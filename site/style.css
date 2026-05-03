@@ -1,0 +1,552 @@
+/* ============================================================
+   Julia Tutorial — stylesheet
+   ============================================================ */
+
+:root {
+  --blue:    #1F4E79;
+  --accent:  #2E75B6;
+  --orange:  #C95F2C;
+  --green:   #3A7D44;
+  --red:     #C84B31;
+  --bg:      #f8f9fb;
+  --surface: #ffffff;
+  --border:  #d0d7de;
+  --text:    #1a1a2e;
+  --muted:   #5a6070;
+  --code-bg: #f3f4f6;
+  --nav-w:   240px;
+  --radius:  8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+}
+
+/* ── Sidebar nav ─────────────────────────────────────────── */
+#sidebar {
+  width: var(--nav-w);
+  min-height: 100vh;
+  background: var(--blue);
+  color: #c9d8eb;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#sidebar .brand {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+#sidebar .brand h1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.3;
+}
+
+#sidebar .brand p {
+  font-size: 0.76rem;
+  color: #93b4d0;
+  margin-top: 4px;
+}
+
+#sidebar nav {
+  padding: 12px 0 24px;
+  flex: 1;
+}
+
+#sidebar nav a {
+  display: block;
+  padding: 7px 20px 7px 20px;
+  font-size: 0.85rem;
+  color: #c9d8eb;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+#sidebar nav a:hover,
+#sidebar nav a.active {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-left-color: #61A5D8;
+}
+
+#sidebar nav .section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a90b0;
+  padding: 16px 20px 4px;
+}
+
+#sidebar nav a.sub {
+  padding-left: 32px;
+  font-size: 0.82rem;
+}
+
+/* ── Main content ────────────────────────────────────────── */
+#content {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 80px;
+}
+
+/* ── Hero ────────────────────────────────────────────────── */
+.hero {
+  background: linear-gradient(135deg, var(--blue) 0%, #2563a8 60%, #3479c2 100%);
+  color: #fff;
+  padding: 60px 72px 52px;
+}
+
+.hero .tag {
+  display: inline-block;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 4px 14px;
+  margin-bottom: 16px;
+  color: #d6eaff;
+}
+
+.hero h1 {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 10px;
+}
+
+.hero h1 span { color: #7EC8E3; }
+
+.hero p {
+  font-size: 1.05rem;
+  opacity: 0.88;
+  max-width: 780px;
+  margin-top: 10px;
+}
+
+.hero-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.hero-badges span {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  color: #dceffe;
+}
+
+/* ── Section wrapper ─────────────────────────────────────── */
+.section {
+  padding: 44px 72px 0;
+  max-width: 1100px;
+}
+
+.section + .section {
+  margin-top: 8px;
+}
+
+/* ── Headings ────────────────────────────────────────────── */
+.section h2 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #d0dde8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section h2 .step-badge {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.section h3 {
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 24px 0 10px;
+}
+
+.section h4 {
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: #444;
+  margin: 18px 0 8px;
+}
+
+/* ── Paragraphs & text ───────────────────────────────────── */
+.section p {
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.section ul, .section ol {
+  padding-left: 22px;
+  margin-bottom: 14px;
+}
+
+.section li {
+  margin-bottom: 5px;
+  color: #333;
+}
+
+code {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  border: 1px solid #e0e3e9;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #c63;
+}
+
+/* ── Code blocks ─────────────────────────────────────────── */
+.code-block {
+  position: relative;
+  margin: 16px 0 20px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid #d0d7de;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2b333d;
+  padding: 8px 14px;
+}
+
+.code-lang {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8ba3bb;
+}
+
+.copy-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 4px;
+  color: #bcc8d4;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.copy-btn.copied { color: #7dcf8e; border-color: #7dcf8e; }
+
+.code-block pre {
+  margin: 0;
+  background: #1e2530;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.code-block pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #cdd9e5;
+  font-size: inherit;
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 16px 0 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+thead tr {
+  background: var(--blue);
+  color: #fff;
+}
+
+thead th {
+  padding: 11px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+tbody tr:nth-child(even) { background: #f5f7fa; }
+tbody tr:hover { background: #eef2f8; }
+
+tbody td {
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+  color: #333;
+}
+
+tbody td code { font-size: 0.83rem; }
+
+/* ── Info / warning / tip boxes ─────────────────────────── */
+.callout {
+  border-left: 4px solid;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 14px 18px;
+  margin: 16px 0 20px;
+  font-size: 0.92rem;
+}
+
+.callout.info  { border-color: var(--accent); background: #edf4fd; }
+.callout.tip   { border-color: var(--green);  background: #edf7f0; }
+.callout.warn  { border-color: var(--orange); background: #fef4ec; }
+
+.callout strong { display: block; margin-bottom: 4px; font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.callout.info  strong { color: var(--accent); }
+.callout.tip   strong { color: var(--green); }
+.callout.warn  strong { color: var(--orange); }
+
+/* ── Progress bar / time estimate ───────────────────────── */
+.time-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  margin-bottom: 8px;
+}
+
+.time-icon { font-size: 1.3rem; }
+
+.time-card .label { font-weight: 600; font-size: 0.93rem; color: var(--blue); }
+.time-card .dur   { margin-left: auto; font-size: 0.82rem; color: var(--muted); background: var(--code-bg); border-radius: 4px; padding: 3px 9px; }
+
+/* ── Divider ─────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 40px 72px 0;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 32px;
+  color: var(--muted);
+  font-size: 0.83rem;
+  border-top: 1px solid var(--border);
+  margin-top: 48px;
+}
+
+/* ── Step-by-step derivation cards ───────────────────────── */
+.deriv-flow {
+  margin: 20px 0 8px;
+}
+
+.deriv-card {
+  border: 1px solid #b8d0ea;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.deriv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #dce9f6;
+  padding: 8px 14px;
+  border-bottom: 1px solid #b8d0ea;
+}
+
+.deriv-num {
+  width: 24px; height: 24px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+
+.deriv-card-head .deriv-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.deriv-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.deriv-math-panel {
+  padding: 14px 16px;
+  background: #f3f8ff;
+  border-right: 1px solid #c4d8ed;
+  overflow-x: auto;
+}
+
+.deriv-code-panel {
+  position: relative;
+  padding: 14px 16px;
+  background: #1a2233;
+  overflow-x: auto;
+}
+
+.deriv-code-panel .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+}
+
+.deriv-panel-label {
+  display: block;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.deriv-math-panel .deriv-panel-label { color: #4a7ab5; }
+.deriv-code-panel .deriv-panel-label { color: #6e90ab; }
+
+.deriv-math-panel p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #2a3a50;
+  line-height: 1.7;
+}
+
+.deriv-code-panel pre {
+  margin: 0; padding: 0; background: none;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  font-size: 0.83rem;
+  line-height: 1.65;
+  color: #cdd9e5;
+  white-space: pre;
+}
+
+/* Connector between cards — shows the operation being applied */
+.deriv-connector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 0.79rem;
+  color: var(--accent);
+  font-style: italic;
+  font-weight: 500;
+  position: relative;
+}
+
+.deriv-connector::before {
+  content: "↓";
+  font-size: 1rem;
+  font-style: normal;
+  flex-shrink: 0;
+}
+
+/* Inline math note (smaller, inside panels) */
+.math-note {
+  font-size: 0.84rem;
+  color: #2a3a50;
+  background: #e6f0fb;
+  border: 1px solid #b8d0ea;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  display: inline-block;
+}
+
+/* Full-width note spanning both columns */
+.deriv-note-row {
+  background: #f0f5fc;
+  border-top: 1px solid #c4d8ed;
+  padding: 9px 16px;
+  font-size: 0.83rem;
+  color: #3a5a7a;
+  grid-column: 1 / -1;
+}
+
+.deriv-note-row strong { color: var(--blue); }
+
+/* ── Deeper sidebar nesting (sub2) ────────────────────────── */
+#sidebar nav a.sub2 {
+  padding-left: 44px;
+  font-size: 0.79rem;
+  color: #89adc8;
+}
+
+#sidebar nav a.sub2:hover,
+#sidebar nav a.sub2.active {
+  color: #c8e0f2;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .deriv-panels { grid-template-columns: 1fr; }
+  .deriv-math-panel { border-right: none; border-bottom: 1px solid #c4d8ed; }
+}
+
+@media (max-width: 820px) {
+  body { flex-direction: column; }
+
+  #sidebar {
+    width: 100%;
+    height: auto;
+    min-height: unset;
+    position: static;
+  }
+
+  #sidebar nav { display: none; }
+  #sidebar .brand { padding: 16px 20px; }
+
+  .hero { padding: 36px 28px 32px; }
+  .hero h1 { font-size: 1.9rem; }
+
+  .section { padding: 32px 28px 0; }
+  .divider { margin: 32px 28px 0; }
+}

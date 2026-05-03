@@ -501,7 +501,8 @@ function load_python_docx()
         return pyimport("docx")
     catch
         @info "python-docx not found — installing via pip..."
-        run(`$(PythonCall.python_executable()) -m pip install --quiet python-docx`)
+        python_exe = pyconvert(String, pyimport("sys").executable)
+        run(`$python_exe -m pip install --quiet python-docx`)
         return pyimport("docx")
     end
 end

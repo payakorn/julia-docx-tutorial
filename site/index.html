@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Julia for HPC — Getting Started Guide</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="brand">
+    <h1>Julia Programming</h1>
+    <p>Getting Started Guide</p>
+  </div>
+  <nav>
+    <a href="#overview">Overview</a>
+    <div class="section-label">Setup</div>
+    <a href="#step1">Step 1 — WSL2</a>
+    <a href="#step2">Step 2 — juliaup &amp; Julia</a>
+    <a href="#step3">Step 3 — Packages</a>
+    <a href="#step4">Step 4 — PDE Packages</a>
+    <div class="section-label">Julia Basics</div>
+    <a href="#basics-functions">Functions</a>
+    <a href="#basics-arrays">Vectors &amp; Matrices</a>
+    <a href="#basics-linalg">Linear Algebra</a>
+    <a href="#basics-builtins">Useful Built-ins</a>
+    <div class="section-label">Writing Julia</div>
+    <a href="#pkg-create">Create a Package</a>
+    <a href="#pkg-structure" class="sub">Package structure</a>
+    <a href="#pkg-revise"    class="sub">Revise — live reload</a>
+    <a href="#pkg-workflow"  class="sub">Dev workflow loop</a>
+    <a href="#step5">Step 5 — PDE Workflow</a>
+    <a href="#step5-model"   class="sub">5.1 Classification</a>
+    <a href="#step5-discret" class="sub">5.2 Discretization Rules</a>
+    <a href="#pde-heat"      class="sub">→ Heat equation</a>
+    <a href="#pde-wave"      class="sub">→ Wave equation</a>
+    <a href="#pde-poisson"   class="sub">→ Poisson equation</a>
+    <a href="#pde-ns"        class="sub">→ Navier-Stokes</a>
+    <a href="#step5-verify"  class="sub">5.4 Verify &amp; Converge</a>
+    <div class="section-label">Tooling</div>
+    <a href="#step6">Step 6 — VS Code</a>
+    <a href="#step7">Step 7 — HPC SSH</a>
+    <a href="#step8">Step 8 — Slurm Jobs</a>
+  </nav>
+</aside>
+
+<div id="content">
+
+  <header class="hero">
+    <div class="tag">Beginner → Intermediate</div>
+    <h1>Julia for <span>HPC</span></h1>
+    <p>A step-by-step guide: from the equation on paper to working Julia code,
+       then to running jobs on a compute cluster.</p>
+    <div class="hero-badges">
+      <span>WSL2</span><span>juliaup</span><span>Julia 1.10 LTS</span>
+      <span>VS Code</span><span>Slurm</span><span>PDE Solvers</span>
+    </div>
+  </header>
+
+  <!-- ══ OVERVIEW ══════════════════════════════════════════ -->
+  <section class="section" id="overview">
+    <h2>Overview &amp; Prerequisites</h2>
+    <p>
+      This guide walks you through a complete Julia environment for scientific
+      computing. The core of the guide (Step 5) shows how to read a PDE from a
+      paper and convert each mathematical term into Julia code, one step at a time.
+    </p>
+    <div class="callout info">
+      <strong>Prerequisites</strong>
+      No Julia experience required. Basic terminal familiarity (cd, ls) is helpful.
+      You need Windows 10/11 with an internet connection for the first run.
+    </div>
+    <h3>Time Estimate</h3>
+    <div class="time-card"><span class="time-icon">🖥️</span><span class="label">Step 1 — Install WSL2</span><span class="dur">10–15 min</span></div>
+    <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 2 — juliaup + Julia</span><span class="dur">5–10 min</span></div>
+    <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 3 — Julia Packages</span><span class="dur">10–15 min</span></div>
+    <div class="time-card"><span class="time-icon">📐</span><span class="label">Step 4 — PDE Packages</span><span class="dur">15–20 min</span></div>
+    <div class="time-card"><span class="time-icon">📝</span><span class="label">Julia Basics — Functions, Arrays, Linear Algebra</span><span class="dur">20–30 min</span></div>
+    <div class="time-card"><span class="time-icon">🧮</span><span class="label">Step 5 — PDE Workflow + Examples</span><span class="dur">30–60 min</span></div>
+    <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 6 — Configure VS Code</span><span class="dur">5–10 min</span></div>
+    <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 7 — HPC SSH Setup</span><span class="dur">10 min</span></div>
+    <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 8 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
+    <div class="time-card" style="border-color:#1F4E79;"><span class="time-icon">🕐</span><span class="label" style="color:#1F4E79;">Total</span><span class="dur" style="font-weight:700;">~115–185 min</span></div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 1 ══════════════════════════════════════════════ -->
+  <section class="section" id="step1">
+    <h2><span class="step-badge">Step 1</span>Install WSL2</h2>
+    <p>WSL2 runs a real Linux kernel inside Windows. All scientific Julia packages work best on Linux.</p>
+    <h3>1.1 Enable WSL2</h3>
+    <p>Open <strong>PowerShell as Administrator</strong>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">PowerShell</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">wsl --install
+# Restart your computer when prompted</code></pre>
+    </div>
+    <h3>1.2 First-time Ubuntu setup</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl wget git build-essential</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 2 ══════════════════════════════════════════════ -->
+  <section class="section" id="step2">
+    <h2><span class="step-badge">Step 2</span>Install juliaup &amp; Julia</h2>
+    <p><strong>juliaup</strong> is the official Julia version manager — like <code>pyenv</code> for Python.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">curl -fsSL https://install.julialang.org | sh
+source ~/.bashrc
+juliaup add release && juliaup default release
+julia --version</code></pre>
+    </div>
+    <h3>2.1 juliaup cheatsheet</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>juliaup add release</code></td><td>Install the latest stable Julia</td></tr>
+          <tr><td><code>juliaup add 1.10.4</code></td><td>Install a specific version</td></tr>
+          <tr><td><code>juliaup default 1.10.4</code></td><td>Switch the default version</td></tr>
+          <tr><td><code>juliaup list</code></td><td>Show installed versions</td></tr>
+          <tr><td><code>juliaup update</code></td><td>Update Julia and juliaup</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>2.2 Your first Julia program</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">println("Hello, Julia!")
+x = 3.14
+println(2x^2 + 1)
+f(x) = exp(-x^2)
+println(f(1.0))</code></pre>
+    </div>
+    <div class="callout info">
+      <strong>REPL modes</strong>
+      Press <code>]</code> for package mode, <code>?</code> for help, <code>;</code> for shell.
+      Backspace returns to normal mode.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 3 ══════════════════════════════════════════════ -->
+  <section class="section" id="step3">
+    <h2><span class="step-badge">Step 3</span>Installing Julia Packages</h2>
+    <p>Always work inside a <em>project environment</em> — it pins versions so results are reproducible.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir -p ~/julia-pde && cd ~/julia-pde
+julia --project=.</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@julia-pde) pkg> add DifferentialEquations Plots SparseArrays</code></pre>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package mode</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>add Plots</code></td><td>Install Plots.jl</td></tr>
+          <tr><td><code>rm Plots</code></td><td>Remove a package</td></tr>
+          <tr><td><code>update</code></td><td>Update all packages</td></tr>
+          <tr><td><code>status</code></td><td>List installed packages</td></tr>
+          <tr><td><code>instantiate</code></td><td>Restore from Manifest.toml</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 4 ══════════════════════════════════════════════ -->
+  <section class="section" id="step4">
+    <h2><span class="step-badge">Step 4</span>Key Julia Packages for Scientific Computing</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><code>LinearAlgebra</code> (stdlib)</td><td>Dense matrix ops, eigensystems</td></tr>
+          <tr><td><code>SparseArrays</code> (stdlib)</td><td>Sparse PDE matrices</td></tr>
+          <tr><td><code>FFTW.jl</code></td><td>Spectral methods (FFT)</td></tr>
+          <tr><td><code>DifferentialEquations.jl</code></td><td>ODE/PDE solver suite</td></tr>
+          <tr><td><code>Ferrite.jl</code> / <code>Gridap.jl</code></td><td>Finite element methods</td></tr>
+          <tr><td><code>Oceananigans.jl</code></td><td>Production CFD on HPC</td></tr>
+          <tr><td><code>Plots.jl</code> / <code>Makie.jl</code></td><td>Visualization</td></tr>
+          <tr><td><code>MPI.jl</code> / <code>CUDA.jl</code></td><td>HPC parallelism</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ BASICS: FUNCTIONS ════════════════════════════════════ -->
+  <section class="section" id="basics-functions">
+    <h2>Functions</h2>
+    <p>
+      Julia functions are first-class values. They support multiple dispatch,
+      optional / keyword arguments, and can be written in several styles.
+    </p>
+
+    <h3>Defining functions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Full block form
+function greet(name)
+    println("Hello, ", name)
+end
+
+# One-liner (most common for math)
+square(x) = x^2
+cube(x)   = x^3
+
+# Call them
+greet("Julia")   # Hello, Julia
+square(5)        # 25
+cube(3)          # 27</code></pre>
+    </div>
+
+    <h3>Anonymous functions</h3>
+    <p>Useful when passing a function as an argument (e.g. to <code>map</code>, <code>filter</code>).</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">f = x -> x^2 + 1          # single argument
+g = (x, y) -> x^2 + y^2   # two arguments
+
+f(3)    # 10
+g(3, 4) # 25
+
+# Inline in map
+map(x -> x^2, [1, 2, 3, 4])   # [1, 4, 9, 16]</code></pre>
+    </div>
+
+    <h3>Default and keyword arguments</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Default argument
+function power(x, n=2)
+    return x^n
+end
+power(3)      # 9   (n defaults to 2)
+power(3, 3)   # 27
+
+# Keyword arguments (after the semicolon)
+function make_point(; x=0.0, y=0.0)
+    return (x, y)
+end
+make_point(y=5.0)   # (0.0, 5.0)</code></pre>
+    </div>
+
+    <h3>Multiple dispatch</h3>
+    <p>Julia picks the right method based on the types of <em>all</em> arguments — no class needed.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">describe(x::Int)     = println("integer: ", x)
+describe(x::Float64) = println("float:   ", x)
+describe(x::String)  = println("string:  ", x)
+
+describe(42)      # integer: 42
+describe(3.14)    # float:   3.14
+describe("hi")    # string:  hi</code></pre>
+    </div>
+
+    <h3>Functions that modify their input — the <code>!</code> convention</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># sort  returns a new sorted array (does not change original)
+# sort! sorts the array in-place (modifies the argument)
+v = [3, 1, 4, 1, 5, 9]
+sorted = sort(v)    # new array; v is unchanged
+sort!(v)            # v is now [1, 1, 3, 4, 5, 9]
+
+# Same pattern: push! append! fill! normalize! etc.</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Convention</strong>
+      A trailing <code>!</code> signals the function modifies at least one of its arguments.
+      When in doubt, prefer the non-<code>!</code> form and assign the result.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ BASICS: ARRAYS ═══════════════════════════════════════ -->
+  <section class="section" id="basics-arrays">
+    <h2>Vectors &amp; Matrices</h2>
+    <p>
+      Julia uses <strong>1-based indexing</strong> and stores matrices in
+      <strong>column-major</strong> order (like Fortran/MATLAB, unlike C/Python).
+    </p>
+
+    <h3>Creating vectors</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [1.0, 2.0, 3.0, 4.0]   # column vector, Float64
+w = [1, 2, 3, 4]            # Int64 by default
+
+zeros(5)                     # [0.0, 0.0, 0.0, 0.0, 0.0]
+ones(4)                      # [1.0, 1.0, 1.0, 1.0]
+rand(6)                      # 6 random numbers in [0,1)
+
+# Range-based
+r = 0.0:0.25:1.0             # lazy range: 0, 0.25, 0.5, 0.75, 1.0
+x = collect(r)               # convert to a plain Vector
+x = range(0, 1, length=101)  # 101 equally-spaced points</code></pre>
+    </div>
+
+    <h3>Creating matrices</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [1 2 3;              # rows separated by ;
+     4 5 6;
+     7 8 9]
+
+zeros(3, 4)              # 3×4 matrix of zeros
+ones(2, 5)               # 2×5 matrix of ones
+rand(4, 4)               # 4×4 random matrix
+Matrix{Float64}(I, 3, 3) # 3×3 identity (needs LinearAlgebra)</code></pre>
+    </div>
+
+    <h3>Indexing and slicing</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [10 20 30;
+     40 50 60;
+     70 80 90]
+
+A[2, 3]      # 60  — row 2, column 3
+A[1, :]      # [10, 20, 30]  — entire first row
+A[:, 2]      # [20, 50, 80]  — entire second column
+A[1:2, 1:2]  # 2×2 top-left submatrix
+
+v = [10, 20, 30, 40, 50]
+v[end]       # 50  — last element
+v[end-1]     # 40
+v[2:4]       # [20, 30, 40]</code></pre>
+    </div>
+
+    <h3>Array comprehensions</h3>
+    <p>The most readable way to build arrays from a formula.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">xs = [i^2 for i in 1:5]              # [1, 4, 9, 16, 25]
+ys = [sin(π*x) for x in 0:0.1:1]    # sin at 11 points
+
+# 2-D comprehension → matrix
+A = [i + j for i in 1:3, j in 1:4]  # 3×4 matrix</code></pre>
+    </div>
+
+    <h3>Broadcasting with <code>.</code></h3>
+    <p>Apply any scalar function element-wise to an array — no loop needed.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [0.0, π/6, π/4, π/3, π/2]
+
+sin.(v)          # element-wise sin
+v .^ 2           # element-wise square
+v .* 2           # element-wise multiply by scalar
+exp.(v) .- 1     # chain: (eˣ - 1) for every element
+
+# Works on matrices too
+A = rand(3, 3)
+log.(A)          # element-wise log
+A .> 0.5         # element-wise boolean</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Broadcasting rule</strong>
+      Any function call can be dotted: <code>f.(x)</code> applies <code>f</code> to every element.
+      Chain multiple dots in one expression — Julia fuses them into a single pass.
+    </div>
+
+    <h3>Growing and combining arrays</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = Float64[]       # empty vector
+push!(v, 1.0)       # append one element
+push!(v, 2.0, 3.0)  # append multiple
+append!(v, [4.0, 5.0])
+
+# Concatenate existing arrays
+a = [1, 2, 3]
+b = [4, 5, 6]
+vcat(a, b)          # [1,2,3,4,5,6]  (vertical / row-wise)
+hcat(a, b)          # 3×2 matrix     (horizontal / column-wise)
+[a; b]              # same as vcat
+[a b]               # same as hcat (row vectors)</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ BASICS: LINEAR ALGEBRA ═══════════════════════════════ -->
+  <section class="section" id="basics-linalg">
+    <h2>Linear Algebra</h2>
+    <p>Load <code>LinearAlgebra</code> (standard library — no install needed) for the full feature set.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using LinearAlgebra</code></pre>
+    </div>
+
+    <h3>Basic matrix operations</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [4.0 3.0; 6.0 3.0]
+b = [10.0, 12.0]
+v = [1.0, 2.0, 3.0]
+w = [4.0, 5.0, 6.0]
+
+A * b           # matrix–vector product
+A * A           # matrix–matrix product
+A'              # transpose (adjoint for real matrices)
+A' * A          # A^T A
+
+dot(v, w)       # dot product  = 1*4 + 2*5 + 3*6 = 32
+cross(v, w)     # cross product (3-D only)
+norm(v)         # Euclidean norm  √(1+4+9)
+norm(v, 1)      # 1-norm (sum of abs values)
+norm(v, Inf)    # ∞-norm (max abs value)</code></pre>
+    </div>
+
+    <h3>Solving linear systems — $Ax = b$</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [2.0 1.0; 5.0 7.0]
+b = [11.0, 13.0]
+
+x = A \ b        # solve Ax = b  →  x = [-3.0, 17.0] (approx)
+                 # uses LU factorization automatically
+
+# Verify the solution
+norm(A * x - b)  # should be ≈ 0</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Use \\ not inv()</strong>
+      <code>A \ b</code> is faster and more numerically stable than <code>inv(A) * b</code>.
+      Never compute the inverse explicitly unless you need it for analysis.
+    </div>
+
+    <h3>Factorizations</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [4.0 2.0; 2.0 3.0]   # symmetric positive-definite
+
+F = lu(A)          # LU factorization  (general square)
+F = cholesky(A)    # Cholesky  (symmetric positive-definite)
+F = qr(A)          # QR  (least-squares, rectangular)
+F = svd(A)         # SVD
+
+# Once factorized, solve multiple right-hand sides cheaply
+x1 = F \ b1
+x2 = F \ b2</code></pre>
+    </div>
+
+    <h3>Eigenvalues and eigenvectors</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [2.0 1.0; 1.0 3.0]
+
+vals        = eigvals(A)    # eigenvalues only
+vals, vecs  = eigen(A)      # both: vals[i], vecs[:,i]
+λ_max       = maximum(vals) # spectral radius
+cond(A)                     # condition number</code></pre>
+    </div>
+
+    <h3>Sparse matrices</h3>
+    <p>PDE discretizations produce huge, sparse systems. Use <code>SparseArrays</code> to avoid storing the millions of zeros.</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using SparseArrays
+
+# Build from (row, col, value) triplets
+rows = [1, 2, 3, 1]
+cols = [1, 2, 3, 3]
+vals = [4.0, 5.0, 6.0, 7.0]
+S = sparse(rows, cols, vals, 3, 3)
+
+# Or convert a dense matrix
+A_dense  = [1.0 0.0; 0.0 2.0]
+A_sparse = sparse(A_dense)
+
+# Tridiagonal shortcut
+n = 5
+T = spdiagm(-1 => -ones(n-1),
+             0 =>  2*ones(n),
+             1 => -ones(n-1))
+
+# Sparse solve uses the same \ syntax
+x = T \ b</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operation</th><th>Julia</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Matrix–vector product</td><td><code>A * x</code></td><td>Dense or sparse</td></tr>
+          <tr><td>Transpose</td><td><code>A'</code></td><td>Conjugate transpose; use <code>transpose(A)</code> for non-conjugate</td></tr>
+          <tr><td>Solve $Ax = b$</td><td><code>A \ b</code></td><td>Auto-selects best algorithm</td></tr>
+          <tr><td>Dot product</td><td><code>dot(u, v)</code> or <code>u ⋅ v</code></td><td><code>\cdot</code> + Tab</td></tr>
+          <tr><td>Norm</td><td><code>norm(v)</code></td><td>Euclidean; add <code>p</code> for p-norm</td></tr>
+          <tr><td>Determinant</td><td><code>det(A)</code></td><td>Dense only; avoid for large matrices</td></tr>
+          <tr><td>Eigenvalues</td><td><code>eigvals(A)</code></td><td>Use <code>eigen</code> for vectors too</td></tr>
+          <tr><td>Condition number</td><td><code>cond(A)</code></td><td>Estimates ill-conditioning</td></tr>
+          <tr><td>Rank</td><td><code>rank(A)</code></td><td>Via SVD threshold</td></tr>
+          <tr><td>Trace</td><td><code>tr(A)</code></td><td>Sum of diagonal elements</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ BASICS: USEFUL BUILT-INS ═════════════════════════════ -->
+  <section class="section" id="basics-builtins">
+    <h2>Useful Built-in Functions</h2>
+    <p>These are in Julia's base — no <code>using</code> needed.</p>
+
+    <h3>Array inspection</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = rand(3, 4)
+
+size(A)        # (3, 4)
+size(A, 1)     # 3   (number of rows)
+size(A, 2)     # 4   (number of columns)
+length(A)      # 12  (total elements)
+ndims(A)       # 2
+eltype(A)      # Float64</code></pre>
+    </div>
+
+    <h3>Reductions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
+
+sum(v)           # 23.0
+prod(v)          # 540.0
+minimum(v)       # 1.0
+maximum(v)       # 9.0
+argmin(v)        # 2  (index of minimum)
+argmax(v)        # 6  (index of maximum)
+mean(v)          # 3.833...  (needs Statistics: using Statistics)
+cumsum(v)        # running total
+
+# Along a dimension of a matrix
+A = [1 2; 3 4]
+sum(A, dims=1)   # sum each column  →  [4 6]
+sum(A, dims=2)   # sum each row     →  [3; 7]</code></pre>
+    </div>
+
+    <h3>Reshaping and iteration</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = 1:12
+
+reshape(v, 3, 4)    # 3×4 matrix (column-major fill)
+reshape(v, 2, 2, 3) # 3-D array
+
+# Iterating
+for (i, val) in enumerate(v)
+    println(i, " => ", val)
+end
+
+# map / filter
+squares = map(x -> x^2, 1:5)        # [1, 4, 9, 16, 25]
+evens   = filter(x -> x % 2 == 0, 1:10)  # [2, 4, 6, 8, 10]</code></pre>
+    </div>
+
+    <h3>Math constants and common functions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">π          # 3.14159...  (type \pi + Tab)
+ℯ          # 2.71828...  (type \euler + Tab)
+Inf        # infinity
+NaN        # not a number
+
+abs(-3.0)  # 3.0
+sqrt(9.0)  # 3.0
+cbrt(8.0)  # 2.0
+floor(2.9) # 2.0
+ceil(2.1)  # 3.0
+round(2.5) # 2.0  (banker's rounding)
+clamp(x, lo, hi)  # keep x within [lo, hi]
+
+isnan(NaN)     # true
+isinf(Inf)     # true
+isfinite(1.0)  # true</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Task</th><th>Julia</th></tr></thead>
+        <tbody>
+          <tr><td>Print with newline</td><td><code>println("value = ", x)</code></td></tr>
+          <tr><td>Print without newline</td><td><code>print("x = ", x)</code></td></tr>
+          <tr><td>String interpolation</td><td><code>"x is $(x), x² is $(x^2)"</code></td></tr>
+          <tr><td>Type of value</td><td><code>typeof(x)</code></td></tr>
+          <tr><td>Convert type</td><td><code>Float64(3)</code>, <code>Int(2.0)</code></td></tr>
+          <tr><td>Check type</td><td><code>x isa Float64</code></td></tr>
+          <tr><td>Ternary expression</td><td><code>x > 0 ? "pos" : "non-pos"</code></td></tr>
+          <tr><td>Short-circuit and/or</td><td><code>&amp;&amp;</code> / <code>||</code></td></tr>
+          <tr><td>Element-wise compare</td><td><code>v .== 3</code>, <code>v .&gt; 0</code></td></tr>
+          <tr><td>Find indices where true</td><td><code>findall(v .&gt; 0)</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>Unicode identifiers</strong>
+      Julia accepts Unicode variable names. Type <code>\alpha</code> then Tab to get
+      <code>α</code>, <code>\Delta</code> for <code>Δ</code>, <code>\^2</code> for superscript ².
+      This lets your code look exactly like the math on the page.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ CREATE A PACKAGE + REVISE ════════════════════════════ -->
+  <section class="section" id="pkg-create">
+    <h2>Create Your First Julia Package</h2>
+    <p>
+      A single-file script is fine for experiments, but once your code grows you
+      want a <strong>package</strong>: a named module with proper dependency
+      tracking, a test suite, and live reload support via Revise.jl.
+      Setting this up takes two minutes and makes every workflow in Step 5
+      onward much smoother.
+    </p>
+
+    <div class="callout tip">
+      <strong>Do this before writing any PDE solver</strong>
+      Packages are not just for publishing to the registry.
+      Using one locally means your code is importable anywhere,
+      testable with a single command, and reloadable without restarting Julia.
+    </div>
+  </section>
+
+  <!-- package structure -->
+  <section class="section" id="pkg-structure">
+    <h3>Package structure</h3>
+    <p>
+      Generate the skeleton with one command. Julia creates all the boilerplate
+      for you:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg
+Pkg.generate("MyPDE")   # creates the folder MyPDE/</code></pre>
+    </div>
+
+    <p>The generated layout:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">file tree</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">MyPDE/
+├── Project.toml        # package name, UUID, dependencies
+└── src/
+    └── MyPDE.jl        # the module — this is your entry point</code></pre>
+    </div>
+
+    <p>Add a <code>test/</code> folder yourself (Julia will use it automatically):</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir MyPDE/test
+touch MyPDE/test/runtests.jl</code></pre>
+    </div>
+
+    <h4>The module file — src/MyPDE.jl</h4>
+    <p>
+      Everything inside <code>module … end</code> is private by default.
+      Use <code>export</code> to make names visible to anyone who does
+      <code>using MyPDE</code>. Split large code into sub-files with
+      <code>include()</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/MyPDE.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">module MyPDE
+
+# Export the names users can call with `using MyPDE`
+export solve_heat_1d, solve_wave_1d, solve_poisson_2d
+
+# Split code into separate files — each file sees the module's scope
+include("heat.jl")      # defines solve_heat_1d
+include("wave.jl")      # defines solve_wave_1d
+include("poisson.jl")   # defines solve_poisson_2d
+
+end</code></pre>
+    </div>
+
+    <h4>A minimal function in src/heat.jl</h4>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/heat.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve_heat_1d(; N=200, α=0.01, L=1.0, T=1.0)
+    dx = L / (N + 1)
+    dt = 0.4 * dx^2 / α
+    x  = range(dx, L - dx, length=N)
+    u  = @. exp(-100 * (x - 0.5)^2)
+    for _ in 1:ceil(Int, T / dt)
+        u[2:end-1] .+= (α * dt / dx^2) .*
+            (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+    end
+    return collect(x), u
+end</code></pre>
+    </div>
+
+    <h4>Load the package in development mode</h4>
+    <p>
+      <code>Pkg.develop</code> links the package into your environment by path —
+      no need to install it. Changes you make to the source files take effect
+      immediately (with Revise, see below).
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># From the directory that CONTAINS the MyPDE/ folder:
+using Pkg
+Pkg.develop(path="./MyPDE")
+
+# Now you can import it like any installed package:
+using MyPDE
+x, u = solve_heat_1d()   # calls your function</code></pre>
+    </div>
+
+    <h4>Write and run tests</h4>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — test/runtests.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using MyPDE, Test
+
+@testset "Heat equation" begin
+    x, u = solve_heat_1d(N=50, T=0.1)
+    @test length(x) == 50           # correct grid size
+    @test maximum(u) < 1.0          # solution decays over time
+    @test u[1] ≈ 0.0 atol=1e-10    # Dirichlet BC holds at left
+    @test u[end] ≈ 0.0 atol=1e-10  # Dirichlet BC holds at right
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@MyPDE) pkg> test   # runs test/runtests.jl and shows pass/fail</code></pre>
+    </div>
+  </section>
+
+  <!-- Revise -->
+  <section class="section" id="pkg-revise">
+    <h3>Revise.jl — live code reload</h3>
+    <p>
+      Normally, changing a source file requires restarting Julia and re-running all
+      your setup code. <strong>Revise.jl</strong> watches your package files and
+      automatically patches the running session whenever you save — keeping your REPL
+      state intact.
+    </p>
+
+    <h4>Install Revise</h4>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Install into your global environment (available in all projects)
+(@v1.10) pkg> add Revise</code></pre>
+    </div>
+
+    <h4>Make Revise load automatically on every Julia start</h4>
+    <p>
+      Create (or edit) <code>~/.julia/config/startup.jl</code> — Julia runs this
+      file every time it starts:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — ~/.julia/config/startup.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">try
+    using Revise
+catch e
+    @warn "Could not load Revise" exception = e
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash — create the file</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir -p ~/.julia/config
+# Then open ~/.julia/config/startup.jl in your editor and paste the code above</code></pre>
+    </div>
+
+    <h4>How Revise works with your package</h4>
+    <p>
+      Load Revise <em>before</em> your package. After that, any edit you save to a
+      source file inside <code>src/</code> is live in the REPL instantly:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL session</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Revise       # must come first
+using MyPDE
+
+x, u = solve_heat_1d()   # works normally
+
+# --- now open src/heat.jl and change α default from 0.01 to 0.05, save ---
+
+x, u = solve_heat_1d()   # Revise picked up the change — no restart needed
+# The new default α = 0.05 is already active</code></pre>
+    </div>
+
+    <div class="callout warn">
+      <strong>Revise does not reload everything</strong>
+      Changes to struct definitions, global constants, and <code>using</code>
+      statements at the top level require a restart. Revise handles function
+      bodies and module-level code — which covers 95% of day-to-day edits.
+    </div>
+  </section>
+
+  <!-- Dev workflow loop -->
+  <section class="section" id="pkg-workflow">
+    <h3>The development workflow loop</h3>
+    <p>
+      Once your package is set up and Revise is running, your day-to-day
+      workflow is a tight loop:
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Start Julia once with your project loaded</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Open a terminal in your project directory and start Julia.
+            Revise loads from <code>startup.jl</code> automatically.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              You only do this once per working session.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Terminal</span>
+            <pre>cd ~/julia-pde
+julia --project=.
+# Revise auto-loaded from startup.jl
+# then:
+using MyPDE</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">write or edit code in your editor</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Edit a source file and save</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Open <code>src/heat.jl</code> in VS Code (or any editor),
+            change a function, and press Save.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Revise watches all files in <code>src/</code> and
+              patches the running Julia session automatically.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">src/heat.jl — change the default α</span>
+            <pre>function solve_heat_1d(; N=200, α=0.05, ...)
+#                              ↑ changed from 0.01
+    ...</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Revise detects the save — no restart needed</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Call the function in the REPL — the new version is already active</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What happens</span>
+            <p>Revise re-defines the function in the running session.
+            All your previously defined variables (grids, results, plots)
+            are still there — nothing is lost.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">REPL</span>
+            <pre>julia> x, u = solve_heat_1d()
+# Uses the new α = 0.05 immediately
+
+julia> plot(x, u)   # still works — no re-import needed</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">run the tests at any time to make sure nothing broke</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Run the test suite to confirm correctness</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Switch to pkg mode and run <code>test</code>. Julia runs
+            <code>test/runtests.jl</code> and prints a pass/fail summary.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Run this before committing to git to catch regressions early.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia (pkg mode — press ])</span>
+            <pre>(@MyPDE) pkg> test
+Test Summary:    | Pass  Fail  Total
+Heat equation    |    4     0      4
+All tests passed.</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout info">
+      <strong>Recommended project layout for Step 5 onward</strong>
+      Create one package (<code>MyPDE</code>) and add each solver from Step 5
+      as a separate <code>src/</code> file. Export the solver functions.
+      This way you can call <code>solve_heat_1d()</code> from the REPL,
+      from tests, and from Slurm job scripts — all with the same import.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 5 ══════════════════════════════════════════════ -->
+  <section class="section" id="step5">
+    <h2><span class="step-badge">Step 5</span>The PDE Solving Workflow</h2>
+    <p>
+      Every PDE problem follows five stages. The most important skill is reading
+      an equation from a paper and converting each mathematical term into code, one
+      operation at a time. That is exactly what the worked examples below do.
+    </p>
+  </section>
+
+  <!-- 5.1 Classification -->
+  <section class="section" id="step5-model">
+    <h3>5.1 Classify the PDE before writing a single line</h3>
+    <p>The type of PDE determines which time scheme and which solver are valid.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Prototype</th><th>Key property</th><th>Example below</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Parabolic</strong></td><td>$\partial u/\partial t = \alpha\nabla^2 u$</td><td>Smooth over time, stable explicit schemes</td><td>Heat equation</td></tr>
+          <tr><td><strong>Hyperbolic</strong></td><td>$\partial^2 u/\partial t^2 = c^2\nabla^2 u$</td><td>Propagates features, tight CFL</td><td>Wave equation</td></tr>
+          <tr><td><strong>Elliptic</strong></td><td>$-\nabla^2 u = f$</td><td>Steady state — no time, solve $Au=b$</td><td>Poisson equation</td></tr>
+          <tr><td><strong>Nonlinear / Coupled</strong></td><td>NS momentum + $\nabla\cdot\mathbf{u}=0$</td><td>Needs projection or implicit treatment</td><td>Navier-Stokes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       5.2  DISCRETIZATION RULES
+       ══════════════════════════════════════════════════════════ -->
+  <section class="section" id="step5-discret">
+    <h3>5.2 Two rules that appear in every PDE solver</h3>
+    <p>
+      A computer cannot work with continuous functions.
+      <strong>Discretization</strong> replaces smooth derivatives with arithmetic
+      on a finite array of numbers. You only need two formulas —
+      and once you recognise them, every solver in this guide will look familiar.
+    </p>
+
+    <!-- Rule 1 -->
+    <h4>Rule 1 — Central difference: how to approximate a second derivative</h4>
+    <p>
+      Suppose you have measured a quantity $u$ at $N$ equally-spaced grid points
+      with spacing $h = \Delta x$. The second derivative at point $i$ is approximated
+      using only its two immediate neighbours:
+    </p>
+
+    $$\frac{d^2 u}{d x^2}\bigg|_{x_i} \approx \frac{u_{i+1} - 2\,u_i + u_{i-1}}{h^2}$$
+
+    <p>The three weights $[+1,\; -2,\; +1]$ form what is called the <em>stencil</em>:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Stencil role</th><th>Notation</th><th>Julia index (interior loop)</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Left neighbour</td><td>$u_{i-1}$</td><td><code>u[i-1]</code> → vectorised: <code>u[1:end-2]</code></td><td>+1</td></tr>
+          <tr><td>Centre point</td><td>$u_i$</td><td><code>u[i]</code> → vectorised: <code>u[2:end-1]</code></td><td>−2</td></tr>
+          <tr><td>Right neighbour</td><td>$u_{i+1}$</td><td><code>u[i+1]</code> → vectorised: <code>u[3:end]</code></td><td>+1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Here is a complete, runnable example — no external setup needed:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — run this yourself</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># 5 grid points on [0, 1], spacing h = 0.25
+h = 0.25
+u = [0.0, 1.0, 1.5, 1.0, 0.0]   # some values at those points
+#    u[1] u[2] u[3] u[4] u[5]
+
+# Second derivative at the single interior point i = 3:
+i = 3
+d2u_at_i = (u[i+1] - 2*u[i] + u[i-1]) / h^2
+println("d²u/dx² at i=3: ", d2u_at_i)   # -16.0
+
+# Apply the stencil to ALL interior points at once (Julia broadcast):
+d2u_all = (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2]) ./ h^2
+println("d²u/dx² at all interior points: ", d2u_all)   # [-16.0, -16.0, -16.0]</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Why u[2:end-1] and not u[1:end]?</strong>
+      The stencil needs both a left and a right neighbour, so it cannot be
+      applied at the first or last point. Those boundary points are fixed by the
+      boundary conditions — they are never updated by the solver.
+    </div>
+
+    <!-- Rule 2 -->
+    <h4>Rule 2 — Forward Euler: how to step forward in time</h4>
+    <p>
+      Once you have a way to compute derivatives in space (Rule 1), you need a way
+      to march the solution forward in time. The simplest method is
+      <strong>forward Euler</strong>: if you know the current state $u^n$ and its
+      rate of change (the right-hand side of the PDE), you predict the next state
+      $u^{n+1}$:
+    </p>
+
+    $$u_i^{n+1} = u_i^n + \Delta t \cdot \underbrace{f(u^n, x_i)}_{\text{right-hand side}}$$
+
+    <p>Continuing the same example — now adding a time dimension:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — run this yourself</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">h  = 0.25
+dt = 0.01         # timestep Δt  (must be chosen carefully — see CFL below)
+u  = [0.0, 1.0, 1.5, 1.0, 0.0]   # u^n at t = 0
+
+# Imagine the PDE says: du/dt = d²u/dx²  (heat equation with α=1)
+# Right-hand side = d²u/dx² computed with Rule 1:
+rhs = (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2]) ./ h^2
+
+# Forward Euler: u^{n+1} = u^n + Δt × rhs
+# Only update interior points — boundary values stay fixed
+u[2:end-1] .+= dt .* rhs
+
+println("u after one step: ", u)
+# u[1] and u[5] unchanged (boundary conditions)
+# u[2], u[3], u[4] updated by the PDE</code></pre>
+    </div>
+
+    <div class="callout warn">
+      <strong>The CFL condition — choosing a safe Δt</strong>
+      Forward Euler is only stable when $\Delta t$ is small enough.
+      Each PDE has its own limit — see the box in each worked example.
+      Using too large a $\Delta t$ causes the numbers to blow up to <code>Inf</code> or <code>NaN</code>
+      within a few steps.
+    </div>
+
+    <p>
+      These two rules — Rule 1 (stencil) and Rule 2 (Euler step) — are the
+      building blocks for every solver in the next section. When you see
+      <code>(u[3:end] .- 2.*u[2:end-1] .+ u[1:end-2]) ./ dx^2</code>
+      anywhere below, that is always Rule 1. When you see
+      <code>u[2:end-1] .+= dt .* (...)</code>, that is always Rule 2.
+    </p>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE A: HEAT EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-heat">
+    <h3>Example A — Heat Equation (Parabolic)</h3>
+    <p>
+      The heat equation models how temperature diffuses through a material over time.
+      This is the simplest PDE and uses both Rule 1 and Rule 2 directly.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the PDE exactly as it appears in the paper</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper / textbook</span>
+            $$\frac{\partial u}{\partial t} = \alpha\,\frac{\partial^2 u}{\partial x^2}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Domain: $x \in [0, L]$, $t \in [0, T]$<br>
+              BCs: $u(0,t) = u(L,t) = 0$<br>
+              IC: $u(x,0) = e^{-100(x-0.5)^2}$ (Gaussian pulse)<br>
+              Parameter: $\alpha$ = thermal diffusivity
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — set up the grid and IC</span>
+            <pre>N  = 200
+L  = 1.0
+dx = L / (N + 1)           # Δx
+x  = range(dx, L-dx, N)   # x₁ … xₙ  (interior only)
+
+# Initial condition u(x, 0)
+u  = @. exp(-100*(x - 0.5)^2)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">discretize the left side — apply Rule 2 (forward Euler) to ∂u/∂t</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Left side: approximate ∂u/∂t with a forward difference in time</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form</span>
+            $$\frac{\partial u}{\partial t} \;\approx\; \frac{u_i^{n+1} - u_i^n}{\Delta t}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Rearranging to solve for the <em>unknown</em> $u_i^{n+1}$:<br>
+              $u_i^{n+1} = u_i^n + \Delta t \cdot (\text{right side})$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — Rule 2 skeleton</span>
+            <pre># u currently holds u^n (the known state)
+# After the line below, u becomes u^{n+1}
+u[2:end-1] .+= dt .* (right_side)
+#  ↑ .+= is shorthand for u = u + dt*rhs
+#  ↑ 2:end-1 skips endpoints → BCs stay 0</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">discretize the right side — apply Rule 1 (central difference) to ∂²u/∂x²</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Right side: approximate α ∂²u/∂x² with the 3-point stencil from Rule 1</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form</span>
+            $$\alpha\,\frac{\partial^2 u}{\partial x^2} \;\approx\; \frac{\alpha}{\Delta x^2}\!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Identical to Rule 1 from Section 5.2 — just scaled by $\alpha / \Delta x^2$.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — Rule 1 applied here</span>
+            <pre># This is Rule 1 scaled by α/dx²:
+right_side = (α / dx^2) .*
+  (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+#    u_{i+1}        u_i              u_{i-1}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">substitute both sides — write the complete update in one line</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Combine: replace (right_side) in step 2 with the expression from step 3</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Full discrete update rule</span>
+            $$u_i^{n+1} = u_i^n + \underbrace{\frac{\alpha\,\Delta t}{\Delta x^2}}_{r}\!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              $r$ is the diffusion number. Stable only when $r \leq \tfrac{1}{2}$.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — the one-line update</span>
+            <pre># This single line IS the heat equation for one timestep:
+u[2:end-1] .+= (α * dt / dx^2) .*
+  (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">choose a safe Δt — the CFL condition prevents blow-up</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">CFL condition: how small must Δt be for the solution to stay stable?</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Stability requirement</span>
+            $$r = \frac{\alpha\,\Delta t}{\Delta x^2} \leq \frac{1}{2}
+              \quad\Longrightarrow\quad
+              \Delta t \leq \frac{\Delta x^2}{2\,\alpha}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Use safety factor 0.4 (not 0.5) to stay well inside the stable region.
+              Once you know $\Delta x$ and $\alpha$, this formula gives you $\Delta t$.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia</span>
+            <pre>α  = 0.01
+dx = L / (N + 1)
+
+# dt = 0.4 × dx² / α  →  r = α·dt/dx² = 0.4 < 0.5  ✓
+dt     = 0.4 * dx^2 / α
+nsteps = ceil(Int, T / dt)   # total number of timesteps</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">wrap in a time loop — the complete solver is just steps 4 and 5 repeated</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">6</div>
+          <span class="deriv-title">Assembled solver — every comment points back to its derivation step</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve_heat_1d(; N=200, α=0.01, L=1.0, T=1.0)
+    # Step 1 — grid
+    dx     = L / (N + 1)
+    x      = range(dx, L - dx, length=N)
+
+    # Step 5 — stable Δt:  r = α·dt/dx² ≤ 0.5
+    dt     = 0.4 * dx^2 / α
+    nsteps = ceil(Int, T / dt)
+
+    # Step 1 — initial condition u(x,0)
+    u = @. exp(-100 * (x - 0.5)^2)
+
+    for _ in 1:nsteps
+        # Steps 3+4 — Rule 1 (stencil) inside Rule 2 (Euler step):
+        #   u_i^{n+1} = u_i^n + r·(u_{i+1} - 2u_i + u_{i-1})
+        u[2:end-1] .+= (α * dt / dx^2) .*
+            (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+        # Dirichlet BCs: u[1] = u[end] = 0 — never updated
+    end
+    return collect(x), u
+end
+
+using Plots
+x, u = solve_heat_1d()
+plot(x, u, xlabel="x", ylabel="u(x,T)", title="Heat equation  T=1.0", lw=2)</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE B: WAVE EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-wave">
+    <h3>Example B — Wave Equation (Hyperbolic)</h3>
+    <p>
+      The wave equation has a <em>second</em> time derivative. Rule 1 (stencil) is
+      applied identically — only the time discretization changes, and now we need
+      to track three time levels instead of two.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the PDE from the paper</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper / textbook</span>
+            $$\frac{\partial^2 u}{\partial t^2} = c^2\,\frac{\partial^2 u}{\partial x^2}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              BCs: $u(0,t) = u(L,t) = 0$ (fixed ends — like a guitar string)<br>
+              ICs: $u(x,0) = u_0(x)$, $\;\dot{u}(x,0) = 0$ (plucked, then released)<br>
+              Parameter: $c$ = wave speed
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — three time levels needed</span>
+            <pre># Because the PDE has ∂²u/∂t², we need:
+#   u_prev = u^{n-1}  (one step ago)
+#   u_curr = u^n      (current)
+#   u_next = u^{n+1}  (what we compute)
+u_prev = initial_condition.(x)
+u_curr = copy(u_prev)   # explained in step 5</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">the right side is identical to Example A — apply Rule 1 (central difference) to c²∂²u/∂x²</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Right side: c² ∂²u/∂x² — same Rule 1 stencil, scaled by c²</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form (identical to heat equation)</span>
+            $$c^2\,\frac{\partial^2 u}{\partial x^2} \;\approx\; \frac{c^2}{\Delta x^2}\!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — Rule 1 scaled by c²</span>
+            <pre>right_side = (c^2 / dx^2) .*
+  (u_curr[3:end] .- 2 .* u_curr[2:end-1]
+                 .+ u_curr[1:end-2])
+# Same stencil as Example A — only α replaced by c²</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">now discretize the LEFT side — ∂²u/∂t² needs a central difference across three time levels</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Left side: approximate ∂²u/∂t² with a central difference in time</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form</span>
+            $$\frac{\partial^2 u}{\partial t^2} \;\approx\; \frac{u_i^{n+1} - 2u_i^n + u_i^{n-1}}{\Delta t^2}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Compare to Rule 1: the same $[+1,\,-2,\,+1]$ pattern — but across
+              <em>time</em> instead of space.
+              Solve for $u_i^{n+1}$:
+              $\;u_i^{n+1} = 2u_i^n - u_i^{n-1} + \Delta t^2 \cdot(\ldots)$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — solve for u_next</span>
+            <pre># u^{n+1} = 2u^n - u^{n-1} + Δt² × right_side
+u_next[2:end-1] .=
+  2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+  dt^2 .* right_side</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">substitute and simplify — define λ = c·Δt/Δx to write the update compactly</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Combine both sides into the leap-frog update rule</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Full discrete update rule</span>
+            $$u_i^{n+1} = 2u_i^n - u_i^{n-1}
+              + \underbrace{\!\left(\frac{c\,\Delta t}{\Delta x}\right)^{\!2}}_{\lambda^2}
+              \!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Notice: the space stencil $[+1,-2,+1]$ is <em>identical</em> to the
+              heat equation — only the time part differs.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — compact with λ²</span>
+            <pre>λ = (c * dt / dx)^2   # CFL number squared
+
+u_next[2:end-1] .=
+  2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+  λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1]
+                       .+ u_curr[1:end-2])</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">handle the zero initial velocity condition, then choose a stable Δt</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Zero initial velocity and CFL condition</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Initial condition for velocity</span>
+            $$\frac{\partial u}{\partial t}(x, 0) = 0
+              \quad\Longrightarrow\quad u^{-1} = u^0$$
+            <p style="margin-top:10px; font-size:0.84rem; color:#4a6a8a;">
+              <strong>CFL stability:</strong>
+              $\lambda = c\,\Delta t / \Delta x \leq 1$
+              $\;\Longrightarrow\;$
+              $\Delta t \leq \Delta x / c$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia</span>
+            <pre># Zero velocity IC: u_prev = u_curr at t=0
+# (the update formula gives the right result)
+u_prev = copy(u_curr)
+
+# CFL: λ = c·dt/dx ≤ 1
+dt = 0.4 * dx / c    # λ = 0.4 < 1  ✓</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">assemble the complete solver</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">6</div>
+          <span class="deriv-title">Assembled solver</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve_wave_1d(; N=300, c=1.0, L=1.0, T=1.5)
+    # Step 1 — grid
+    dx = L / (N + 1)
+    x  = range(dx, L - dx, length=N)
+
+    # Step 5 — CFL:  λ = c·dt/dx ≤ 1
+    dt = 0.4 * dx / c
+    λ  = (c * dt / dx)^2       # λ² used in update rule
+
+    # Step 1 — initial condition: triangular pluck
+    u_curr = [xi < 0.5 ? 2xi : 2(1 - xi) for xi in x]
+
+    # Step 5 — zero initial velocity → u_prev = u_curr
+    u_prev = copy(u_curr)
+    u_next = similar(u_curr)
+
+    for _ in 1:ceil(Int, T / dt)
+        # Steps 2+3+4 — leap-frog:
+        #   u^{n+1} = 2u^n - u^{n-1} + λ²·(stencil)
+        u_next[2:end-1] .=
+            2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+            λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1]
+                                 .+ u_curr[1:end-2])
+        # Dirichlet BCs: endpoints stay 0
+        u_prev, u_curr = u_curr, copy(u_next)
+    end
+    return collect(x), u_curr
+end
+
+using Plots
+x, u = solve_wave_1d()
+plot(x, u, xlabel="x", ylabel="u(x,T)", title="Wave equation  T=1.5", lw=2)</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE C: POISSON EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-poisson">
+    <h3>Example C — Poisson Equation (Elliptic)</h3>
+    <p>
+      Poisson is a <em>steady-state</em> problem — no time derivative, no time loop.
+      Instead, Rule 1 is applied at every grid point <em>simultaneously</em> to
+      produce a large linear system $A\mathbf{u} = \mathbf{b}$, solved in one shot.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the PDE — notice there is no time derivative</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper / textbook</span>
+            $$-\nabla^2 u(x,y) = f(x,y), \quad (x,y) \in [0,L]^2$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              BC: $u = 0$ on all four walls<br>
+              Test case (known exact answer):<br>
+              &ensp;$f(x,y) = 2\pi^2\sin(\pi x)\sin(\pi y)$<br>
+              &ensp;$u_{\text{exact}}(x,y) = \sin(\pi x)\sin(\pi y)$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — grid and source term</span>
+            <pre>N  = 50
+h  = 1.0 / (N + 1)
+xs = range(h, 1-h, length=N)
+ys = range(h, 1-h, length=N)
+
+# Source term matrix F[j,i] = f(xs[i], ys[j])
+F = [2π^2*sin(π*x)*sin(π*y)
+     for y in ys, x in xs]</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">expand ∇² in 2D and apply Rule 1 at every interior node (i, j)</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Apply the 5-point stencil at each node — this gives one equation per grid point</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Rule 1 applied in x and y</span>
+            $$-\frac{u_{i+1,j}+u_{i-1,j}+u_{i,j+1}+u_{i,j-1}-4u_{i,j}}{h^2} = f_{i,j}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              There are $N^2$ such equations (one per interior point).
+              Each involves up to 5 unknowns.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What this means structurally</span>
+            <pre># N² unknowns, N² equations
+# → one large sparse linear system  A·u = b
+#
+# A is sparse: each row has ≤ 5 nonzeros
+#   diagonal:     4/h²  (the -2u_i term ×2)
+#   off-diagonals: -1/h² (the +1 neighbour terms)
+#
+# Solve once:  u = A \ b</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">stack all N² equations into matrix form using Kronecker products</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Build the sparse matrix A from 1D pieces using Kronecker products</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Matrix construction</span>
+            $$T_{1D} = \frac{1}{h^2}\begin{pmatrix}-2&1&&\\1&-2&1&\\&\ddots&\ddots&\\&&1&-2\end{pmatrix}$$
+            $$A = -(I_N \otimes T_{1D} + T_{1D} \otimes I_N)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              $\otimes$ is the Kronecker product — it "tiles" the 1D stencil
+              across all rows and columns of the 2D grid.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — sparse assembly</span>
+            <pre>using SparseArrays, LinearAlgebra
+
+e   = ones(N)
+T1D = spdiagm(
+   0 => -2 .* e,
+   1 =>  e[1:end-1],   # super-diagonal
+  -1 =>  e[1:end-1])   # sub-diagonal
+T1D ./= h^2
+
+I_N = sparse(I, N, N)
+A = -(kron(I_N, T1D) + kron(T1D, I_N))</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">flatten the source term to a vector b, then call Julia's backslash solver</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Solve A·u = b — Julia's \ calls a sparse direct solver automatically</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Linear system</span>
+            $$A\,\mathbf{u} = \mathbf{b}
+              \quad\Longrightarrow\quad
+              \mathbf{u} = A \backslash \mathbf{b}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Julia's <code>\</code> detects that $A$ is sparse and uses
+              SuiteSparse's UMFPACK solver.
+              One call — no iteration needed.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia</span>
+            <pre># b = F flattened to a column vector
+b = vec(F)
+
+# Solve A·u = b  →  u = A\b
+u_vec = A \ b
+
+# Reshape the solution back to N×N
+u = reshape(u_vec, N, N)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">assemble the complete solver and verify against the exact solution</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Assembled solver with verification</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using SparseArrays, LinearAlgebra
+
+function solve_poisson_2d(; N=50, L=1.0)
+    # Step 1 — grid
+    h  = L / (N + 1)
+    xs = range(h, L - h, length=N)
+    ys = range(h, L - h, length=N)
+
+    # Step 3 — build sparse 2D Laplacian (Rule 1 in matrix form)
+    e   = ones(N)
+    T1D = spdiagm(0 => -2 .* e,
+                  1 =>  e[1:end-1],
+                 -1 =>  e[1:end-1]) ./ h^2
+    I_N = sparse(I, N, N)
+    A   = -(kron(I_N, T1D) + kron(T1D, I_N))   # A = −∇²
+
+    # Step 4 — source term and solve
+    F = [2π^2 * sin(π*x) * sin(π*y) for y in ys, x in xs]
+    u = reshape(A \ vec(F), N, N)
+
+    # Verification — compare to known exact solution
+    u_exact = [sin(π*x) * sin(π*y) for y in ys, x in xs]
+    println("L∞ error = ", maximum(abs.(u .- u_exact)),
+            "  (should be O(h²) ≈ ", h^2, ")")
+
+    return collect(xs), collect(ys), u
+end
+
+using Plots
+xs, ys, u = solve_poisson_2d()
+heatmap(xs, ys, u, c=:viridis, aspect_ratio=:equal,
+        xlabel="x", ylabel="y", title="Poisson solution u(x,y)")</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE D: NAVIER-STOKES
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-ns">
+    <h3>Example D — Navier-Stokes (Nonlinear, Coupled)</h3>
+    <p>
+      Navier-Stokes combines everything from Examples A–C: an Euler time step
+      (Example A), a diffusion term (Example A), and a pressure Poisson sub-solve
+      (Example C) — all coupled together and repeated every timestep.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the two coupled equations from the paper</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper — incompressible NS</span>
+            $$\frac{\partial \mathbf{u}}{\partial t} + \underbrace{(\mathbf{u}\cdot\nabla)\mathbf{u}}_{\text{convection — nonlinear}} = -\frac{\nabla p}{\rho} + \nu\,\nabla^2 \mathbf{u}$$
+            $$\nabla \cdot \mathbf{u} = 0$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              $\mathbf{u}=(u,v)$ velocity, $p$ pressure, $\nu$ kinematic viscosity<br>
+              Reynolds number: $\mathrm{Re} = UL/\nu$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What each term needs in code</span>
+            <pre># ∂u/∂t + diffusion → Euler step (Example A pattern)
+# (u·∇)u            → computed each step (new, nonlinear)
+# −∇p/ρ             → requires solving for p first
+# ∇·u = 0           → means: solve a Poisson eq. for p
+#                      (same as Example C, every timestep)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">identify each term's difficulty — and which example it mirrors</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Map each NS term to what you already know from Examples A–C</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Term-by-term breakdown</span>
+            <div style="font-size:0.88rem; line-height:2.1;">
+              $\partial\mathbf{u}/\partial t$ → Rule 2 Euler step (Example A) ✓<br>
+              $\nu\nabla^2\mathbf{u}$ → Rule 1 stencil × ν (Example A) ✓<br>
+              $(\mathbf{u}\cdot\nabla)\mathbf{u}$ → <strong>new</strong> — nonlinear, must recompute every step<br>
+              $-\nabla p/\rho$ → <strong>new</strong> — pressure is unknown until we solve for it<br>
+              $\nabla\cdot\mathbf{u}=0$ → <strong>new</strong> — forces a Poisson solve (Example C) every step
+            </div>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What changes each timestep</span>
+            <pre># convection: -(u·∇)u
+#   = -(u·∂u/∂x + v·∂u/∂y)  for x-component
+#   Must re-evaluate at every step because u changes
+
+# Example C's Poisson solve now runs every step:
+#   ∇²p = (ρ/dt) ∇·u*
+# This is the expensive part of NS</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">use the projection (fractional-step) method — split each timestep into three stages</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Stage 1 — Advance velocity ignoring pressure (intermediate u*)</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Math</span>
+            $$\mathbf{u}^* = \mathbf{u}^n + \Delta t\!\left[-(\mathbf{u}^n\cdot\nabla)\mathbf{u}^n + \nu\,\nabla^2\mathbf{u}^n\right]$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              This is an Euler step — identical to Example A — but the right-hand side
+              includes the convection term. $\mathbf{u}^*$ is not divergence-free yet.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Rule 1 stencil for diffusion (same as Example A):
+diff_x = ν .* laplacian(u, h)   # ν∇²u
+diff_y = ν .* laplacian(v, h)
+
+# Convection (new — nonlinear product):
+conv_x = -(u .* dudx .+ v .* dudy)
+conv_y = -(u .* dvdx .+ v .* dvdy)
+
+# Rule 2 Euler step (same as Example A):
+u_star = u .+ dt .* (conv_x .+ diff_x)
+v_star = v .+ dt .* (conv_y .+ diff_y)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Stage 2 — find the pressure that makes u divergence-free (this is Example C inside NS)</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Stage 2 — Solve a Poisson equation for pressure — same as Example C</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Pressure Poisson equation</span>
+            $$\nabla^2 p^{n+1} = \frac{\rho}{\Delta t}\,\nabla\cdot\mathbf{u}^*$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              This is the Poisson equation from Example C — with the right-hand side
+              replaced by the divergence of $\mathbf{u}^*$. It must be solved
+              <strong>every single timestep</strong>, which is why NS is expensive.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Divergence of u*:  ∇·u*
+div_ustar = dudx_star .+ dvdy_star
+
+# Right-hand side (same structure as Example C)
+b = (ρ / dt) .* div_ustar
+
+# Solve ∇²p = b  →  same A matrix as Example C
+p = reshape(A_pressure \ vec(b), N, N)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Stage 3 — subtract the pressure gradient to enforce ∇·u = 0</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Stage 3 — Correct velocity with the pressure gradient</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Correction step</span>
+            $$\mathbf{u}^{n+1} = \mathbf{u}^* - \frac{\Delta t}{\rho}\,\nabla p^{n+1}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Subtracting $\nabla p$ removes the divergent part of $\mathbf{u}^*$,
+              leaving a velocity field that satisfies $\nabla\cdot\mathbf{u}=0$.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Pressure gradient (Rule 1 in x and y):
+dpdx = (p[3:end,:] .- p[1:end-2,:]) ./ (2h)
+dpdy = (p[:,3:end] .- p[:,1:end-2]) ./ (2h)
+
+# Correction:
+u = u_star .- (dt/ρ) .* dpdx
+v = v_star .- (dt/ρ) .* dpdy
+# Now ∇·u ≈ 0  ✓</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">for real simulations, use Oceananigans.jl — it implements all three stages internally</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">6</div>
+          <span class="deriv-title">Production code — Oceananigans.jl handles the full projection for you</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg; Pkg.add("Oceananigans")
+using Oceananigans
+
+# Lid-driven cavity at Re = 100
+# Oceananigans handles stages 1–3 internally on every timestep
+grid = RectilinearGrid(size=(64, 64), x=(0,1), y=(0,1),
+                       topology=(Bounded, Bounded, Flat))
+
+model = NonhydrostaticModel(;
+    grid,
+    advection   = UpwindBiasedFifthOrder(),
+    timestepper = :RungeKutta3,
+    closure     = ScalarDiffusivity(ν=1e-2))   # ν = 1/Re = 0.01
+
+set!(model, u=0, v=0)
+
+simulation = Simulation(model, Δt=1e-3, stop_time=10)
+run!(simulation)</code></pre>
+    </div>
+  </section>
+
+  <!-- 5.4 Verify -->
+  <section class="section" id="step5-verify">
+    <h3>5.4 Verify — Convergence Study</h3>
+    <p>
+      After writing a solver, confirm that refining the grid reduces the error
+      at the expected rate. For central differences: halving $h$ should divide
+      the error by $\approx 4$ (second-order accuracy).
+    </p>
+
+    $$\|u_h - u_{\text{exact}}\|_\infty = C\,h^p, \quad p = 2 \text{ for central differences}$$
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Plots
+
+Ns  = [10, 20, 40, 80, 160]
+hs  = Float64[]
+err = Float64[]
+
+for N in Ns
+    xs, ys, u_num = solve_poisson_2d(N=N)
+    h = 1.0 / (N + 1)
+    u_exact = [sin(π*x)*sin(π*y) for y in ys, x in xs]
+    push!(hs, h)
+    push!(err, maximum(abs.(u_num .- u_exact)))
+    ratio = length(err) > 1 ? err[end-1]/err[end] : NaN
+    println("N=$N  h=$h  error=$(err[end])  ratio=$(round(ratio, digits=2))")
+end
+# ratio ≈ 4.0 each row confirms 2nd-order convergence
+
+plot(hs, err, xscale=:log10, yscale=:log10, marker=:o, lw=2,
+     xlabel="h", ylabel="L∞ error", title="Convergence study", label="Numerical")
+plot!(hs, err[1].*(hs./hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 6 ══════════════════════════════════════════════ -->
+  <section class="section" id="step6">
+    <h2><span class="step-badge">Step 6</span>Configure VS Code for Julia + WSL</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Extension</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><strong>WSL</strong></td><td>Connect VS Code to your WSL environment</td></tr>
+          <tr><td><strong>Julia</strong></td><td>Syntax highlighting, IntelliSense, REPL integration</td></tr>
+          <tr><td><strong>Jupyter</strong></td><td>Run .ipynb notebooks with a Julia kernel</td></tr>
+          <tr><td><strong>Remote — SSH</strong></td><td>Edit files on the HPC cluster</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Pluto.jl — reactive notebooks</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg; Pkg.add(["Pluto", "PlutoUI"])
+using Pluto
+Pluto.run()    # opens at localhost:1234</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
+  <section class="section" id="step7">
+    <h2><span class="step-badge">Step 7</span>Connect to the HPC Cluster</h2>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">ssh-keygen -t ed25519 -C "your_email@example.com"
+ssh-copy-id user@cluster.example.edu
+ssh user@cluster.example.edu
+module load julia/1.10 && julia --version</code></pre>
+    </div>
+    <h3>Sync your project</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">rsync -avz ~/julia-pde/ user@cluster:~/julia-pde/
+ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instantiate()'"</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
+  <section class="section" id="step8">
+    <h2><span class="step-badge">Step 8</span>Submitting Julia Jobs with Slurm</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>sbatch job.sh</code></td><td>Submit a job</td></tr>
+          <tr><td><code>squeue -u $USER</code></td><td>Show your jobs</td></tr>
+          <tr><td><code>scancel JOBID</code></td><td>Cancel a job</td></tr>
+          <tr><td><code>sinfo</code></td><td>Show available nodes</td></tr>
+          <tr><td><code>sacct -j JOBID</code></td><td>Stats after run</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash (job.sh)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --job-name=heat_eq
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=4G
+#SBATCH --time=00:30:00
+#SBATCH --output=heat_%j.out
+
+module load julia/1.10
+julia --threads=4 --project=. heat_equation.jl</code></pre>
+    </div>
+    <div class="callout info">
+      <strong>Threading</strong>
+      <code>--threads=4</code> and <code>--cpus-per-task=4</code> must match.
+      Use <code>Threads.@threads for i in 1:N</code> to parallelize loops.
+    </div>
+  </section>
+
+  <footer>
+    Julia for HPC — Student Setup Guide &nbsp;·&nbsp; MIT License
+  </footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
