@@ -17,7 +17,7 @@
 
 using Pkg
 # ---------------- Auto-install missing packages on first run ------------------
-const REQUIRED_PKGS = ["Plots", "PythonCall"]
+const REQUIRED_PKGS = ["Plots", "PythonCall", "Gmsh"]
 
 function ensure_packages()
     installed = Set(keys(Pkg.project().dependencies))
@@ -32,6 +32,7 @@ ensure_packages()
 
 using Plots, LinearAlgebra, SparseArrays, Printf, Dates
 using PythonCall
+using Gmsh: gmsh
 
 # Set headless backend for HPC / CI
 ENV["GKSwstype"] = "100"
@@ -476,6 +477,144 @@ function fig_convergence_study()
     savefig(plt, joinpath(CFG.figures_dir, "convergence_study.png"))
 end
 
+"""
+    gmsh_unit_square(; lc=0.5)
+
+Mesh the unit square [0,1]² with Gmsh and return `(xy, tri_nodes)` where
+`xy` is `2 × n_nodes` of node coordinates and `tri_nodes` is `3 × n_tri`
+of 1-based global node indices per triangle.
+"""
+function gmsh_unit_square(; lc::Float64=0.5)
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)   # quiet output
+    gmsh.model.add("unit_square")
+
+    # 1. Geometry — corner points of [0,1] × [0,1] with target element size lc
+    p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, lc)
+    p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, lc)
+    p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, lc)
+    p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, lc)
+
+    # 2. Edges and the surface they bound
+    l1 = gmsh.model.geo.addLine(p1, p2)
+    l2 = gmsh.model.geo.addLine(p2, p3)
+    l3 = gmsh.model.geo.addLine(p3, p4)
+    l4 = gmsh.model.geo.addLine(p4, p1)
+    cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
+    gmsh.model.geo.addPlaneSurface([cl])
+
+    # 3. Synchronise the CAD kernel and triangulate the surface
+    gmsh.model.geo.synchronize()
+    gmsh.model.mesh.generate(2)        # 2D ⇒ triangles
+
+    # 4. Pull the mesh back into Julia
+    node_tags, coord, _   = gmsh.model.mesh.getNodes()
+    _, _, elem_node_tags  = gmsh.model.mesh.getElements(2)
+
+    n_nodes = length(node_tags)
+    xy      = reshape(coord, 3, n_nodes)[1:2, :]      # drop z
+
+    # Gmsh tags can be sparse — remap them to dense 1..n_nodes indices.
+    tag2idx   = Dict(Int(t) => i for (i, t) in enumerate(node_tags))
+    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]
+    tri_nodes = reshape(flat_conn, 3, :)
+
+    gmsh.finalize()
+    return xy, tri_nodes
+end
+
+"""
+    assemble_adjacency(tri_nodes, n_nodes)
+
+Walk every triangle and add a 1 at A[i, j] for each pair (i, j) of its
+nodes. The resulting sparse matrix has the same non-zero pattern as a
+P1 finite-element stiffness matrix on the same mesh.
+"""
+function assemble_adjacency(tri_nodes::AbstractMatrix{Int}, n_nodes::Int)
+    I = Int[]; J = Int[]; V = Float64[]
+    for k in axes(tri_nodes, 2)
+        nodes_k = tri_nodes[:, k]              # 3 global node IDs
+        for a in 1:3, b in 1:3
+            push!(I, nodes_k[a])               # global row
+            push!(J, nodes_k[b])               # global column
+            push!(V, 1.0)                      # local entry value
+        end
+    end
+    return sparse(I, J, V, n_nodes, n_nodes)   # duplicates auto-summed
+end
+
+function fig_mesh_to_matrix()
+    @info "Generating Figure 8: Mesh-to-matrix correspondence (real Gmsh.jl run)"
+
+    # Coarse mesh — `lc` chosen so the figure stays readable (~12 nodes).
+    xy, tri_nodes = gmsh_unit_square(lc=0.5)
+    n_nodes = size(xy, 2)
+    n_tri   = size(tri_nodes, 2)
+
+    # Build the matrix exactly as a P1-FEM assembler would.
+    A = assemble_adjacency(tri_nodes, n_nodes)
+
+    # Highlight the first triangle so readers can match it to the matrix.
+    tri_hl = tri_nodes[:, 1]
+
+    # ---- Left panel: the mesh with node and triangle labels ----
+    p1 = plot(legend=false, framestyle=:box, aspect_ratio=:equal,
+              xlim=(-0.15, 1.15), ylim=(-0.15, 1.15),
+              xlabel="x", ylabel="y",
+              title="Gmsh mesh: $n_nodes nodes, $n_tri triangles",
+              titlefontcolor=parse(Colorant, BLUE))
+
+    for k in 1:n_tri
+        a, b, c = tri_nodes[1, k], tri_nodes[2, k], tri_nodes[3, k]
+        xs = [xy[1, a], xy[1, b], xy[1, c], xy[1, a]]
+        ys = [xy[2, a], xy[2, b], xy[2, c], xy[2, a]]
+        fc = (k == 1) ? :gold : :lightblue
+        fa = (k == 1) ? 0.55 : 0.20
+        plot!(p1, xs, ys, seriestype=:shape,
+              fillcolor=fc, fillalpha=fa,
+              linecolor=parse(Colorant, BLUE), linewidth=1.4)
+        cx = (xy[1, a] + xy[1, b] + xy[1, c]) / 3
+        cy = (xy[2, a] + xy[2, b] + xy[2, c]) / 3
+        annotate!(p1, cx, cy, text("T$k", :gray30, :center, 8, :italic))
+    end
+
+    for i in 1:n_nodes
+        scatter!(p1, [xy[1, i]], [xy[2, i]], ms=12, color=:white,
+                 markerstrokecolor=parse(Colorant, BLUE), markerstrokewidth=2)
+        annotate!(p1, xy[1, i], xy[2, i],
+                  text("$i", parse(Colorant, BLUE), :center, 9, :bold))
+    end
+
+    # ---- Right panel: spy-style plot of A ----
+    rows, cols, _ = findnz(A)
+
+    p2 = scatter(cols, rows, ms=11, color=parse(Colorant, ACCENT),
+                 markerstrokecolor=parse(Colorant, BLUE), markerstrokewidth=1,
+                 legend=false, framestyle=:box,
+                 xlim=(0.5, n_nodes + 0.5), ylim=(0.5, n_nodes + 0.5),
+                 yflip=true, aspect_ratio=:equal,
+                 xticks=1:n_nodes, yticks=1:n_nodes,
+                 xlabel="column j  (node j)", ylabel="row i  (node i)",
+                 title="Sparsity of A — non-zero ⇔ nodes share a triangle",
+                 titlefontcolor=parse(Colorant, BLUE))
+
+    # ring the 9 entries contributed by triangle T1
+    for i in tri_hl, j in tri_hl
+        scatter!(p2, [j], [i], ms=17, color=:transparent,
+                 markerstrokecolor=:firebrick, markerstrokewidth=2.5)
+    end
+    annotate!(p2, (n_nodes + 1) / 2, n_nodes + 0.9,
+              text("red rings = the 9 entries A[i,j], i,j ∈ {$(tri_hl[1]),$(tri_hl[2]),$(tri_hl[3])} from T1",
+                   :firebrick, :center, 8, :italic))
+
+    plt = plot(p1, p2, layout=(1, 2),
+               size=(CFG.fig_width, 540), dpi=CFG.fig_dpi,
+               plot_title="From Gmsh mesh to sparse matrix: every triangle T contributes 9 entries A[i,j] with i,j ∈ T",
+               plot_titlefontsize=12,
+               plot_titlefontcolor=parse(Colorant, BLUE))
+    savefig(plt, joinpath(CFG.figures_dir, "mesh_to_matrix.png"))
+end
+
 function generate_all_figures()
     @info "=== Generating all figures ==="
     fig_pde_pipeline()
@@ -485,6 +624,7 @@ function generate_all_figures()
     fig_poisson_equation()
     fig_navier_stokes()
     fig_convergence_study()
+    fig_mesh_to_matrix()
     @info "All figures saved to $(CFG.figures_dir)"
 end
 
@@ -496,13 +636,15 @@ end
 Loads python-docx (auto-installs via pip if missing) and returns the module.
 """
 function load_python_docx()
-    # Try to import; if it fails, install via pip
     try
         return pyimport("docx")
     catch
-        @info "python-docx not found — installing via pip..."
-        python_exe = pyconvert(String, pyimport("sys").executable)
-        run(`$python_exe -m pip install --quiet python-docx`)
+        @info "python-docx not found — installing via CondaPkg..."
+        # PythonCall's bundled conda env has no pip; use CondaPkg's pip-side helper.
+        CondaPkg = Base.require(Base.PkgId(
+            Base.UUID("992eb4ea-22a4-4c89-a5bb-47a3300528ab"), "CondaPkg"))
+        Base.invokelatest(CondaPkg.add_pip, "python-docx")
+        Base.invokelatest(CondaPkg.resolve)
         return pyimport("docx")
     end
 end
@@ -670,18 +812,20 @@ function build_docx()
              "Steps 1–3 install Julia. Step 4 introduces PDE packages. " *
              "Step 5 walks the full PDE-solving workflow with worked " *
              "examples for the heat, wave, Poisson, and Navier-Stokes " *
-             "equations. Steps 6–8 connect to the HPC cluster.")
+             "equations and a section on unstructured meshing with Gmsh. " *
+             "Steps 6–8 connect to the HPC cluster.")
     add_heading("Time Estimate", 2)
     add_table(["Step", "Estimated Time"],
-              [["1 — Install WSL2",          "10–15 min"],
-               ["2 — juliaup + Julia",       "5–10 min"],
-               ["3 — Install Julia Packages","10–15 min"],
-               ["4 — Learn PDE Packages",    "15–20 min"],
-               ["5 — PDE Workflow + Examples","30–60 min"],
-               ["6 — Configure VS Code",     "5–10 min"],
-               ["7 — HPC SSH Setup",         "10 min"],
-               ["8 — Submit Slurm Jobs",     "10–15 min"],
-               ["Total",                     "~95–155 min"]])
+              [["1 — Install WSL2",                "10–15 min"],
+               ["2 — juliaup + Julia",             "5–10 min"],
+               ["3 — Install Julia Packages",      "10–15 min"],
+               ["4 — Learn PDE Packages",          "15–20 min"],
+               ["5 — PDE Workflow + Examples",     "30–60 min"],
+               ["5.6 — Gmsh: mesh → matrix",       "15–20 min"],
+               ["6 — Configure VS Code",           "5–10 min"],
+               ["7 — HPC SSH Setup",               "10 min"],
+               ["8 — Submit Slurm Jobs",           "10–15 min"],
+               ["Total",                           "~110–175 min"]])
     add_page_break()
 
     # ─── STEP 1: WSL ────────────────────────────────────────────────────
@@ -738,6 +882,7 @@ function build_docx()
                ["DifferentialEquations.jl",   "ODE/PDE solver suite"],
                ["MethodOfLines.jl",           "Auto-discretization of PDEs"],
                ["KrylovKit.jl",               "GMRES, CG iterative solvers"],
+               ["Gmsh.jl",                    "Unstructured mesh generation"],
                ["Ferrite.jl / Gridap.jl",     "Finite element methods"],
                ["Oceananigans.jl",            "Production CFD on HPC"],
                ["Plots.jl / Makie.jl",        "Visualization"],
@@ -851,6 +996,139 @@ function build_docx()
               caption="Figure 7. Left: Poisson L∞ error vs grid spacing h on a log-log " *
                       "scale — the slope confirms 2nd-order convergence. Right: solve " *
                       "time scales near-linearly in N² (sparse direct solver).")
+
+    add_page_break()
+
+    # ─── 5.6  GMSH: MESH → MATRIX ───────────────────────────────────────
+    add_heading("5.6  Beyond Structured Grids — Meshing with Gmsh", 2)
+    add_para("Finite-difference grids work for rectangles. Real geometry " *
+             "— L-shapes, airfoils, brain MRI, machine parts — needs " *
+             "unstructured meshes. Gmsh is the de-facto open-source mesher; " *
+             "the Julia bindings live in Gmsh.jl. The workflow has three " *
+             "parts: (1) describe the geometry, (2) let Gmsh triangulate it, " *
+             "(3) read the node coordinates and element connectivity back " *
+             "into Julia and assemble a sparse matrix.")
+
+    add_heading("Install Gmsh.jl", 3)
+    add_code(["# In package mode (press ]):",
+              "(@julia-pde) pkg> add Gmsh"])
+
+    add_heading("Generate a 2D triangular mesh of the unit square", 3)
+    add_para("This is the exact code that produced Figure 8 — running the " *
+             "lecture script reproduces the same mesh on the student's " *
+             "machine, byte-for-byte.")
+    add_code(["using Gmsh: gmsh",
+              "using SparseArrays",
+              "",
+              "function gmsh_unit_square(; lc::Float64 = 0.5)",
+              "    gmsh.initialize()",
+              "    gmsh.option.setNumber(\"General.Terminal\", 0)",
+              "    gmsh.model.add(\"unit_square\")",
+              "",
+              "    # 1. Geometry — corner points of [0,1]×[0,1], target size lc",
+              "    p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, lc)",
+              "    p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, lc)",
+              "    p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, lc)",
+              "    p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, lc)",
+              "",
+              "    # 2. Edges and the surface they bound",
+              "    l1 = gmsh.model.geo.addLine(p1, p2)",
+              "    l2 = gmsh.model.geo.addLine(p2, p3)",
+              "    l3 = gmsh.model.geo.addLine(p3, p4)",
+              "    l4 = gmsh.model.geo.addLine(p4, p1)",
+              "    cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])",
+              "    gmsh.model.geo.addPlaneSurface([cl])",
+              "",
+              "    # 3. Synchronise the CAD kernel and triangulate the surface",
+              "    gmsh.model.geo.synchronize()",
+              "    gmsh.model.mesh.generate(2)        # 2D ⇒ triangles",
+              "",
+              "    # 4. Pull the mesh back into Julia",
+              "    node_tags, coord, _  = gmsh.model.mesh.getNodes()",
+              "    _, _, elem_node_tags = gmsh.model.mesh.getElements(2)",
+              "",
+              "    n_nodes = length(node_tags)",
+              "    xy      = reshape(coord, 3, n_nodes)[1:2, :]   # drop z",
+              "",
+              "    # Gmsh tags can be sparse — remap them to dense 1..n_nodes",
+              "    tag2idx   = Dict(Int(t) => i for (i,t) in enumerate(node_tags))",
+              "    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]",
+              "    tri_nodes = reshape(flat_conn, 3, :)",
+              "",
+              "    gmsh.finalize()",
+              "    return xy, tri_nodes",
+              "end",
+              "",
+              "xy, tri_nodes = gmsh_unit_square(lc=0.5)",
+              "# xy        :: 2 × n_nodes  (coordinates of every mesh node)",
+              "# tri_nodes :: 3 × n_tri    (column k = global node IDs of triangle k)"])
+
+    add_heading("From mesh to sparse matrix — element assembly", 3)
+    add_para("Visit every triangle, and for each pair (a, b) of its three " *
+             "local nodes add the local contribution at the matching global " *
+             "indices. With unit local entries this gives a matrix whose " *
+             "non-zero pattern is identical to a P1 stiffness matrix on the " *
+             "same mesh:")
+    add_code(["function assemble_adjacency(tri_nodes, n_nodes)",
+              "    I = Int[]; J = Int[]; V = Float64[]",
+              "    for k in axes(tri_nodes, 2)",
+              "        nodes_k = tri_nodes[:, k]      # 3 global node IDs",
+              "        for a in 1:3, b in 1:3",
+              "            push!(I, nodes_k[a])       # global row",
+              "            push!(J, nodes_k[b])       # global column",
+              "            push!(V, 1.0)              # local entry value",
+              "        end",
+              "    end",
+              "    return sparse(I, J, V, n_nodes, n_nodes)  # duplicates auto-summed",
+              "end",
+              "",
+              "n_nodes = size(xy, 2)",
+              "A = assemble_adjacency(tri_nodes, n_nodes)"])
+    add_para("The COO triplets (I, J, V) are the natural output of element " *
+             "assembly; `sparse` automatically sums duplicate (i, j) pairs, " *
+             "which is exactly what \"adding contributions from every " *
+             "element touching that node\" means. Replace the `1.0` with " *
+             "the entries of a 3×3 local stiffness matrix to get a real FEM " *
+             "Laplacian — the index plumbing is the same.")
+
+    add_heading("How mesh indices and matrix indices line up", 3)
+    add_para("This is the central idea behind FEM/FVM assembly — once it " *
+             "clicks, every other implementation detail follows:")
+    add_bullet("Each mesh node has a unique global index 1..n. " *
+               "That same index is its row (and column) in the matrix A.")
+    add_bullet("Each element carries a small connectivity list. For a P1 " *
+               "triangle that list has three node IDs.")
+    add_bullet("The element produces a small dense local matrix whose rows " *
+               "and columns are labelled by local node order (1, 2, 3).")
+    add_bullet("Local index a maps to global index nodes_k[a], so " *
+               "K_local[a, b] is added into A[nodes_k[a], nodes_k[b]].")
+    add_bullet("If two elements share a node, both contribute to the same " *
+               "row/column of A — A[i, j] is the sum of every element " *
+               "contribution touching the pair (i, j). Mesh edges become " *
+               "off-diagonal non-zeros; mesh nodes become diagonal entries.")
+
+    add_image(joinpath(CFG.figures_dir, "mesh_to_matrix.png"); width_in=6.5,
+              caption="Figure 8. Left: a 9-node, 8-triangle mesh of the unit " *
+                      "square. Right: the sparsity pattern of the assembled " *
+                      "matrix A. An entry A[i, j] is non-zero iff nodes i " *
+                      "and j share at least one triangle. The red rings on " *
+                      "the right mark the nine entries contributed by " *
+                      "triangle T1 (gold on the left), whose nodes are " *
+                      "{1, 2, 5} — those nine entries are A[1,1], A[1,2], " *
+                      "A[1,5], A[2,1], A[2,2], A[2,5], A[5,1], A[5,2], A[5,5].")
+
+    add_para("Practical implications:")
+    add_bullet("Sparsity ≈ average node degree of the mesh — typically 6–8 " *
+               "neighbours in 2D, so A holds ~7n non-zeros instead of n².")
+    add_bullet("Reordering nodes (Cuthill–McKee, METIS) does not change " *
+               "the physics; it relabels the indices and can dramatically " *
+               "reduce fill-in for sparse direct solvers.")
+    add_bullet("Boundary conditions are applied by editing the rows and " *
+               "columns of A whose indices match the boundary node IDs — " *
+               "the same node-to-row mapping is reused.")
+    add_bullet("Higher-order elements (P2, P3, …) add edge/face degrees of " *
+               "freedom; the connectivity table just gets more rows, but " *
+               "the global-DOF-to-matrix-row rule is unchanged.")
 
     add_page_break()
 

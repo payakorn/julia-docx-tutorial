@@ -43,6 +43,7 @@
     <a href="#pde-poisson"   class="sub">→ Poisson equation</a>
     <a href="#pde-ns"        class="sub">→ Navier-Stokes</a>
     <a href="#step5-verify"  class="sub">5.4 Verify &amp; Converge</a>
+    <a href="#step5-gmsh"    class="sub">5.5 Mesh → Matrix (Gmsh)</a>
     <div class="section-label">Tooling</div>
     <a href="#step6">Step 6 — VS Code</a>
     <a href="#step7">Step 7 — HPC SSH</a>
@@ -83,10 +84,11 @@
     <div class="time-card"><span class="time-icon">📐</span><span class="label">Step 4 — PDE Packages</span><span class="dur">15–20 min</span></div>
     <div class="time-card"><span class="time-icon">📝</span><span class="label">Julia Basics — Functions, Arrays, Linear Algebra</span><span class="dur">20–30 min</span></div>
     <div class="time-card"><span class="time-icon">🧮</span><span class="label">Step 5 — PDE Workflow + Examples</span><span class="dur">30–60 min</span></div>
+    <div class="time-card"><span class="time-icon">🔺</span><span class="label">5.5 — Gmsh: mesh → matrix</span><span class="dur">15–20 min</span></div>
     <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 6 — Configure VS Code</span><span class="dur">5–10 min</span></div>
     <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 7 — HPC SSH Setup</span><span class="dur">10 min</span></div>
     <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 8 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
-    <div class="time-card" style="border-color:#1F4E79;"><span class="time-icon">🕐</span><span class="label" style="color:#1F4E79;">Total</span><span class="dur" style="font-weight:700;">~115–185 min</span></div>
+    <div class="time-card" style="border-color:#1F4E79;"><span class="time-icon">🕐</span><span class="label" style="color:#1F4E79;">Total</span><span class="dur" style="font-weight:700;">~130–205 min</span></div>
   </section>
 
   <hr class="divider" />
@@ -194,6 +196,7 @@ julia --project=.</code></pre>
           <tr><td><code>SparseArrays</code> (stdlib)</td><td>Sparse PDE matrices</td></tr>
           <tr><td><code>FFTW.jl</code></td><td>Spectral methods (FFT)</td></tr>
           <tr><td><code>DifferentialEquations.jl</code></td><td>ODE/PDE solver suite</td></tr>
+          <tr><td><code>Gmsh.jl</code></td><td>Unstructured mesh generation (used in §5.5)</td></tr>
           <tr><td><code>Ferrite.jl</code> / <code>Gridap.jl</code></td><td>Finite element methods</td></tr>
           <tr><td><code>Oceananigans.jl</code></td><td>Production CFD on HPC</td></tr>
           <tr><td><code>Plots.jl</code> / <code>Makie.jl</code></td><td>Visualization</td></tr>
@@ -1919,6 +1922,172 @@ plot(hs, err, xscale=:log10, yscale=:log10, marker=:o, lw=2,
      xlabel="h", ylabel="L∞ error", title="Convergence study", label="Numerical")
 plot!(hs, err[1].*(hs./hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pre>
     </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ 5.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
+  <section class="section" id="step5-gmsh">
+    <h3>5.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
+    <p>
+      Finite-difference grids work for rectangles. Real geometry — L-shapes,
+      airfoils, brain MRI, machine parts — needs <strong>unstructured</strong>
+      meshes. <a href="https://gmsh.info" target="_blank" rel="noopener">Gmsh</a>
+      is the de-facto open-source mesher; the Julia bindings live in
+      <code>Gmsh.jl</code>. The workflow has three parts: (1) describe the
+      geometry, (2) let Gmsh triangulate it, (3) read the node coordinates
+      and element connectivity back into Julia and assemble a sparse matrix.
+    </p>
+
+    <div class="callout info">
+      <strong>Runnable code.</strong> The two code blocks below are the
+      <em>exact</em> functions used to produce the figure at the end of this
+      section. Running <code>julia --project=. generate_lecture_doc.jl</code>
+      reproduces the same mesh and the same sparsity pattern on your machine.
+    </div>
+
+    <h3>Install Gmsh.jl</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@julia-pde) pkg> add Gmsh</code></pre>
+    </div>
+
+    <h3>Generate a 2D triangular mesh of the unit square</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Gmsh: gmsh
+using SparseArrays
+
+function gmsh_unit_square(; lc::Float64 = 0.5)
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("unit_square")
+
+    # 1. Geometry — corner points of [0,1]×[0,1], target size lc
+    p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, lc)
+    p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, lc)
+    p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, lc)
+    p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, lc)
+
+    # 2. Edges and the surface they bound
+    l1 = gmsh.model.geo.addLine(p1, p2)
+    l2 = gmsh.model.geo.addLine(p2, p3)
+    l3 = gmsh.model.geo.addLine(p3, p4)
+    l4 = gmsh.model.geo.addLine(p4, p1)
+    cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
+    gmsh.model.geo.addPlaneSurface([cl])
+
+    # 3. Synchronise the CAD kernel and triangulate the surface
+    gmsh.model.geo.synchronize()
+    gmsh.model.mesh.generate(2)        # 2D ⇒ triangles
+
+    # 4. Pull the mesh back into Julia
+    node_tags, coord, _  = gmsh.model.mesh.getNodes()
+    _, _, elem_node_tags = gmsh.model.mesh.getElements(2)
+
+    n_nodes = length(node_tags)
+    xy      = reshape(coord, 3, n_nodes)[1:2, :]   # drop z
+
+    # Gmsh tags can be sparse — remap to dense 1..n_nodes indices
+    tag2idx   = Dict(Int(t) =&gt; i for (i,t) in enumerate(node_tags))
+    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]
+    tri_nodes = reshape(flat_conn, 3, :)
+
+    gmsh.finalize()
+    return xy, tri_nodes
+end
+
+xy, tri_nodes = gmsh_unit_square(lc = 0.5)
+# xy        :: 2 × n_nodes  (coordinates of every mesh node)
+# tri_nodes :: 3 × n_tri    (column k = global node IDs of triangle k)</code></pre>
+    </div>
+
+    <h3>From mesh to sparse matrix — element assembly</h3>
+    <p>
+      Visit every triangle. For each pair $(a,b)$ of its three local nodes,
+      add the local contribution at the matching <em>global</em> indices.
+      With unit local entries the result has the same non-zero pattern as a
+      P1 finite-element stiffness matrix on the same mesh:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function assemble_adjacency(tri_nodes, n_nodes)
+    I = Int[]; J = Int[]; V = Float64[]
+    for k in axes(tri_nodes, 2)
+        nodes_k = tri_nodes[:, k]      # 3 global node IDs
+        for a in 1:3, b in 1:3
+            push!(I, nodes_k[a])       # global row
+            push!(J, nodes_k[b])       # global column
+            push!(V, 1.0)              # local entry value
+        end
+    end
+    return sparse(I, J, V, n_nodes, n_nodes)  # duplicates auto-summed
+end
+
+n_nodes = size(xy, 2)
+A = assemble_adjacency(tri_nodes, n_nodes)</code></pre>
+    </div>
+    <p>
+      The COO triplets <code>(I, J, V)</code> are the natural output of
+      element assembly; <code>sparse</code> automatically sums duplicate
+      $(i,j)$ pairs — exactly what <em>“adding contributions from every
+      element touching that node”</em> means. Replace the <code>1.0</code>
+      with the entries of a real 3×3 local stiffness matrix and you have a
+      working FEM Laplacian — the index plumbing is unchanged.
+    </p>
+
+    <h3>How mesh indices and matrix indices line up</h3>
+    <p>
+      This is the central idea behind FEM/FVM assembly — once it clicks,
+      every other implementation detail follows:
+    </p>
+    <ul>
+      <li>Each mesh node has a unique <strong>global index</strong>
+        $1..n$. That same index is its row (and column) in $A$.</li>
+      <li>Each element carries a small <strong>connectivity list</strong>.
+        For a P1 triangle that list has three node IDs.</li>
+      <li>The element produces a small dense local matrix
+        $K^{(k)}_{ab}$ whose rows and columns are labelled by the
+        element's <em>local</em> node order $(1, 2, 3)$.</li>
+      <li>Local index $a$ maps to global index
+        <code>tri_nodes[a, k]</code>. So
+        $K^{(k)}_{ab}$ is added into
+        $A_{\text{tri\_nodes}[a,k],\,\text{tri\_nodes}[b,k]}$.</li>
+      <li>If two elements share a node, both contribute to the same
+        row/column of $A$ — entry $A_{ij}$ is the <em>sum</em> of every
+        element contribution touching the pair $(i,j)$. Mesh edges become
+        off-diagonal non-zeros; mesh nodes become diagonal entries.</li>
+    </ul>
+
+    <figure class="figure">
+      <img src="../output/figures/mesh_to_matrix.png"
+           alt="Left: a Gmsh-generated triangular mesh of the unit square with numbered nodes. Right: the sparsity pattern of the assembled matrix, with the 9 entries from triangle T1 ringed in red."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure.</strong> Output of the two functions above (lc = 0.5).
+        Left: the Gmsh mesh, with each node and each triangle labelled.
+        Right: the sparsity pattern of <code>A</code>; an entry
+        $A_{ij}$ is non-zero iff nodes $i$ and $j$ share at least one
+        triangle. The red rings on the right mark the nine entries
+        contributed by triangle <strong>T1</strong> (gold on the left) —
+        i.e. all $(i, j)$ with $i, j \in \texttt{tri\_nodes[:, 1]}$.
+      </figcaption>
+    </figure>
+
+    <p style="margin-top:1.4em;"><strong>Practical implications:</strong></p>
+    <ul>
+      <li>Sparsity ≈ average node degree of the mesh — typically 6–8
+        neighbours in 2D, so $A$ holds $\approx 7n$ non-zeros instead of $n^2$.</li>
+      <li>Reordering nodes (Cuthill–McKee, METIS) does <em>not</em> change
+        the physics; it only relabels indices and can dramatically reduce
+        fill-in for sparse direct solvers.</li>
+      <li>Boundary conditions are applied by editing the rows and columns
+        of $A$ whose indices match boundary node IDs — the same node-to-row
+        mapping is reused.</li>
+      <li>Higher-order elements (P2, P3, …) add edge/face degrees of
+        freedom; the connectivity table just grows more rows, but the
+        global-DOF-to-matrix-row rule is unchanged.</li>
+    </ul>
   </section>
 
   <hr class="divider" />
