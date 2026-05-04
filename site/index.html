@@ -68,15 +68,101 @@
   <section class="section" id="overview">
     <h2>Overview &amp; Prerequisites</h2>
     <p>
-      This guide walks you through a complete Julia environment for scientific
-      computing. The core of the guide (Step 5) shows how to read a PDE from a
-      paper and convert each mathematical term into Julia code, one step at a time.
+      Welcome — this guide is for students who have never written scientific
+      Julia code before. By the end you will have a real Linux development
+      environment, a working Julia installation, your own package called
+      <code>juliaPDEs</code>, four worked PDE examples (heat, wave, Poisson,
+      Navier–Stokes), and the connection settings to run the same code on
+      a university HPC cluster via SSH and Slurm.
     </p>
+
+    <h3>What is "scientific computing" and why do we use Julia?</h3>
+    <p>
+      <strong>Scientific computing</strong> means using a computer to
+      simulate physical processes — heat spreading through a metal bar,
+      sound waves bouncing in a room, fluid flowing past a wing. The maths
+      that describes these processes is almost always written as a
+      <strong>partial differential equation (PDE)</strong>: an equation
+      involving partial derivatives of an unknown field with respect to
+      space and time. We will <em>discretise</em> these equations (turn
+      derivatives into arithmetic on a grid) and let the computer step the
+      solution forward.
+    </p>
+    <p>
+      <strong>Julia</strong> is a programming language designed exactly for
+      this kind of work. It looks as readable as Python, runs as fast as C,
+      and has first-class support for arrays, linear algebra, and parallel
+      computing built into the standard library. You write
+      <code>2x^2 + 1</code> and Julia compiles it to efficient machine code
+      the first time you call it.
+    </p>
+
+    <h3>What is HPC?</h3>
+    <p>
+      <strong>HPC</strong> stands for <em>High-Performance Computing</em>.
+      In practice it means: many CPU cores (and possibly GPUs) working
+      together on one big problem, on a shared cluster of machines. You
+      do not run jobs by double-clicking; you submit a <em>job script</em>
+      to a queueing system (we use <strong>Slurm</strong>), wait your turn,
+      and the cluster gives you the requested cores for a bounded amount of
+      time. Steps 7 and 8 walk you through that workflow.
+    </p>
+
+    <h3>Why all the setup before any maths?</h3>
+    <p>
+      The first four steps look like pure plumbing — install a Linux kernel,
+      install a version manager, install Julia, install packages — but each
+      one solves a real problem you would otherwise hit later:
+    </p>
+    <ul>
+      <li><strong>WSL2 (Step 1)</strong> gives you a Linux environment on
+        Windows. Almost every HPC cluster runs Linux, and most scientific
+        Julia packages are tested mainly on Linux. Developing on Linux
+        locally means the code you run on your laptop is the code that runs
+        on the cluster — no surprises.</li>
+      <li><strong>juliaup (Step 2)</strong> lets you install many Julia
+        versions side-by-side. The cluster might have Julia 1.10 LTS while
+        you want to try 1.11 at home; juliaup keeps both.</li>
+      <li><strong>Project environments (Step 3)</strong> pin every package
+        to an exact version and write that information into
+        <code>Manifest.toml</code>. Send that file to a colleague and they
+        get bit-identical packages — that is how published computational
+        results stay reproducible years later.</li>
+      <li><strong>PDE packages (Step 4)</strong> save you from rewriting
+        well-tested numerical algorithms (sparse linear solvers, mesh
+        generators, finite-element assemblers) from scratch.</li>
+    </ul>
+
+    <h3>What you will build</h3>
+    <p>
+      A Julia package called <code>juliaPDEs</code> with three solvers
+      (<code>solve_heat_1d</code>, <code>solve_wave_1d</code>,
+      <code>solve_navier_stokes</code>) plus the supporting workflow —
+      Revise live-reload, a test suite, an unstructured mesh demo, and a
+      Slurm job script that runs the same package on the cluster.
+    </p>
+
     <div class="callout info">
       <strong>Prerequisites</strong>
-      No Julia experience required. Basic terminal familiarity (cd, ls) is helpful.
-      You need Windows 10/11 with an internet connection for the first run.
+      No Julia experience required. You need a Windows 10 or 11 machine
+      (anything from the last ~5 years works), an internet connection for
+      the first install, and basic terminal familiarity — knowing what
+      <code>cd</code>, <code>ls</code>, and <code>pwd</code> do is enough.
+      Maths-wise: comfort with calculus (partial derivatives) helps in
+      Step 5; a bit of linear algebra (matrix–vector products) helps in
+      Step 5.5. You do not need any prior programming course beyond what
+      a typical engineering or science freshman has done.
     </div>
+
+    <h3>How to use this guide</h3>
+    <p>
+      Read top to bottom on your first pass. Every code block has a
+      <em>Copy</em> button — paste it straight into your terminal or REPL.
+      If something fails, look for a <em>callout</em> box (the coloured
+      panels) — they collect the most common gotchas and how to fix them.
+      The sidebar on the left lets you jump back to any section once you
+      know what you are looking for.
+    </p>
     <h3>Time Estimate</h3>
     <div class="time-card"><span class="time-icon">🖥️</span><span class="label">Step 1 — Install WSL2</span><span class="dur">10–15 min</span></div>
     <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 2 — juliaup + Julia</span><span class="dur">5–10 min</span></div>
@@ -96,19 +182,119 @@
   <!-- ══ STEP 1 ══════════════════════════════════════════════ -->
   <section class="section" id="step1">
     <h2><span class="step-badge">Step 1</span>Install WSL2</h2>
-    <p>WSL2 runs a real Linux kernel inside Windows. All scientific Julia packages work best on Linux.</p>
+
+    <h3>What is WSL2 and why do we need it?</h3>
+    <p>
+      <strong>WSL</strong> stands for <em>Windows Subsystem for Linux</em>.
+      It lets you run a real, full Linux operating system <em>inside</em>
+      Windows — the same Linux that powers most of the world's servers,
+      including essentially every HPC cluster you will ever use.
+      <strong>WSL2</strong> is the second-generation version: it boots a
+      lightweight virtual machine with an actual Linux kernel, so commands
+      and tools behave exactly the way they would on a native Linux box.
+    </p>
+    <p>
+      Why bother? Three reasons:
+    </p>
+    <ol>
+      <li><strong>The cluster runs Linux.</strong> Whatever you develop on
+        your laptop should match the target. Developing on Linux locally
+        means the same shell commands, same package versions, same file
+        paths.</li>
+      <li><strong>Most scientific libraries are Linux-first.</strong>
+        CUDA, MPI, Gmsh, Oceananigans — all are tested mainly on Linux,
+        and Julia binaries on Linux tend to be the most polished.</li>
+      <li><strong>Better tools.</strong> The Linux command line gives you
+        <code>grep</code>, <code>awk</code>, <code>ssh</code>, real package
+        managers, and so on, without third-party installs.</li>
+    </ol>
+
+    <div class="callout info">
+      <strong>What is a "kernel"?</strong>
+      The kernel is the low-level core of an operating system — it talks to
+      the CPU and memory, schedules processes, and manages files and
+      networking. WSL2 ships an actual Linux kernel (the same one you would
+      get on Ubuntu) running side-by-side with the Windows kernel, instead
+      of merely emulating Linux commands like the original WSL did.
+    </div>
+
     <h3>1.1 Enable WSL2</h3>
-    <p>Open <strong>PowerShell as Administrator</strong>:</p>
+    <p>
+      Open the <strong>PowerShell</strong> app as <em>Administrator</em>
+      (search for "PowerShell" in the Start menu, right-click,
+      <em>Run as administrator</em>). The <code>wsl --install</code>
+      command turns on the required Windows features and downloads Ubuntu
+      (the default Linux distribution) in one go:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">PowerShell</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">wsl --install
 # Restart your computer when prompted</code></pre>
     </div>
+    <p>
+      After the restart, an Ubuntu terminal window opens automatically.
+      It will ask you to create a Linux <em>username</em> and
+      <em>password</em>. The password does not need to match your Windows
+      one — pick anything memorable. You will type this password whenever
+      you run a command with <code>sudo</code> (see below).
+    </p>
+
     <h3>1.2 First-time Ubuntu setup</h3>
+    <p>
+      Linux distributions ship with a <em>package manager</em> — a tool that
+      installs, updates, and removes software in a controlled way. On Ubuntu
+      that tool is <code>apt</code>. The first thing you do on a fresh
+      install is bring the package list up to date and apply security
+      patches:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl wget git build-essential</code></pre>
+    </div>
+
+    <p>What each piece of those lines does:</p>
+    <ul>
+      <li><code>sudo</code> — run the next command as the administrator
+        ("super-user do"). It will prompt for the password you just set.</li>
+      <li><code>apt update</code> — refresh the local index of available
+        package versions. Does <em>not</em> install anything.</li>
+      <li><code>apt upgrade -y</code> — install any newer versions of
+        packages you already have. The <code>-y</code> answers "yes" to
+        every prompt automatically.</li>
+      <li><code>apt install -y curl wget git build-essential</code> —
+        install four extra bits we need:
+        <ul>
+          <li><code>curl</code> and <code>wget</code> download files from
+            URLs (we will use <code>curl</code> to fetch the juliaup
+            installer).</li>
+          <li><code>git</code> is the version-control system you will
+            use for source code.</li>
+          <li><code>build-essential</code> is a meta-package that pulls
+            in the GNU compiler (<code>gcc</code>), <code>make</code>, and
+            other tools that some Julia packages need to build native
+            extensions.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>Where do my files live?</strong>
+      Inside WSL your home directory is <code>~</code> (e.g.
+      <code>/home/yourname</code>). From Windows you can reach it through
+      <code>\\wsl$\Ubuntu\home\yourname</code> in File Explorer. Keep your
+      Julia code <em>inside</em> WSL (e.g. <code>~/projects/...</code>) for
+      best performance — accessing Windows-side files
+      (<code>/mnt/c/Users/...</code>) from Linux is much slower.
+    </div>
+
+    <div class="callout warn">
+      <strong>If <code>wsl --install</code> fails</strong>
+      On older Windows 10 builds you may need to enable two features
+      manually first: open <em>Turn Windows features on or off</em>, tick
+      <em>Virtual Machine Platform</em> and <em>Windows Subsystem for
+      Linux</em>, click OK, restart, then re-run <code>wsl --install</code>.
+      Windows 11 enables both by default.
     </div>
   </section>
 
@@ -117,7 +303,28 @@ sudo apt install -y curl wget git build-essential</code></pre>
   <!-- ══ STEP 2 ══════════════════════════════════════════════ -->
   <section class="section" id="step2">
     <h2><span class="step-badge">Step 2</span>Install juliaup &amp; Julia</h2>
-    <p><strong>juliaup</strong> is the official Julia version manager — like <code>pyenv</code> for Python.</p>
+
+    <h3>What is juliaup, and why not just install Julia directly?</h3>
+    <p>
+      <strong>juliaup</strong> is the official Julia <em>version manager</em>.
+      A version manager keeps several Julia versions installed at once and
+      lets you switch between them per project. This matters because:
+    </p>
+    <ul>
+      <li>Different libraries support different Julia versions. Your cluster
+        might have Julia 1.10 LTS while you experiment with 1.11 at home.</li>
+      <li>When the next Julia release comes out you can install it
+        side-by-side, try your code, and roll back if anything breaks
+        without re-downloading the previous one.</li>
+      <li>The same idea exists in other ecosystems —
+        <code>pyenv</code>/<code>conda</code> for Python, <code>nvm</code>
+        for Node, <code>rustup</code> for Rust.</li>
+    </ul>
+
+    <h3>2.1 Install juliaup and the latest Julia</h3>
+    <p>
+      Run these from inside your WSL Ubuntu terminal (not PowerShell):
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">curl -fsSL https://install.julialang.org | sh
@@ -125,7 +332,28 @@ source ~/.bashrc
 juliaup add release && juliaup default release
 julia --version</code></pre>
     </div>
-    <h3>2.1 juliaup cheatsheet</h3>
+    <p>What those four lines do:</p>
+    <ul>
+      <li><code>curl -fsSL …</code> downloads the official juliaup installer
+        script and pipes it into <code>sh</code> (the shell). The flags mean
+        "fail on errors, silent, follow redirects, dump to stdout".</li>
+      <li><code>source ~/.bashrc</code> reloads your shell configuration so
+        the new <code>juliaup</code> and <code>julia</code> commands are on
+        your <code>PATH</code> in the same terminal — without it you would
+        have to close and reopen the terminal first.</li>
+      <li><code>juliaup add release</code> downloads the latest stable Julia
+        release. <code>juliaup default release</code> tells juliaup that when
+        you type <code>julia</code> with no extra arguments, you want that
+        version.</li>
+      <li><code>julia --version</code> verifies it worked. Expect output
+        like <code>julia version 1.11.2</code>.</li>
+    </ul>
+
+    <h3>2.2 The juliaup cheatsheet</h3>
+    <p>
+      Bookmark this — these are the only juliaup commands you will use day
+      to day:
+    </p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Command</th><th>Action</th></tr></thead>
@@ -138,7 +366,23 @@ julia --version</code></pre>
         </tbody>
       </table>
     </div>
-    <h3>2.2 Your first Julia program</h3>
+
+    <div class="callout tip">
+      <strong>"release" vs "lts" — which to pick?</strong>
+      <code>release</code> is whatever Julia was published most recently.
+      <code>lts</code> ("long-term support", currently Julia 1.10) gets bug
+      fixes for years and is what HPC clusters typically install. For this
+      guide either works, but if your cluster pins 1.10, run
+      <code>juliaup add 1.10</code> at home for an exact match.
+    </div>
+
+    <h3>2.3 Your first Julia program — meet the REPL</h3>
+    <p>
+      Type <code>julia</code> in your terminal. You enter the
+      <strong>REPL</strong> — Julia's <em>Read-Eval-Print Loop</em>: an
+      interactive prompt where every line you type is parsed, run, and the
+      result printed. Try this:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">println("Hello, Julia!")
@@ -147,10 +391,43 @@ println(2x^2 + 1)
 f(x) = exp(-x^2)
 println(f(1.0))</code></pre>
     </div>
+    <p>Things to notice:</p>
+    <ul>
+      <li><code>2x^2 + 1</code> — Julia lets you skip the multiplication
+        sign before a variable. <code>2x</code> means <code>2*x</code>.</li>
+      <li><code>f(x) = exp(-x^2)</code> — single-line function definition.
+        Equivalent to <code>function f(x); exp(-x^2); end</code>.</li>
+      <li>Everything has a type. <code>x = 3.14</code> creates a
+        <code>Float64</code>; <code>x = 3</code> would have been an
+        <code>Int64</code>.</li>
+    </ul>
+
+    <h3>2.4 The four REPL modes</h3>
+    <p>
+      The REPL has four different "modes", each with its own prompt
+      colour. Switch between them with a single keystroke at an empty
+      prompt — backspace returns to normal mode:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Key</th><th>Mode</th><th>What for</th></tr></thead>
+        <tbody>
+          <tr><td>(default)</td><td><code>julia&gt;</code></td><td>Run Julia code</td></tr>
+          <tr><td><code>]</code></td><td><code>(env) pkg&gt;</code></td><td>Manage packages: <code>add</code>, <code>rm</code>, <code>status</code>, <code>test</code>, <code>instantiate</code></td></tr>
+          <tr><td><code>?</code></td><td><code>help?&gt;</code></td><td>Show docs for a function — try <code>?sin</code></td></tr>
+          <tr><td><code>;</code></td><td><code>shell&gt;</code></td><td>Run a single shell command without leaving the REPL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="callout info">
-      <strong>REPL modes</strong>
-      Press <code>]</code> for package mode, <code>?</code> for help, <code>;</code> for shell.
-      Backspace returns to normal mode.
+      <strong>Why the REPL is special</strong>
+      Most languages compile your whole program then run it. Julia compiles
+      <em>each function the first time it is called</em> and keeps the
+      compiled version in memory. So the REPL is not just a toy interactive
+      prompt — it is a full-speed environment where you can develop and
+      benchmark code as you write it. We will build on this with Revise in
+      Step 4.5.
     </div>
   </section>
 
@@ -159,27 +436,116 @@ println(f(1.0))</code></pre>
   <!-- ══ STEP 3 ══════════════════════════════════════════════ -->
   <section class="section" id="step3">
     <h2><span class="step-badge">Step 3</span>Installing Julia Packages</h2>
-    <p>Always work inside a <em>project environment</em> — it pins versions so results are reproducible.</p>
+
+    <h3>What is a "package" and what is an "environment"?</h3>
+    <p>
+      A <strong>package</strong> in Julia is a self-contained piece of
+      software you can re-use — a plotting library, a sparse-matrix solver,
+      a CFD engine. <code>Plots.jl</code>, <code>SparseArrays</code>,
+      <code>DifferentialEquations.jl</code> are all packages.
+    </p>
+    <p>
+      An <strong>environment</strong> is just a folder that says "for this
+      project, use these specific package versions". Concretely, the folder
+      contains two files:
+    </p>
+    <ul>
+      <li><code>Project.toml</code> — the high-level list:
+        <em>"this project depends on Plots and SparseArrays"</em>.</li>
+      <li><code>Manifest.toml</code> — the low-level lock file:
+        <em>"Plots is exactly version 1.41.6, which itself depends on
+        Showoff 1.1.0, GR 0.73.7, ..."</em>. Every transitive dependency is
+        pinned to an exact version.</li>
+    </ul>
+    <p>
+      Together they make your work <strong>reproducible</strong>. If you
+      hand someone these two files plus your code, they can recreate your
+      Julia setup byte-for-byte by running one command
+      (<code>Pkg.instantiate()</code>). This is how published computational
+      results stay reproducible years after the paper.
+    </p>
+
+    <div class="callout info">
+      <strong>Compare with Python</strong>
+      <code>Project.toml</code> is the equivalent of
+      <code>requirements.txt</code> or <code>pyproject.toml</code>;
+      <code>Manifest.toml</code> is the equivalent of a
+      <code>pip freeze</code>/<code>poetry.lock</code> output. The
+      difference: in Julia these files are first-class language features,
+      not third-party tooling, so <em>everyone</em> uses them.
+    </div>
+
+    <h3>3.1 Create a project folder and activate its environment</h3>
+    <p>
+      The convention is one folder per project. Inside that folder, start
+      Julia with <code>--project=.</code> so it uses the local environment
+      rather than your global default:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">mkdir -p ~/julia-pde && cd ~/julia-pde
 julia --project=.</code></pre>
     </div>
+    <p>
+      <code>mkdir -p</code> creates the folder (the <code>-p</code> flag
+      means "don't error if it already exists, and create parents as
+      needed"). <code>cd</code> moves into it.
+      <code>julia --project=.</code> starts Julia and uses the current
+      directory as the project. The first time, both
+      <code>Project.toml</code> and <code>Manifest.toml</code> will be
+      created automatically when you add your first package.
+    </p>
+
+    <h3>3.2 Add packages in package mode</h3>
+    <p>
+      Inside the REPL, press <code>]</code> to enter package mode. The
+      prompt changes from <code>julia&gt;</code> to
+      <code>(@julia-pde) pkg&gt;</code> — that <code>(@julia-pde)</code>
+      part is the active environment. Now run:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">(@julia-pde) pkg> add DifferentialEquations Plots SparseArrays</code></pre>
     </div>
+    <p>
+      Julia downloads each package and all its transitive dependencies,
+      precompiles them, and writes the choices into <code>Project.toml</code>
+      and <code>Manifest.toml</code>. The first run takes a few minutes
+      because there is a lot to download; subsequent <code>add</code> calls
+      take seconds.
+    </p>
+
+    <h3>3.3 Package-mode cheatsheet</h3>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Package mode</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td><code>add Plots</code></td><td>Install Plots.jl</td></tr>
-          <tr><td><code>rm Plots</code></td><td>Remove a package</td></tr>
-          <tr><td><code>update</code></td><td>Update all packages</td></tr>
-          <tr><td><code>status</code></td><td>List installed packages</td></tr>
-          <tr><td><code>instantiate</code></td><td>Restore from Manifest.toml</td></tr>
+          <tr><td><code>add Plots</code></td><td>Install <code>Plots.jl</code> into the active environment</td></tr>
+          <tr><td><code>rm Plots</code></td><td>Remove a package from <code>Project.toml</code></td></tr>
+          <tr><td><code>update</code></td><td>Update every package to the latest compatible version</td></tr>
+          <tr><td><code>status</code></td><td>List installed packages with their versions</td></tr>
+          <tr><td><code>instantiate</code></td><td>Re-create the environment from <code>Manifest.toml</code> (after cloning a project)</td></tr>
+          <tr><td><code>activate /path/to/proj</code></td><td>Switch the REPL to a different environment</td></tr>
+          <tr><td><code>test</code></td><td>Run the test suite of the active package</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>Always commit both <code>.toml</code> files to git</strong>
+      <code>Project.toml</code> alone says "I depend on Plots". The exact
+      version comes from <code>Manifest.toml</code>. Without the manifest,
+      a colleague who clones your repo a year later might get a newer Plots
+      that breaks your code. Commit both, then anyone can restore your
+      environment with <code>] instantiate</code>.
+    </div>
+
+    <div class="callout warn">
+      <strong>If <code>add</code> hangs on first run</strong>
+      The very first <code>add</code> command needs to clone the General
+      package registry (~50 MB). On a slow network this can take a few
+      minutes; let it finish. If it errors out, run
+      <code>] registry update</code> and try again.
     </div>
   </section>
 
@@ -188,6 +554,13 @@ julia --project=.</code></pre>
   <!-- ══ STEP 4 ══════════════════════════════════════════════ -->
   <section class="section" id="step4">
     <h2><span class="step-badge">Step 4</span>Key Julia Packages for Scientific Computing</h2>
+    <p>
+      A whirlwind tour of the libraries you will hear mentioned in PDE
+      papers, lectures, and on the cluster. You do not need to install all
+      of these now — Step 4.5 will tell you exactly which ones the
+      <code>juliaPDEs</code> package needs. Use this table as a reference
+      for "what package would I reach for if I needed feature X".
+    </p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Package</th><th>Use case</th></tr></thead>
@@ -204,6 +577,65 @@ julia --project=.</code></pre>
         </tbody>
       </table>
     </div>
+
+    <h3>What each category is for, in plain English</h3>
+    <ul>
+      <li><strong>Standard libraries</strong> — <code>LinearAlgebra</code>
+        gives you matrix multiplication, eigenvalues, SVD, the backslash
+        operator <code>A \ b</code> for solving linear systems, and so on.
+        <code>SparseArrays</code> stores matrices that are mostly zero
+        without wasting memory on the zeros — essential for any PDE on a
+        large grid. Both ship with Julia, no install needed; you just write
+        <code>using LinearAlgebra</code>.</li>
+      <li><strong>Spectral methods</strong> — when your geometry is
+        periodic (think: simulating turbulence in a cube with periodic
+        boundaries) you can solve PDEs by switching to Fourier space, doing
+        derivatives there as multiplications, and switching back. The fast
+        switch is the FFT, and <code>FFTW.jl</code> wraps the famous FFTW
+        C library.</li>
+      <li><strong>ODE/PDE suites</strong> —
+        <code>DifferentialEquations.jl</code> is a one-stop shop with
+        dozens of time-integrators (Euler, RK4, Tsit5, Rosenbrock23, ...)
+        and quality-of-life features like adaptive timestepping, event
+        handling, and easy GPU offload. Use it once you outgrow the simple
+        explicit-Euler loops we will write in Step 5.</li>
+      <li><strong>Mesh generation</strong> — most real geometry (engine
+        parts, blood vessels) is too irregular for a uniform grid.
+        <code>Gmsh.jl</code> drives the open-source Gmsh mesher to
+        triangulate arbitrary 2D/3D domains, with refinement near
+        interesting features. Section 5.5 walks through this.</li>
+      <li><strong>Finite element frameworks</strong> —
+        <code>Ferrite.jl</code> and <code>Gridap.jl</code> are higher-level
+        frameworks that handle FEM bookkeeping for you (basis functions,
+        quadrature, assembly). Useful when you want to solve a real PDE,
+        not just learn how the pieces fit together.</li>
+      <li><strong>Domain-specific solvers</strong> —
+        <code>Oceananigans.jl</code> is a production-grade incompressible
+        Navier–Stokes solver, optimised for ocean and atmosphere
+        simulations on CPU and GPU. It is what we will call from
+        <code>src/Navier_Stokes.jl</code> in Step 4.5 because we are not
+        going to reinvent CFD from scratch.</li>
+      <li><strong>Visualisation</strong> — <code>Plots.jl</code> is the
+        easy-to-use, MATLAB-style plotting library; great for quick
+        figures. <code>Makie.jl</code> is a more powerful (and prettier)
+        modern plotting library for 3D and interactive visualisation —
+        slower to start up but worth it for anything publication-quality.</li>
+      <li><strong>Parallelism</strong> — <code>MPI.jl</code> wraps the
+        Message Passing Interface that powers most multi-node HPC code:
+        you launch many copies of your program on different nodes and they
+        send messages to each other. <code>CUDA.jl</code> targets NVIDIA
+        GPUs from Julia almost as easily as writing a normal array
+        operation — <code>x .+ y</code> on a <code>CuArray</code> runs on
+        the GPU.</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>What does <code>.jl</code> mean?</strong>
+      The <code>.jl</code> suffix is purely a naming convention — it tells
+      you the project is a Julia package, the way <code>.py</code> hints at
+      Python. The actual package name in Julia code is just the part before
+      it: <code>using Plots</code>, not <code>using Plots.jl</code>.
+    </div>
   </section>
 
   <hr class="divider" />
@@ -212,11 +644,38 @@ julia --project=.</code></pre>
   <section class="section" id="basics-functions">
     <h2>Functions</h2>
     <p>
-      Julia functions are first-class values. They support multiple dispatch,
-      optional / keyword arguments, and can be written in several styles.
+      A function in Julia is a named piece of computation that takes
+      <em>arguments</em> in and returns a <em>result</em>. You will spend
+      almost all of your scientific code time either writing functions
+      (your solvers, your post-processing) or calling them (other people's
+      libraries). It is the only abstraction you absolutely need to be
+      fluent with.
     </p>
+    <p>
+      Three things make Julia functions slightly different from what you
+      might know from Python or MATLAB:
+    </p>
+    <ul>
+      <li><strong>First-class values.</strong> A function is a value just
+        like a number — you can store it in a variable, pass it to another
+        function, or return it from one.</li>
+      <li><strong>Multiple dispatch.</strong> You can define many methods
+        of the <em>same</em> function, and Julia picks the right one based
+        on the types of <em>all</em> the arguments. We will see why this is
+        powerful below.</li>
+      <li><strong>Compiled, not interpreted.</strong> The first time you
+        call <code>solve_heat_1d(N=200)</code>, Julia compiles a specialised
+        machine-code version for that argument type combination and caches
+        it. Subsequent calls are at C speed.</li>
+    </ul>
 
-    <h3>Defining functions</h3>
+    <h3>Defining functions — the two main forms</h3>
+    <p>
+      Julia gives you two ways to write a function. The block form is for
+      anything that takes more than one line; the one-liner is what you
+      reach for when the body is a single expression — typical for
+      mathematical formulas:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia"># Full block form
@@ -233,9 +692,23 @@ greet("Julia")   # Hello, Julia
 square(5)        # 25
 cube(3)          # 27</code></pre>
     </div>
+    <p>
+      Notice there is no <code>return</code> on the one-liners — Julia
+      returns the value of the last expression in the body automatically.
+      You <em>can</em> write <code>return</code> explicitly when it makes
+      the intent clearer (early-return on a special case, for example), but
+      it is optional at the end.
+    </p>
 
     <h3>Anonymous functions</h3>
-    <p>Useful when passing a function as an argument (e.g. to <code>map</code>, <code>filter</code>).</p>
+    <p>
+      Sometimes you need a tiny function only once — you do not want to
+      give it a name, you just want to hand it to someone else's code. In
+      Julia those are written with the arrow <code>-&gt;</code>. They are
+      essential when passing a function as an argument (e.g. to
+      <code>map</code>, <code>filter</code>, or our
+      <code>WaveEquation.f_init</code> field):
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">f = x -> x^2 + 1          # single argument
@@ -249,6 +722,16 @@ map(x -> x^2, [1, 2, 3, 4])   # [1, 4, 9, 16]</code></pre>
     </div>
 
     <h3>Default and keyword arguments</h3>
+    <p>
+      A <strong>default argument</strong> is a value used when the caller
+      does not supply that argument. It saves typing common defaults at
+      every call site. A <strong>keyword argument</strong> goes
+      <em>after a semicolon</em> in the signature and must be passed by
+      name at the call site — it is the right choice when you have many
+      configuration knobs and order would be hard to remember (think:
+      <code>solve_heat_1d(; N=200, α=0.01, L=1.0, T=1.0)</code> — what
+      would the order even be?):
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia"># Default argument
@@ -264,9 +747,21 @@ function make_point(; x=0.0, y=0.0)
 end
 make_point(y=5.0)   # (0.0, 5.0)</code></pre>
     </div>
+    <p>
+      The PDE solvers we will write almost always use keyword arguments —
+      most physical parameters have sensible defaults, and the call site
+      stays self-documenting: <code>solve_wave_1d(c=2.0, T=0.5)</code> is
+      readable; <code>solve_wave_1d(2.0, 0.5)</code> is not.
+    </p>
 
-    <h3>Multiple dispatch</h3>
-    <p>Julia picks the right method based on the types of <em>all</em> arguments — no class needed.</p>
+    <h3>Multiple dispatch — Julia's superpower</h3>
+    <p>
+      In most languages a function name has one definition; in Julia, the
+      same name can have many <em>methods</em> and Julia picks the right
+      one based on the types of <em>all</em> the arguments at the call
+      site. This lets a library author specialise behaviour for new types
+      you define in your own code, without monkey-patching:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">describe(x::Int)     = println("integer: ", x)
@@ -279,6 +774,14 @@ describe("hi")    # string:  hi</code></pre>
     </div>
 
     <h3>Functions that modify their input — the <code>!</code> convention</h3>
+    <p>
+      Julia has a strong cultural rule: any function whose name ends in
+      <code>!</code> ("bang") modifies at least one of its arguments
+      <em>in place</em>. Functions without the bang return a new value and
+      leave their inputs alone. This is purely convention (the language
+      does not enforce it), but every standard library and major package
+      follows it religiously, so you can read code at a glance:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia"># sort  returns a new sorted array (does not change original)
@@ -289,6 +792,14 @@ sort!(v)            # v is now [1, 1, 3, 4, 5, 9]
 
 # Same pattern: push! append! fill! normalize! etc.</code></pre>
     </div>
+    <p>
+      Why does the bang matter for PDEs? Performance. Allocating a new
+      array every timestep is expensive — for a million-grid-point heat
+      simulation over 10&thinsp;000 steps, that is 10 billion bytes of garbage
+      for the GC to clean up. We instead update the array in place. In our
+      heat solver we wrote <code>u[2:end-1] .+= ...</code> — that is
+      effectively a bang operation on <code>u</code>.
+    </p>
 
     <div class="callout tip">
       <strong>Convention</strong>
@@ -303,11 +814,41 @@ sort!(v)            # v is now [1, 1, 3, 4, 5, 9]
   <section class="section" id="basics-arrays">
     <h2>Vectors &amp; Matrices</h2>
     <p>
-      Julia uses <strong>1-based indexing</strong> and stores matrices in
-      <strong>column-major</strong> order (like Fortran/MATLAB, unlike C/Python).
+      Almost every numerical algorithm reduces, in the end, to operations
+      on vectors and matrices — discretised functions on a grid, stiffness
+      matrices, time-history snapshots. Julia treats these as first-class
+      citizens: built into the language, with optimised low-level code
+      already wired up to the standard linear-algebra libraries (BLAS,
+      LAPACK).
+    </p>
+
+    <h3>Two conventions to internalise on day one</h3>
+    <ul>
+      <li><strong>1-based indexing.</strong> The first element is
+        <code>v[1]</code>, not <code>v[0]</code>. The last is
+        <code>v[end]</code>. If you are coming from Python or C, this trips
+        you up for about ten minutes; after that it never bothers you
+        again.</li>
+      <li><strong>Column-major storage.</strong> A matrix
+        <code>A[i, j]</code> is laid out in memory column by column, so
+        looping <em>down a column first</em> is the cache-friendly order.
+        This matches Fortran and MATLAB; it is the opposite of C and
+        NumPy. We will revisit this when we discuss performance.</li>
+    </ul>
+    <p>
+      The two conventions interact: when you write a tight inner loop over
+      a matrix, the right pattern is
+      <code>for j in axes(A, 2), i in axes(A, 1)</code> — outer loop over
+      columns, inner over rows. That keeps you walking through memory in
+      order.
     </p>
 
     <h3>Creating vectors</h3>
+    <p>
+      A <code>Vector</code> in Julia is just a 1-D array. The simplest way
+      to create one is to write the elements in square brackets, separated
+      by commas:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">v = [1.0, 2.0, 3.0, 4.0]   # column vector, Float64
@@ -322,8 +863,25 @@ r = 0.0:0.25:1.0             # lazy range: 0, 0.25, 0.5, 0.75, 1.0
 x = collect(r)               # convert to a plain Vector
 x = range(0, 1, length=101)  # 101 equally-spaced points</code></pre>
     </div>
+    <p>
+      A <em>range</em> like <code>0.0:0.25:1.0</code> is special — it is
+      <strong>lazy</strong>: Julia stores only the start, step, and stop,
+      not the actual numbers. <code>length(r)</code> still works, you can
+      index into it, and most array functions accept it. Use
+      <code>collect</code> only when you really need a concrete
+      <code>Vector</code> (e.g. to mutate it). For PDE grids, the very
+      common <code>range(0, 1, length=101)</code> form lets you specify
+      "I want exactly 101 points from 0 to 1 inclusive" — Julia computes
+      the step for you.
+    </p>
 
     <h3>Creating matrices</h3>
+    <p>
+      Matrix literals use spaces between elements in a row, and semicolons
+      between rows. Constructor functions like <code>zeros(m, n)</code>
+      take two size arguments instead of one. The identity matrix
+      <code>I</code> lives in <code>LinearAlgebra</code>:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">A = [1 2 3;              # rows separated by ;
@@ -337,6 +895,14 @@ Matrix{Float64}(I, 3, 3) # 3×3 identity (needs LinearAlgebra)</code></pre>
     </div>
 
     <h3>Indexing and slicing</h3>
+    <p>
+      <code>A[i, j]</code> is the element at row <code>i</code>, column
+      <code>j</code>. A colon <code>:</code> means "all of this dimension"
+      — so <code>A[1, :]</code> is the entire first row,
+      <code>A[:, 2]</code> the entire second column. Ranges
+      (<code>1:2</code>) extract sub-blocks. <code>end</code> is a
+      magic word meaning "the last index along this dimension":
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">A = [10 20 30;
@@ -355,7 +921,13 @@ v[2:4]       # [20, 30, 40]</code></pre>
     </div>
 
     <h3>Array comprehensions</h3>
-    <p>The most readable way to build arrays from a formula.</p>
+    <p>
+      The most readable way to build arrays from a formula. The syntax
+      mirrors mathematical set-builder notation: <em>"the array of f(x) for
+      x in some range"</em>. With two indices in the comprehension, you
+      get a 2-D matrix automatically. We will use this constantly to
+      evaluate initial conditions and source terms on a grid:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">xs = [i^2 for i in 1:5]              # [1, 4, 9, 16, 25]
@@ -366,7 +938,16 @@ A = [i + j for i in 1:3, j in 1:4]  # 3×4 matrix</code></pre>
     </div>
 
     <h3>Broadcasting with <code>.</code></h3>
-    <p>Apply any scalar function element-wise to an array — no loop needed.</p>
+    <p>
+      <strong>Broadcasting</strong> is Julia's element-wise operation
+      mechanism. Any function or operator can be turned element-wise by
+      adding a <code>.</code> in the right place: <code>sin.(v)</code>,
+      <code>v .^ 2</code>, <code>A .* B</code>. The killer feature is that
+      Julia <em>fuses</em> chains of dotted operations into a single loop —
+      no temporary arrays for intermediate results — so
+      <code>exp.(v) .- 1</code> is exactly as fast as a hand-written loop.
+      This is the workhorse of all the PDE update steps you will write:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">v = [0.0, π/6, π/4, π/3, π/2]
@@ -411,7 +992,33 @@ hcat(a, b)          # 3×2 matrix     (horizontal / column-wise)
   <!-- ══ BASICS: LINEAR ALGEBRA ═══════════════════════════════ -->
   <section class="section" id="basics-linalg">
     <h2>Linear Algebra</h2>
-    <p>Load <code>LinearAlgebra</code> (standard library — no install needed) for the full feature set.</p>
+    <p>
+      Most of scientific computing eventually boils down to a linear
+      algebra problem: solve $A\mathbf{x} = \mathbf{b}$, find the
+      eigenvalues of $A$, decompose $A$ into easier-to-work-with factors.
+      Julia's <code>LinearAlgebra</code> standard library wraps the
+      industry-standard BLAS and LAPACK Fortran libraries, so a one-line
+      Julia call is the same code that runs underneath MATLAB, NumPy, R,
+      and most scientific software written in the past 30 years.
+    </p>
+    <p>
+      A few mental models that help in this section:
+    </p>
+    <ul>
+      <li>A matrix can be thought of as a <em>linear function</em> from
+        vectors to vectors: <code>A * x</code> applies the function. Most
+        useful matrices have structure (symmetric, tridiagonal, sparse) —
+        recognising that structure is what makes solving fast.</li>
+      <li>You almost never want to compute <code>inv(A)</code> explicitly.
+        Solving <code>A * x = b</code> is a different (and cheaper)
+        operation than computing the inverse, and Julia gives you the
+        <code>\</code> operator for exactly that.</li>
+      <li>Many algorithms have a <em>factorise once, solve many</em>
+        structure: factor <code>F = lu(A)</code> takes most of the time;
+        each subsequent <code>F \ b</code> is cheap. The same applies to
+        <code>cholesky</code>, <code>qr</code>, <code>svd</code>.</li>
+    </ul>
+    <p>Load <code>LinearAlgebra</code> (standard library — no install needed) for the full feature set:</p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using LinearAlgebra</code></pre>
@@ -438,6 +1045,15 @@ norm(v, Inf)    # ∞-norm (max abs value)</code></pre>
     </div>
 
     <h3>Solving linear systems — $Ax = b$</h3>
+    <p>
+      The backslash <code>A \ b</code> is Julia's "solve this linear
+      system" operator. It looks at <code>A</code>, picks the right
+      algorithm (LU for general matrices, Cholesky for symmetric positive
+      definite, QR for non-square least squares, sparse direct or iterative
+      for sparse), and returns the solution. This is one of the most
+      pleasant pieces of API in any scientific language — you get the
+      right algorithm without choosing one by hand:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">A = [2.0 1.0; 5.0 7.0]
@@ -482,7 +1098,15 @@ cond(A)                     # condition number</code></pre>
     </div>
 
     <h3>Sparse matrices</h3>
-    <p>PDE discretizations produce huge, sparse systems. Use <code>SparseArrays</code> to avoid storing the millions of zeros.</p>
+    <p>
+      A finite-difference Laplacian on a 1&nbsp;000 × 1&nbsp;000 grid produces
+      a one-million × one-million matrix. As a dense array that is 8 TB.
+      As a sparse array — five non-zeros per row — it fits in 80 MB.
+      <code>SparseArrays</code> is what makes any non-trivial PDE solve
+      possible. The same <code>\</code>, <code>*</code>, <code>+</code>
+      operators work on sparse matrices, and Julia automatically picks a
+      sparse-aware algorithm:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using SparseArrays
@@ -531,7 +1155,13 @@ x = T \ b</code></pre>
   <!-- ══ BASICS: USEFUL BUILT-INS ═════════════════════════════ -->
   <section class="section" id="basics-builtins">
     <h2>Useful Built-in Functions</h2>
-    <p>These are in Julia's base — no <code>using</code> needed.</p>
+    <p>
+      A short reference of the everyday functions you will use to
+      <em>inspect</em>, <em>summarise</em>, and <em>reshape</em> arrays.
+      All of these live in Julia's <code>Base</code> module — they are
+      always available, no <code>using</code> required. Treat this as a
+      cheat-sheet you can come back to.
+    </p>
 
     <h3>Array inspection</h3>
     <div class="code-block">
@@ -635,13 +1265,54 @@ isfinite(1.0)  # true</code></pre>
 
   <!-- ══ CREATE A PACKAGE + REVISE ════════════════════════════ -->
   <section class="section" id="pkg-create">
-    <h2>Create Your First Julia Package</h2>
+    <h2>Create Your First Julia Package — <code>juliaPDEs</code></h2>
     <p>
-      A single-file script is fine for experiments, but once your code grows you
-      want a <strong>package</strong>: a named module with proper dependency
-      tracking, a test suite, and live reload support via Revise.jl.
-      Setting this up takes two minutes and makes every workflow in Step 5
-      onward much smoother.
+      Up to now we have been adding packages from the registry — using
+      other people's code. Now we make our <em>own</em> package. A
+      <strong>package</strong> in Julia is just a folder with a special
+      structure that the language treats as importable: a name, a
+      <code>Project.toml</code>, and a <code>src/</code> folder containing
+      a module file.
+    </p>
+
+    <h3>Why package your code instead of writing one big script?</h3>
+    <p>
+      A 50-line one-shot script is fine. As soon as you reach a few
+      hundred lines, or you want to share the code, or you want to test
+      pieces of it independently, the script approach starts to hurt.
+      Switching to a package gives you, in order of how much they help:
+    </p>
+    <ol>
+      <li><strong>Stable imports.</strong> Anywhere on your machine you
+        can write <code>using juliaPDEs</code> and your three solvers are
+        available — REPL, Jupyter notebook, test file, Slurm job script.
+        No more juggling <code>include("../../src/solver.jl")</code>
+        with relative paths.</li>
+      <li><strong>Reproducible dependencies.</strong> The package's own
+        <code>Project.toml</code>/<code>Manifest.toml</code> pin
+        every library to an exact version. Five years from now, on a new
+        cluster, your code still gets bit-identical packages.</li>
+      <li><strong>A test suite.</strong> Drop a
+        <code>test/runtests.jl</code> into the folder and Julia runs it
+        with one command (<code>] test</code>), reporting pass/fail.</li>
+      <li><strong>Live reload via Revise.</strong> Edit a source file,
+        save, and the running REPL session picks up the change without
+        a restart. Iteration becomes fast — the difference between a
+        ten-second feedback loop and a one-minute one.</li>
+      <li><strong>Easy publishing later.</strong> When the code is
+        useful enough to share, registering it on Julia's General
+        Registry is mostly paperwork because the layout is already
+        right.</li>
+    </ol>
+
+    <h3>What we will build in this section</h3>
+    <p>
+      In the rest of Step 4.5 we generate a fresh package called
+      <code>juliaPDEs</code> and add three solvers — heat, wave, and
+      Navier–Stokes — each in its own file under <code>src/</code>. By
+      the end you will have the same layout that ships in the
+      <code>juliaPDEs/</code> folder of this repo, plus the
+      Revise + tests workflow that makes Step 5 painless.
     </p>
 
     <div class="callout tip">
@@ -654,112 +1325,314 @@ isfinite(1.0)  # true</code></pre>
 
   <!-- package structure -->
   <section class="section" id="pkg-structure">
-    <h3>Package structure</h3>
+    <h3>Package structure — building <code>juliaPDEs</code> step by step</h3>
     <p>
-      Generate the skeleton with one command. Julia creates all the boilerplate
-      for you:
+      Follow the steps in order. By the end you will have the same package layout
+      that lives in the <code>juliaPDEs/</code> folder of this repo, with three
+      solvers wired up and ready to use from the REPL.
+    </p>
+
+    <h4>Step A — Generate the skeleton</h4>
+    <p>
+      One command creates the folder and the boilerplate <code>Project.toml</code> +
+      module file:
     </p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using Pkg
-Pkg.generate("MyPDE")   # creates the folder MyPDE/</code></pre>
+Pkg.generate("juliaPDEs")   # creates the folder juliaPDEs/</code></pre>
     </div>
 
     <p>The generated layout:</p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">file tree</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-bash">MyPDE/
-├── Project.toml        # package name, UUID, dependencies
+      <pre><code class="language-bash">juliaPDEs/
+├── Project.toml          # package name, UUID, dependencies
 └── src/
-    └── MyPDE.jl        # the module — this is your entry point</code></pre>
+    └── juliaPDEs.jl      # the module — entry point</code></pre>
     </div>
 
-    <p>Add a <code>test/</code> folder yourself (Julia will use it automatically):</p>
+    <p>Add a <code>test/</code> folder yourself (Julia uses it automatically):</p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-bash">mkdir MyPDE/test
-touch MyPDE/test/runtests.jl</code></pre>
+      <pre><code class="language-bash">mkdir juliaPDEs/test
+touch juliaPDEs/test/runtests.jl</code></pre>
     </div>
 
-    <h4>The module file — src/MyPDE.jl</h4>
+    <h4>Step B — Add the dependencies</h4>
     <p>
-      Everything inside <code>module … end</code> is private by default.
-      Use <code>export</code> to make names visible to anyone who does
-      <code>using MyPDE</code>. Split large code into sub-files with
-      <code>include()</code>:
+      Activate the package's own environment and install everything the three
+      solvers need. <code>Plots</code> is for visualization,
+      <code>Revise</code> for live reload during development, and
+      <code>Oceananigans</code> is the CFD engine called by the
+      Navier–Stokes solver. The remaining packages match the
+      <code>Project.toml</code> that ships with the repo:
     </p>
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/MyPDE.jl</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">module MyPDE
-
-# Export the names users can call with `using MyPDE`
-export solve_heat_1d, solve_wave_1d, solve_poisson_2d
-
-# Split code into separate files — each file sees the module's scope
-include("heat.jl")      # defines solve_heat_1d
-include("wave.jl")      # defines solve_wave_1d
-include("poisson.jl")   # defines solve_poisson_2d
-
-end</code></pre>
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">cd juliaPDEs
+julia --project=.</code></pre>
     </div>
 
-    <h4>A minimal function in src/heat.jl</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@juliaPDEs) pkg> add Plots Revise Oceananigans LinearAlgebra SparseArrays Gmsh Makie CUDA</code></pre>
+    </div>
+
+    <p>
+      Julia writes the dependencies into <code>Project.toml</code> and pins exact
+      versions in <code>Manifest.toml</code> — commit both to git so the cluster
+      gets the same versions you developed against.
+    </p>
+
+    <h4>Step C — Write the module entry point — src/juliaPDEs.jl</h4>
+    <p>
+      Everything inside <code>module … end</code> is private by default.
+      <code>using</code> brings in third-party packages once, at the module level,
+      so every included file can call them. <code>include()</code> pastes a
+      file into the module so each sub-file sees the module's scope.
+      <code>export</code> declares the names that become visible after
+      <code>using juliaPDEs</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/juliaPDEs.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">module juliaPDEs
+
+using Plots, Revise, Oceananigans
+
+include("heat.jl")
+include("wave.jl")
+include("Navier_Stokes.jl")
+
+export solve_heat_1d, solve_wave_1d, solve_navier_stokes,
+       animate_wave_1d, animate_navier_stokes
+
+end # module juliaPDEs</code></pre>
+    </div>
+
+    <h4>Step D — The heat solver — src/heat.jl</h4>
+    <p>
+      A 1-D explicit Euler heat solver: Dirichlet BCs (the endpoints stay 0),
+      Gaussian initial pulse. The CFL factor <code>0.4</code> keeps
+      <code>r = α·dt/dx² ≤ 0.5</code> so the explicit scheme remains stable.
+    </p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — src/heat.jl</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">function solve_heat_1d(; N=200, α=0.01, L=1.0, T=1.0)
-    dx = L / (N + 1)
-    dt = 0.4 * dx^2 / α
-    x  = range(dx, L - dx, length=N)
-    u  = @. exp(-100 * (x - 0.5)^2)
-    for _ in 1:ceil(Int, T / dt)
+    # Step 1 — grid
+    dx     = L / (N + 1)
+    x      = range(dx, L - dx, length=N)
+
+    # Step 5 — stable Δt:  r = α·dt/dx² ≤ 0.5
+    dt     = 0.4 * dx^2 / α
+    nsteps = ceil(Int, T / dt)
+
+    # Step 1 — initial condition u(x,0)
+    u = @. exp(-100 * (x - 0.5)^2)
+
+    for _ in 1:nsteps
+        # Steps 3+4 — Rule 1 (stencil) inside Rule 2 (Euler step):
+        #   u_i^{n+1} = u_i^n + r·(u_{i+1} - 2u_i + u_{i-1})
         u[2:end-1] .+= (α * dt / dx^2) .*
             (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+        # Dirichlet BCs: u[1] = u[end] = 0 — never updated
     end
     return collect(x), u
 end</code></pre>
     </div>
 
-    <h4>Load the package in development mode</h4>
+    <h4>Step E — The wave solver — src/wave.jl</h4>
+    <p>
+      The wave solver groups its parameters in a <code>WaveEquation</code> struct
+      so callers can mix-and-match grid size, boundary condition
+      (<code>:Dirichlet</code>, <code>:Neumann</code>, <code>:Periodic</code>,
+      <code>:Absorbing</code>), and initial shape independently.
+      <code>Base.@kwdef</code> auto-generates a keyword constructor with defaults
+      so you can write <code>WaveEquation(nx=400, T=2.0)</code> and let everything
+      else stay default:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct WaveEquation
+    nx::Int = 300
+    nt::Int = 300
+    c::Float64 = 1.0
+    L::Float64 = 1.0
+    T::Float64 = 1.5
+    bc::Symbol = :Dirichlet           # :Dirichlet | :Neumann | :Periodic | :Absorbing
+    f_init::Function = x -> sin.(pi * x)
+    dx::Float64 = L / (nx - 1)
+    dt::Float64 = T / nt
+    x::Any = range(0, L, length=nx)
+end</code></pre>
+    </div>
+
+    <p>
+      The leap-frog update uses the same 3-point Laplacian stencil as the heat
+      equation, but stepped in time with two history slots (<code>u_prev</code>,
+      <code>u_curr</code>). CFL: <code>λ = c·dt/dx ≤ 1</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve_wave_1d(problem::WaveEquation; return_history::Bool=false)
+    dx, dt, x = problem.dx, problem.dt, problem.x
+    λ = (problem.c * dt / dx)^2
+
+    u_curr = problem.f_init.(x)
+    apply_boundary_conditions!(u_curr, u_curr, problem; is_initial=true)
+    u_prev = copy(u_curr)
+    u_next = copy(u_curr)
+
+    for i in 1:problem.nt
+        # Leap-frog:  u^{n+1} = 2u^n - u^{n-1} + λ²·(stencil)
+        u_next[2:end-1] .= 2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+            λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1] .+ u_curr[1:end-2])
+        apply_boundary_conditions!(u_next, u_curr, problem)
+        u_prev, u_curr = copy(u_curr), copy(u_next)
+    end
+    return collect(x), u_curr
+end</code></pre>
+    </div>
+
+    <p style="font-size:0.9rem; color:#4a6a8a;">
+      The full file also defines <code>apply_boundary_conditions!</code>
+      (one branch per BC symbol), <code>animate_wave_1d</code> (saves a GIF),
+      and an analytic <code>wave_1d_exact</code> reference solution — see
+      <code>juliaPDEs/src/wave.jl</code> in the repo for the complete code.
+    </p>
+
+    <h4>Step F — The Navier–Stokes solver — src/Navier_Stokes.jl</h4>
+    <p>
+      The incompressible Navier–Stokes equations are two coupled PDEs in the
+      velocity field $\mathbf{u}(x,y,t) = (u, v)$ and pressure $p(x,y,t)$:
+    </p>
+    <p style="text-align:center;">
+      $$\frac{\partial \mathbf{u}}{\partial t}
+        + (\mathbf{u}\!\cdot\!\nabla)\mathbf{u}
+        = -\nabla p + \nu\,\nabla^2 \mathbf{u},
+        \qquad \nabla\!\cdot\!\mathbf{u} = 0.$$
+    </p>
+    <p>
+      Each term has a physical meaning: $(\mathbf{u}\!\cdot\!\nabla)\mathbf{u}$
+      is <em>advection</em> (fluid carrying its own momentum, the nonlinear
+      part), $-\nabla p$ is the <em>pressure gradient</em> that enforces
+      incompressibility, $\nu\,\nabla^2 \mathbf{u}$ is <em>viscous
+      diffusion</em>, and $\nabla\!\cdot\!\mathbf{u}=0$ keeps the flow
+      divergence-free at every step.
+    </p>
+    <p>
+      We solve the classic <strong>lid-driven cavity</strong> benchmark on
+      $\Omega = [0,1]\times[0,1]$:
+    </p>
+    <ul>
+      <li><strong>Top lid (north):</strong> $u = 1,\ v = 0$ — drives the flow.</li>
+      <li><strong>Other walls:</strong> $u = v = 0$ (no-slip) — the default.</li>
+      <li><strong>Initial condition:</strong> $\mathbf{u}(x,y,0) = \mathbf{0}$.</li>
+      <li><strong>Reynolds number:</strong>
+        $\mathrm{Re} = \dfrac{U\,L}{\nu} = \dfrac{1 \cdot 1}{10^{-2}} = 100$,
+        set by choosing $\nu = 10^{-2}$ in <code>ScalarDiffusivity</code>.</li>
+    </ul>
+    <p>
+      Rather than discretising and writing a projection method by hand, we
+      delegate to <code>Oceananigans.jl</code>. Oceananigans handles the
+      staggered finite-volume grid, a 5th-order upwind-biased advection
+      scheme, the divergence-free pressure projection, and a 3rd-order
+      Runge–Kutta time integrator — all on CPU or GPU. The simulation runs
+      for $t \in [0, 10]$ with $\Delta t = 10^{-3}$ and pushes a snapshot of
+      the speed field $\sqrt{u^2 + v^2}$ into <code>speed_hist</code> every
+      100 iterations so we can animate it later with
+      <code>animate_navier_stokes</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/Navier_Stokes.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve_navier_stokes()
+    grid = Oceananigans.RectilinearGrid(size=(64, 64), x=(0, 1), y=(0, 1),
+        topology=(Bounded, Bounded, Flat))
+
+    # Top lid moves at speed 1
+    u_bcs = Oceananigans.FieldBoundaryConditions(
+        north = Oceananigans.ValueBoundaryCondition(1.0))
+
+    model = Oceananigans.NonhydrostaticModel(grid;
+        advection   = Oceananigans.UpwindBiased(order=5),
+        timestepper = :RungeKutta3,
+        boundary_conditions = (u=u_bcs,),
+        closure     = Oceananigans.ScalarDiffusivity(ν=1e-2))   # ν = 1/Re
+
+    Oceananigans.set!(model, u=0, v=0)
+    simulation = Oceananigans.Simulation(model, Δt=1e-3, stop_time=10.0)
+
+    speed_field = Oceananigans.Field(
+        sqrt(model.velocities.u^2 + model.velocities.v^2))
+    speed_hist  = []
+
+    function save_state(sim)
+        Oceananigans.compute!(speed_field)
+        push!(speed_hist, copy(Oceananigans.interior(speed_field, :, :, 1)))
+    end
+    simulation.callbacks[:save] = Oceananigans.Callback(
+        save_state, Oceananigans.IterationInterval(100))
+
+    Oceananigans.run!(simulation)
+    return (speed_hist=speed_hist, Δt=0.1)
+end</code></pre>
+    </div>
+
+    <h4>Step G — Load the package in development mode</h4>
     <p>
       <code>Pkg.develop</code> links the package into your environment by path —
-      no need to install it. Changes you make to the source files take effect
-      immediately (with Revise, see below).
+      no install, no version pin. Edits you make to source files take effect
+      immediately (with Revise, see below):
     </p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia"># From the directory that CONTAINS the MyPDE/ folder:
+      <pre><code class="language-julia"># From the directory that CONTAINS the juliaPDEs/ folder:
 using Pkg
-Pkg.develop(path="./MyPDE")
+Pkg.develop(path="./juliaPDEs")
 
-# Now you can import it like any installed package:
-using MyPDE
-x, u = solve_heat_1d()   # calls your function</code></pre>
+# Now import it like any installed package:
+using juliaPDEs
+x, u  = solve_heat_1d()                                # heat
+x, u  = solve_wave_1d(juliaPDEs.WaveEquation())        # wave (uses defaults)
+hist  = solve_navier_stokes()                          # Navier–Stokes
+animate_navier_stokes(hist)                            # → navier_stokes_animation.gif</code></pre>
     </div>
 
-    <h4>Write and run tests</h4>
+    <h4>Step H — Write and run tests</h4>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — test/runtests.jl</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">using MyPDE, Test
+      <pre><code class="language-julia">using juliaPDEs, Test
 
 @testset "Heat equation" begin
     x, u = solve_heat_1d(N=50, T=0.1)
     @test length(x) == 50           # correct grid size
     @test maximum(u) < 1.0          # solution decays over time
-    @test u[1] ≈ 0.0 atol=1e-10    # Dirichlet BC holds at left
-    @test u[end] ≈ 0.0 atol=1e-10  # Dirichlet BC holds at right
+    @test u[1]   ≈ 0.0 atol=1e-10   # Dirichlet BC at left
+    @test u[end] ≈ 0.0 atol=1e-10   # Dirichlet BC at right
+end
+
+@testset "Wave equation" begin
+    prob = juliaPDEs.WaveEquation(nx=100, nt=200, T=0.5)
+    x, u = solve_wave_1d(prob)
+    @test length(x) == 100
+    @test all(isfinite, u)          # no NaNs from CFL violation
 end</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia (pkg mode)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">(@MyPDE) pkg> test   # runs test/runtests.jl and shows pass/fail</code></pre>
+      <pre><code class="language-julia">(@juliaPDEs) pkg> test   # runs test/runtests.jl and prints pass/fail</code></pre>
     </div>
   </section>
 
@@ -767,10 +1640,28 @@ end</code></pre>
   <section class="section" id="pkg-revise">
     <h3>Revise.jl — live code reload</h3>
     <p>
-      Normally, changing a source file requires restarting Julia and re-running all
-      your setup code. <strong>Revise.jl</strong> watches your package files and
-      automatically patches the running session whenever you save — keeping your REPL
-      state intact.
+      Here is the problem Revise solves. You start Julia, load
+      <code>juliaPDEs</code>, run a function, plot the result. Then you
+      open <code>src/heat.jl</code>, fix a bug, and want to re-run. Without
+      Revise, the running Julia session has the <em>old</em> definition
+      of <code>solve_heat_1d</code> compiled into memory. To pick up your
+      change you would have to:
+    </p>
+    <ol>
+      <li>Quit Julia (<code>exit()</code>),</li>
+      <li>Restart it,</li>
+      <li><code>using juliaPDEs</code> again (cue: 5–30 seconds of
+        precompilation),</li>
+      <li>Re-run any setup code, re-load your test data, re-make your
+        plot.</li>
+    </ol>
+    <p>
+      That is brutal when you are in a tight develop-test cycle.
+      <strong>Revise.jl</strong> watches all the source files in your
+      package and, the moment you save one, it patches the running Julia
+      session — replacing the old function definitions with the new ones,
+      <em>without</em> losing any other state. Your variables, plots, and
+      loaded data all survive.
     </p>
 
     <h4>Install Revise</h4>
@@ -811,7 +1702,7 @@ end</code></pre>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — REPL session</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using Revise       # must come first
-using MyPDE
+using juliaPDEs
 
 x, u = solve_heat_1d()   # works normally
 
@@ -834,7 +1725,15 @@ x, u = solve_heat_1d()   # Revise picked up the change — no restart needed
     <h3>The development workflow loop</h3>
     <p>
       Once your package is set up and Revise is running, your day-to-day
-      workflow is a tight loop:
+      workflow is a tight loop. The whole point of getting Steps 1–4.5
+      right is to make this loop as short as possible — typing a fix
+      and seeing the new behaviour in seconds, not minutes:
+    </p>
+    <p>
+      <em>Start Julia once</em> → <em>edit code in your editor</em> →
+      <em>save</em> → <em>re-run a function in the REPL</em> →
+      <em>occasionally run the test suite</em>. The four cards below
+      walk through each step:
     </p>
 
     <div class="deriv-flow">
@@ -856,11 +1755,11 @@ x, u = solve_heat_1d()   # Revise picked up the change — no restart needed
           <div class="deriv-code-panel">
             <button class="copy-btn">Copy</button>
             <span class="deriv-panel-label">Terminal</span>
-            <pre>cd ~/julia-pde
+            <pre>cd ~/projects/julia-docx-tutorial/juliaPDEs
 julia --project=.
 # Revise auto-loaded from startup.jl
 # then:
-using MyPDE</pre>
+using juliaPDEs</pre>
           </div>
         </div>
       </div>
@@ -936,9 +1835,10 @@ julia> plot(x, u)   # still works — no re-import needed</pre>
           <div class="deriv-code-panel">
             <button class="copy-btn">Copy</button>
             <span class="deriv-panel-label">Julia (pkg mode — press ])</span>
-            <pre>(@MyPDE) pkg> test
+            <pre>(@juliaPDEs) pkg> test
 Test Summary:    | Pass  Fail  Total
 Heat equation    |    4     0      4
+Wave equation    |    2     0      2
 All tests passed.</pre>
           </div>
         </div>
@@ -948,8 +1848,9 @@ All tests passed.</pre>
 
     <div class="callout info">
       <strong>Recommended project layout for Step 5 onward</strong>
-      Create one package (<code>MyPDE</code>) and add each solver from Step 5
-      as a separate <code>src/</code> file. Export the solver functions.
+      Keep using the <code>juliaPDEs</code> package you just built — add each
+      new solver from Step 5 as a separate <code>src/</code> file, include it
+      from <code>src/juliaPDEs.jl</code>, and export the entry point.
       This way you can call <code>solve_heat_1d()</code> from the REPL,
       from tests, and from Slurm job scripts — all with the same import.
     </div>
@@ -961,16 +1862,97 @@ All tests passed.</pre>
   <section class="section" id="step5">
     <h2><span class="step-badge">Step 5</span>The PDE Solving Workflow</h2>
     <p>
-      Every PDE problem follows five stages. The most important skill is reading
-      an equation from a paper and converting each mathematical term into code, one
-      operation at a time. That is exactly what the worked examples below do.
+      Every PDE problem you will solve in this guide follows the same
+      five-stage pipeline:
     </p>
+    <ol>
+      <li><strong>Model.</strong> Write down the equation, the spatial
+        domain, the boundary conditions, and (for time-dependent problems)
+        the initial condition.</li>
+      <li><strong>Discretise.</strong> Lay a grid over the domain. Replace
+        every continuous derivative with a finite-difference stencil so
+        the unknowns become a finite array of numbers.</li>
+      <li><strong>Build the system.</strong> Assemble the discrete
+        operators — either as an explicit update rule (heat, wave) or as
+        a matrix system $A\mathbf{u} = \mathbf{b}$ (Poisson).</li>
+      <li><strong>Solve.</strong> Step forward in time, or call a linear
+        solver, or hand the problem off to a library like Oceananigans.</li>
+      <li><strong>Visualise &amp; verify.</strong> Plot snapshots, run
+        tests, compare with an analytic solution if you have one. Refine
+        the grid and watch the error fall — that is convergence.</li>
+    </ol>
+    <p>
+      The most important skill is reading an equation from a paper and
+      converting each mathematical term into code, one operation at a
+      time. The four worked examples below — heat, wave, Poisson,
+      Navier–Stokes — walk through that translation in detail. They share
+      the same two discretisation primitives (the central-difference
+      stencil and forward Euler) which we explain first.
+    </p>
+
+    <figure class="figure">
+      <img src="../output/figures/pde_pipeline.png"
+           alt="Five-stage PDE-solving pipeline: Model, Discretize, Build System, Solve, Visualize."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 1.</strong> The five-stage PDE-solving pipeline.
+        Every example in this guide flows left to right through the same
+        five boxes — model, discretise, build system, solve, visualise.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_pde_pipeline()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots
+
+function fig_pde_pipeline()
+    stages = [("Model",       "PDE + BCs + ICs\nClassify type"),
+              ("Discretize",  "Grid, FDM/FEM\nTime scheme"),
+              ("Build System","Assemble A, b\nSparse matrices"),
+              ("Solve",       "Direct / iterative\nTime-stepping"),
+              ("Visualize",   "Plot, verify\nConvergence")]
+    colors = [:steelblue, :dodgerblue, :seagreen, :darkorange, :gray]
+
+    plt = plot(size=(1200, 380), legend=false, framestyle=:none,
+               xlim=(-0.3, 12.5), ylim=(0, 2.2), aspect_ratio=:equal,
+               background_color=:white, dpi=150)
+
+    for (i, (title, desc)) in enumerate(stages)
+        x = (i - 1) * 2.4
+        plot!(plt, [x, x+2, x+2, x, x], [0.3, 0.3, 1.7, 1.7, 0.3],
+              seriestype=:shape, fillcolor=colors[i], linecolor=:black,
+              linewidth=1.5, fillalpha=0.85)
+        annotate!(plt, x+1.0, 1.35,
+                  text("$i. $title", :white, :center, 13, :bold))
+        annotate!(plt, x+1.0, 0.78,
+                  text(desc, :white, :center, 10))
+        if i &lt; length(stages)
+            annotate!(plt, x+2.2, 1.0, text("→", :black, :center, 22, :bold))
+        end
+    end
+    title!(plt, "The PDE-Solving Pipeline")
+    savefig(plt, "pde_pipeline.png")
+end
+
+fig_pde_pipeline()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- 5.1 Classification -->
   <section class="section" id="step5-model">
     <h3>5.1 Classify the PDE before writing a single line</h3>
-    <p>The type of PDE determines which time scheme and which solver are valid.</p>
+    <p>
+      Before discretising anything, decide what <em>kind</em> of PDE you
+      are looking at. The classification matters because it tells you
+      which time scheme is allowed, whether you need a time loop at all,
+      and what kind of linear solver you will end up calling. The four
+      families below cover everything in this guide:
+    </p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Type</th><th>Prototype</th><th>Key property</th><th>Example below</th></tr></thead>
@@ -982,6 +1964,58 @@ All tests passed.</pre>
         </tbody>
       </table>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/pde_types.png"
+           alt="Four PDE families — Parabolic, Hyperbolic, Elliptic, Mixed/Nonlinear — with prototype equations."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 2.</strong> The four major PDE families and their
+        prototype equations. The classification you pick determines
+        which time scheme is allowed (Step 5.2) and which solver to use
+        (Step 5.4).
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_pde_types()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors
+
+function fig_pde_types()
+    types = [("Parabolic",  "Heat / Diffusion\n∂u/∂t = α∇²u",
+             "Smooths features\nover time", :darkorange),
+             ("Hyperbolic", "Wave / Advection\n∂²u/∂t² = c²∇²u",
+             "Preserves features\nfinite speed c", :dodgerblue),
+             ("Elliptic",   "Poisson / Laplace\n−∇²u = f",
+             "Steady state\nno time evolution", :seagreen),
+             ("Mixed/NL",   "Navier-Stokes\n∂u/∂t + (u·∇)u\n= −∇p + ν∇²u",
+             "Hardest!\nFluid dynamics", :firebrick)]
+
+    plt = plot(size=(1200, 500), legend=false, framestyle=:none,
+               xlim=(-0.3, 12.0), ylim=(0.8, 4.4),
+               background_color=:white, dpi=150)
+
+    for (i, (cat, eq, desc, color)) in enumerate(types)
+        x = (i - 1) * 3
+        plot!(plt, [x, x+2.6, x+2.6, x, x], [1.5, 1.5, 4.0, 4.0, 1.5],
+              seriestype=:shape, fillcolor=color, fillalpha=0.18,
+              linecolor=color, linewidth=2)
+        annotate!(plt, x+1.3, 3.7, text(cat, color, :center, 14, :bold))
+        annotate!(plt, x+1.3, 3.0, text(eq,  :black, :center, 10))
+        annotate!(plt, x+1.3, 2.0, text(desc, RGB(0.35,0.35,0.35),
+                                        :center, 10, :italic))
+    end
+    title!(plt, "PDE Classification — Four Major Types")
+    savefig(plt, "pde_types.png")
+end
+
+fig_pde_types()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- ══════════════════════════════════════════════════════════
@@ -990,10 +2024,20 @@ All tests passed.</pre>
   <section class="section" id="step5-discret">
     <h3>5.2 Two rules that appear in every PDE solver</h3>
     <p>
-      A computer cannot work with continuous functions.
-      <strong>Discretization</strong> replaces smooth derivatives with arithmetic
-      on a finite array of numbers. You only need two formulas —
-      and once you recognise them, every solver in this guide will look familiar.
+      A computer cannot work with continuous functions $u(x, t)$. The
+      first job of any numerical method is to replace those continuous
+      objects with a <em>finite</em> set of numbers — the values of $u$
+      at $N$ grid points $x_1, x_2, \ldots, x_N$ and at discrete time
+      slices $t^0, t^1, \ldots$ This process is called
+      <strong>discretisation</strong>.
+    </p>
+    <p>
+      Discretisation has two halves: how to handle space (derivatives
+      become stencils) and how to handle time (the equation becomes a
+      step-by-step rule). You only need two formulas — Rule 1
+      (central-difference for space) and Rule 2 (forward Euler for time)
+      — and once you recognise them, every explicit solver in this guide
+      is just a couple of lines of code on top.
     </p>
 
     <!-- Rule 1 -->
@@ -1102,8 +2146,21 @@ println("u after one step: ", u)
   <section class="section" id="pde-heat">
     <h3>Example A — Heat Equation (Parabolic)</h3>
     <p>
-      The heat equation models how temperature diffuses through a material over time.
-      This is the simplest PDE and uses both Rule 1 and Rule 2 directly.
+      The heat equation models how temperature (or any diffusing
+      quantity — chemical concentration, smoke density, ink in water)
+      smooths out over time. Heat flows from hot regions to cold ones at
+      a rate proportional to the temperature gradient — that physical
+      statement, written in differential form, is exactly
+      $\partial u/\partial t = \alpha\,\partial^2 u/\partial x^2$. The
+      diffusivity $\alpha$ controls how fast: a higher $\alpha$ smooths
+      the profile out faster.
+    </p>
+    <p>
+      This is the simplest meaningful PDE you can write, and it uses both
+      Rule 1 (the second-derivative stencil) and Rule 2 (forward Euler)
+      directly with no extra machinery. Read the four cards below as a
+      single derivation: from the textbook equation on the left to the
+      runnable Julia loop on the right, one transformation at a time.
     </p>
 
     <div class="deriv-flow">
@@ -1287,6 +2344,64 @@ using Plots
 x, u = solve_heat_1d()
 plot(x, u, xlabel="x", ylabel="u(x,T)", title="Heat equation  T=1.0", lw=2)</code></pre>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/heat_equation.png"
+           alt="Heat equation: snapshots at six times (left) and a space–time heatmap (right)."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 3.</strong> Heat equation. <em>Left:</em> snapshots
+        of the Gaussian pulse at increasing times — each later curve is
+        broader and shorter, the signature of diffusion. <em>Right:</em>
+        the same simulation as a space–time heatmap, with colour
+        encoding $u$ — the bright "tongue" widens monotonically because
+        information only smooths, never propagates.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
+        Uses the same <code>solve_heat_1d</code> as in Step 4.5, returning
+        the time history as well as the final state.
+      </p>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_heat_equation()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Printf, Colors
+
+function fig_heat_equation()
+    x, snapshots, U_hist, t_grid = solve_heat_1d()    # returns history
+
+    times_sorted = sort(collect(keys(snapshots)))
+    n    = length(times_sorted)
+    cmap = cgrad(:YlOrRd, range(0.3, 0.95, length=n))
+
+    p1 = plot(xlabel="x", ylabel="u(x, t)",
+              title="Heat Equation:  ∂u/∂t = α ∇²u",
+              legend=:topright, grid=true, gridalpha=0.3,
+              ylim=(-0.05, 1.05), framestyle=:box)
+    for (i, tt) in enumerate(times_sorted)
+        plot!(p1, x, snapshots[tt], lw=2.2, color=cmap[i],
+              label=@sprintf("t = %.2f", tt))
+    end
+    plot!(p1, [0.5, 0.5], [0.95, 0.30], arrow=true, color=:firebrick,
+          lw=1.5, label="")
+    annotate!(p1, 0.62, 0.65,
+              text("diffuses\n&amp; smooths", :firebrick, :left, 9))
+
+    p2 = heatmap(t_grid, x, U_hist, c=:YlOrRd,
+                 xlabel="time t", ylabel="x",
+                 title="Space-time evolution", colorbar_title="u")
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
+    savefig(plt, "heat_equation.png")
+end
+
+fig_heat_equation()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- ════════════════════════════════════════════════════════
@@ -1295,9 +2410,32 @@ plot(x, u, xlabel="x", ylabel="u(x,T)", title="Heat equation  T=1.0", lw=2)</cod
   <section class="section" id="pde-wave">
     <h3>Example B — Wave Equation (Hyperbolic)</h3>
     <p>
-      The wave equation has a <em>second</em> time derivative. Rule 1 (stencil) is
-      applied identically — only the time discretization changes, and now we need
-      to track three time levels instead of two.
+      The wave equation describes any disturbance that <em>propagates</em>
+      with a finite speed — sound in air, light, vibrations on a string,
+      seismic shocks. The classic 1-D version is what you get from
+      modelling a tightly stretched guitar string: the acceleration of the
+      string at every point is proportional to its local curvature, with
+      proportionality $c^2$ (the wave speed squared).
+    </p>
+    <p>
+      Mathematically, the wave equation looks <em>almost</em> like the
+      heat equation — the right-hand side is exactly the same Laplacian
+      $\partial^2 u/\partial x^2$ — but the left-hand side is now a
+      <em>second</em> time derivative instead of a first. That single
+      change has two big consequences:
+    </p>
+    <ol>
+      <li>We need an initial condition for both $u$ and $\dot u$, because
+        a second-order ODE in time needs two starting values.</li>
+      <li>The natural time-stepping scheme is leap-frog, which keeps
+        track of <em>three</em> time levels — past, present, future —
+        instead of the two we had for heat.</li>
+    </ol>
+    <p>
+      Rule 1 (the spatial stencil) is applied identically — only the time
+      discretisation changes. Read the cards below the same way as for
+      heat: textbook equation on the left, Julia code on the right, one
+      transformation at a time.
     </p>
 
     <div class="deriv-flow">
@@ -1491,6 +2629,61 @@ using Plots
 x, u = solve_wave_1d()
 plot(x, u, xlabel="x", ylabel="u(x,T)", title="Wave equation  T=1.5", lw=2)</code></pre>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/wave_equation.png"
+           alt="Wave equation: snapshots showing two pulses propagating in opposite directions, plus a space–time heatmap revealing characteristic lines."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 4.</strong> Wave equation. <em>Left:</em> snapshots
+        showing the initial pulse split into a left- and a right-moving
+        copy that bounce off the fixed ends — d'Alembert's solution in
+        action. <em>Right:</em> the space–time heatmap shows the
+        characteristic lines $x \pm c\,t = \mathrm{const}$ as the bright
+        diagonals along which information travels.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_wave_equation()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Printf, Colors
+
+function fig_wave_equation()
+    x, snapshots, U_hist, t_grid = solve_wave_1d()
+
+    times_sorted = sort(collect(keys(snapshots)))
+    n    = length(times_sorted)
+    cmap = cgrad(:viridis, range(0.1, 0.9, length=n))
+
+    p1 = plot(xlabel="x", ylabel="u(x, t)",
+              title="Wave Equation:  ∂²u/∂t² = c² ∇²u",
+              legend=:topright, grid=true, gridalpha=0.3,
+              ylim=(-1.1, 1.1), framestyle=:box)
+    hline!(p1, [0], color=:gray, lw=0.5, label="")
+    for (i, tt) in enumerate(times_sorted)
+        plot!(p1, x, snapshots[tt], lw=2.0, color=cmap[i],
+              label=@sprintf("t = %.2f", tt))
+    end
+
+    # Run a longer simulation for the space-time plot
+    _, _, U_long, t_long = solve_wave_1d(T_final=4.0)
+
+    p2 = heatmap(t_long, x, U_long, c=:RdBu, clims=(-1, 1),
+                 xlabel="time t", ylabel="x",
+                 title="Space-time: characteristic lines",
+                 colorbar_title="u")
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
+    savefig(plt, "wave_equation.png")
+end
+
+fig_wave_equation()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- ════════════════════════════════════════════════════════
@@ -1499,9 +2692,31 @@ plot(x, u, xlabel="x", ylabel="u(x,T)", title="Wave equation  T=1.5", lw=2)</cod
   <section class="section" id="pde-poisson">
     <h3>Example C — Poisson Equation (Elliptic)</h3>
     <p>
-      Poisson is a <em>steady-state</em> problem — no time derivative, no time loop.
-      Instead, Rule 1 is applied at every grid point <em>simultaneously</em> to
-      produce a large linear system $A\mathbf{u} = \mathbf{b}$, solved in one shot.
+      Poisson's equation $-\nabla^2 u = f$ shows up everywhere in
+      physics. It governs the steady-state temperature distribution in a
+      body with heat sources (the heat equation in equilibrium), the
+      electric potential created by a charge density (Gauss's law), the
+      pressure field that keeps an incompressible fluid divergence-free
+      (we will see this inside Navier–Stokes), and the deflection of a
+      thin membrane under load. Same equation, different physical
+      meanings — that is part of why mastering it pays off.
+    </p>
+    <p>
+      Computationally, Poisson is fundamentally different from heat and
+      wave: there is <em>no time</em>. The unknown $u$ is a single static
+      field defined for all points at once. Instead of a time loop that
+      marches each point forward step by step, we apply Rule 1 (the
+      Laplacian stencil) <em>simultaneously</em> at every interior grid
+      point. That gives one big linear equation per grid point — together
+      they form the system $A\mathbf{u} = \mathbf{b}$, which we solve in
+      one shot with Julia's backslash operator.
+    </p>
+    <p>
+      The key new idea is therefore <strong>matrix assembly</strong>:
+      turning the stencil into a sparse matrix $A$ whose row $k$ encodes
+      the equation centred on grid point $k$. Get this right once and the
+      same pattern reappears in every elliptic, implicit, or steady
+      problem you will solve.
     </p>
 
     <div class="deriv-flow">
@@ -1683,6 +2898,50 @@ xs, ys, u = solve_poisson_2d()
 heatmap(xs, ys, u, c=:viridis, aspect_ratio=:equal,
         xlabel="x", ylabel="y", title="Poisson solution u(x,y)")</code></pre>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/poisson_equation.png"
+           alt="Poisson equation: source term, solution heatmap, and 3-D surface."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 5.</strong> Poisson equation, three views.
+        <em>Left:</em> the source term $f(x,y)$. <em>Centre:</em> the
+        steady-state solution $u(x,y)$ — same shape as the source but
+        smoother and rescaled. <em>Right:</em> the same solution as a
+        3-D surface, useful for spotting peaks and saddles.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_poisson_equation()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots
+
+function fig_poisson_equation()
+    xs, ys, U, F = solve_poisson_2d()
+
+    p1 = heatmap(xs, ys, F, c=:coolwarm,
+                 xlabel="x", ylabel="y",
+                 title="Source term  f(x,y)", aspect_ratio=:equal)
+    p2 = heatmap(xs, ys, U, c=:viridis,
+                 xlabel="x", ylabel="y",
+                 title="Solution  u(x,y)", aspect_ratio=:equal)
+    p3 = surface(xs, ys, U, c=:viridis, camera=(40, 30),
+                 xlabel="x", ylabel="y", zlabel="u",
+                 title="3D view of u(x,y)")
+
+    plt = plot(p1, p2, p3, layout=(1, 3), size=(1300, 480), dpi=150,
+               plot_title="Poisson Equation:  −∇²u = f   (steady-state, no time)",
+               plot_titlefontsize=14)
+    savefig(plt, "poisson_equation.png")
+end
+
+fig_poisson_equation()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- ════════════════════════════════════════════════════════
@@ -1691,9 +2950,41 @@ heatmap(xs, ys, u, c=:viridis, aspect_ratio=:equal,
   <section class="section" id="pde-ns">
     <h3>Example D — Navier-Stokes (Nonlinear, Coupled)</h3>
     <p>
-      Navier-Stokes combines everything from Examples A–C: an Euler time step
-      (Example A), a diffusion term (Example A), and a pressure Poisson sub-solve
-      (Example C) — all coupled together and repeated every timestep.
+      The Navier–Stokes equations are the governing equations of fluid
+      flow — every weather forecast, every aircraft simulation, every
+      blood-flow study uses them. They are deceptively short to write
+      down, but they combine essentially every difficulty we have met
+      so far, and they introduce one new one (nonlinearity).
+    </p>
+    <p>
+      What makes Navier–Stokes hard:
+    </p>
+    <ul>
+      <li>It is a <em>system</em> of two coupled PDEs — momentum
+        and continuity — for the velocity $\mathbf{u}$ <em>and</em>
+        pressure $p$.</li>
+      <li>The convection term $(\mathbf{u}\cdot\nabla)\mathbf{u}$ is
+        <em>nonlinear</em> — the velocity advects itself. Linear
+        algebra alone is not enough; you typically iterate.</li>
+      <li>The continuity constraint $\nabla\cdot\mathbf{u}=0$
+        (incompressibility) is not a time-evolution rule but a
+        <em>constraint</em> — it must hold at every instant. Enforcing
+        it requires solving a Poisson equation for pressure
+        <em>every</em> timestep.</li>
+      <li>At high Reynolds number $\mathrm{Re} = UL/\nu$ the flow
+        becomes turbulent — a chaotic, multi-scale mess that needs
+        either very fine grids or sub-grid models.</li>
+    </ul>
+    <p>
+      Algorithmically, every step of Navier–Stokes touches every tool
+      from Examples A–C: a forward-Euler-style time step (Example A's
+      time loop), a $\nabla^2 u$ viscous diffusion term (also Example
+      A's stencil), and a pressure Poisson solve (Example C's sparse
+      $A\mathbf{u}=\mathbf{b}$). Plus convection. The card sequence
+      below walks the standard projection-method recipe; in our actual
+      <code>juliaPDEs</code> package we hand the heavy lifting to
+      <code>Oceananigans.jl</code> rather than rewriting it ourselves
+      (see Step 4.5.6).
     </p>
 
     <div class="deriv-flow">
@@ -1886,18 +3177,99 @@ set!(model, u=0, v=0)
 simulation = Simulation(model, Δt=1e-3, stop_time=10)
 run!(simulation)</code></pre>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/navier_stokes.png"
+           alt="Navier-Stokes lid-driven cavity: schematic on the left and streamlines on the right."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 6.</strong> Lid-driven cavity, the canonical
+        Navier–Stokes test problem. <em>Left:</em> schematic — the top
+        lid moves with speed $U$, all other walls are no-slip; the
+        primary vortex sits roughly at $(0.5,\,0.55)$. <em>Right:</em>
+        streamlines (level curves of the stream function $\Psi$) — they
+        spiral around the vortex centre.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
+        This panel is illustrative — it draws the cavity schematic and
+        an analytical stream-function approximation. For the real
+        time-stepped simulation, see Step 4.5.6 (the Oceananigans-based
+        <code>solve_navier_stokes</code>).
+      </p>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_navier_stokes()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors
+
+function fig_navier_stokes()
+    # Left panel: cavity schematic
+    p1 = plot(legend=false, framestyle=:none, aspect_ratio=:equal,
+              xlim=(-0.2, 1.2), ylim=(-0.2, 1.4),
+              title="Lid-Driven Cavity (NS benchmark)")
+    plot!(p1, [0,1,1,0,0], [0,0,1,1,0], color=:black, lw=2.5)
+    plot!(p1, [0.15, 0.85], [1.05, 1.05], arrow=true, color=:firebrick, lw=2.5)
+    annotate!(p1, 0.5, 1.18,
+              text("moving lid  U = 1.0", :firebrick, :center, 11, :bold))
+    annotate!(p1, -0.07, 0.5, text("u=v=0", :steelblue, :right,  10))
+    annotate!(p1,  1.07, 0.5, text("u=v=0", :steelblue, :left,   10))
+    annotate!(p1,  0.5, -0.10, text("u=v=0", :steelblue, :center, 10))
+    θ = range(0, 2π, length=100)
+    for r in (0.15, 0.25, 0.35)
+        plot!(p1, 0.5 .+ r .* cos.(θ), 0.55 .+ r .* sin.(θ),
+              color=:seagreen, lw=1, alpha=0.6)
+    end
+    annotate!(p1, 0.5, 0.55, text("vortex", :seagreen, :center, 11, :bold))
+
+    # Right panel: streamlines (illustrative analytical approximation)
+    n  = 40
+    xg = range(0, 1, length=n);  yg = range(0, 1, length=n)
+    X  = [x for y in yg, x in xg];  Y = [y for y in yg, x in xg]
+    Ψ  = @. X*(1-X)*Y^2*(1-Y) * sin(π*X)
+    p2 = contour(xg, yg, Ψ, levels=20, c=:plasma, fill=false, lw=1.2,
+                 xlabel="x", ylabel="y",
+                 title="Streamlines (illustrative)",
+                 aspect_ratio=:equal, colorbar_title="Ψ")
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 550), dpi=150,
+               plot_title="Navier-Stokes:  ∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u",
+               plot_titlefontsize=13)
+    savefig(plt, "navier_stokes.png")
+end
+
+fig_navier_stokes()</code></pre>
+      </div>
+    </details>
   </section>
 
   <!-- 5.4 Verify -->
   <section class="section" id="step5-verify">
     <h3>5.4 Verify — Convergence Study</h3>
     <p>
-      After writing a solver, confirm that refining the grid reduces the error
-      at the expected rate. For central differences: halving $h$ should divide
-      the error by $\approx 4$ (second-order accuracy).
+      A solver that runs without crashing is not the same as a correct
+      solver. The single most powerful sanity check in numerical analysis
+      is a <strong>convergence study</strong>: pick a problem with a known
+      exact answer, run the solver at several grid resolutions, and check
+      that the error shrinks at the rate the theory predicts.
+    </p>
+    <p>
+      The error of a finite-difference scheme is governed by the order of
+      the spatial discretisation. Our central-difference Laplacian
+      (Rule 1) is <strong>second-order accurate</strong>, meaning:
     </p>
 
     $$\|u_h - u_{\text{exact}}\|_\infty = C\,h^p, \quad p = 2 \text{ for central differences}$$
+
+    <p>
+      What does this practically mean? If you halve the grid spacing
+      ($h \to h/2$), the error should drop by a factor of
+      $2^p = 2^2 = 4$. Doing this at three or four resolutions and
+      verifying the ratio is the standard correctness test:
+    </p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
@@ -1922,6 +3294,75 @@ plot(hs, err, xscale=:log10, yscale=:log10, marker=:o, lw=2,
      xlabel="h", ylabel="L∞ error", title="Convergence study", label="Numerical")
 plot!(hs, err[1].*(hs./hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pre>
     </div>
+
+    <figure class="figure">
+      <img src="../output/figures/convergence_study.png"
+           alt="Convergence study: log-log error vs h on the left, solver runtime vs grid size on the right."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 7.</strong> Convergence and scaling.
+        <em>Left:</em> the L∞ error follows the slope-2 reference line on
+        the log–log plot — that is the visual signature of $O(h^2)$
+        accuracy. <em>Right:</em> solver wall-clock time vs grid size for
+        the sparse direct solve — sub-quadratic in $N$, the typical
+        behaviour of UMFPACK on 2-D Laplacians.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_convergence_study()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors
+
+function fig_convergence_study()
+    Ns = [10, 20, 40, 80, 160]
+    hs       = Float64[]
+    errors   = Float64[]
+    runtimes = Float64[]
+
+    poisson_exact(x, y) = sin(π*x) * sin(π*y)
+
+    for N in Ns
+        h  = 1.0 / (N + 1)
+        t0 = time()
+        xs, ys, U, _ = solve_poisson_2d(N=N)
+        t1 = time()
+        U_exact = [poisson_exact(x, y) for y in ys, x in xs]
+        push!(hs, h)
+        push!(errors, maximum(abs.(U .- U_exact)))
+        push!(runtimes, t1 - t0)
+    end
+
+    ref_h2 = errors[1] .* (hs ./ hs[1]).^2
+
+    p1 = plot(hs, errors, xscale=:log10, yscale=:log10,
+              marker=:circle, ms=7, lw=2.2, color=:dodgerblue,
+              label="L∞ error (numerical)",
+              xlabel="grid spacing h",
+              ylabel="max |u_num − u_exact|",
+              title="Convergence — Poisson 2D",
+              grid=true, gridalpha=0.3, framestyle=:box,
+              legend=:bottomright)
+    plot!(p1, hs, ref_h2, ls=:dash, lw=1.8, color=:firebrick,
+          label="O(h²) reference")
+
+    p2 = plot(Ns, runtimes, marker=:diamond, ms=7, lw=2.2,
+              color=:seagreen, xscale=:log10, yscale=:log10,
+              xlabel="grid points per side N",
+              ylabel="solve time (s)",
+              title="Sparse direct solver scaling",
+              grid=true, gridalpha=0.3, framestyle=:box, legend=false)
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
+    savefig(plt, "convergence_study.png")
+end
+
+fig_convergence_study()</code></pre>
+      </div>
+    </details>
   </section>
 
   <hr class="divider" />
@@ -1929,15 +3370,58 @@ plot!(hs, err[1].*(hs./hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pr
   <!-- ══ 5.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
   <section class="section" id="step5-gmsh">
     <h3>5.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
+
+    <h4>Why structured grids are not enough</h4>
     <p>
-      Finite-difference grids work for rectangles. Real geometry — L-shapes,
-      airfoils, brain MRI, machine parts — needs <strong>unstructured</strong>
-      meshes. <a href="https://gmsh.info" target="_blank" rel="noopener">Gmsh</a>
-      is the de-facto open-source mesher; the Julia bindings live in
-      <code>Gmsh.jl</code>. The workflow has three parts: (1) describe the
-      geometry, (2) let Gmsh triangulate it, (3) read the node coordinates
-      and element connectivity back into Julia and assemble a sparse matrix.
+      Everything we have done so far used a <strong>structured grid</strong>:
+      the unit interval $[0,1]$ chopped into $N$ equal sub-intervals, or
+      the unit square chopped into a uniform $N \times N$ array. Structured
+      grids have one huge advantage — neighbour relationships are trivial,
+      <code>u[i+1, j]</code> just is the right neighbour — and one fatal
+      disadvantage: they can only represent rectangular domains.
     </p>
+    <p>
+      Real engineering geometry is never rectangular. An airfoil cross-
+      section, an L-shaped duct, a brain in MRI data, a turbine blade —
+      none of these fit a uniform grid without wasting most of the
+      domain on points that are not in the body or, worse, putting grid
+      points where there is no physics. The remedy is an
+      <strong>unstructured mesh</strong>: a tessellation of the actual
+      domain by triangles (in 2D) or tetrahedra (in 3D) that <em>conforms
+      to the geometry</em> — denser near features that need resolution,
+      coarser where the solution is boring.
+    </p>
+
+    <h4>What is "Gmsh"?</h4>
+    <p>
+      <a href="https://gmsh.info" target="_blank" rel="noopener">Gmsh</a>
+      is the de-facto open-source mesh generator: a 30-year-old C++
+      project that takes a geometric description (points, lines, curves,
+      surfaces) and produces a high-quality unstructured mesh of the
+      enclosed region. It powers many academic FEM workflows and ships
+      with its own little CAD scripting language. We do not call its
+      executable from the shell — we use <code>Gmsh.jl</code>, the Julia
+      bindings, which expose the full Gmsh API as ordinary Julia
+      functions.
+    </p>
+
+    <h4>The three-part workflow</h4>
+    <p>
+      Going from "an L-shape on paper" to "a sparse matrix you can put
+      in a linear solve" has three phases:
+    </p>
+    <ol>
+      <li><strong>Describe the geometry</strong> — write the
+        boundary as a sequence of points connected by lines/curves,
+        bound a surface with that boundary. Tell Gmsh how fine you want
+        the mesh near each point (the parameter <code>lc</code> below).</li>
+      <li><strong>Triangulate</strong> — let Gmsh fill the interior with
+        well-shaped triangles that satisfy your size hints.</li>
+      <li><strong>Read it back into Julia</strong> — pull out the node
+        coordinates and the connectivity table (which three nodes form
+        each triangle), then assemble the sparse matrix using exactly
+        the COO + element-loop pattern we already know.</li>
+    </ol>
 
     <div class="callout info">
       <strong>Runnable code.</strong> The two code blocks below are the
@@ -1947,12 +3431,25 @@ plot!(hs, err[1].*(hs./hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pr
     </div>
 
     <h3>Install Gmsh.jl</h3>
+    <p>
+      Gmsh.jl bundles the Gmsh binary inside the Julia package — no
+      separate system install needed. One line in package mode and you
+      are done:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">(@julia-pde) pkg> add Gmsh</code></pre>
     </div>
 
     <h3>Generate a 2D triangular mesh of the unit square</h3>
+    <p>
+      We mesh the simplest possible domain — the unit square $[0,1]^2$ —
+      so we can focus on the API and the index plumbing rather than the
+      geometry. The function below opens Gmsh, registers four corner
+      points, four edges, the surface they bound, runs the 2D mesher,
+      then pulls the resulting nodes and triangles back as plain Julia
+      arrays:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using Gmsh: gmsh
@@ -2003,38 +3500,184 @@ xy, tri_nodes = gmsh_unit_square(lc = 0.5)
     </div>
 
     <h3>From mesh to sparse matrix — element assembly</h3>
+
+    <h4>What we are about to build, in plain words</h4>
     <p>
-      Visit every triangle. For each pair $(a,b)$ of its three local nodes,
-      add the local contribution at the matching <em>global</em> indices.
-      With unit local entries the result has the same non-zero pattern as a
-      P1 finite-element stiffness matrix on the same mesh:
+      We have a triangular mesh: a list of points (<code>xy</code>) and a list
+      of triangles (<code>tri_nodes</code>). We want to turn that geometry
+      into a <strong>matrix</strong> $A$ whose entries describe how the nodes
+      are connected. Why a matrix? Because every PDE solver, whether finite-
+      element, finite-volume, or finite-difference, ultimately produces a
+      linear system $A\mathbf{u} = \mathbf{b}$. The mesh tells us
+      <em>which</em> entries of $A$ are non-zero; the physics tells us
+      <em>what values</em> to put in them. In this section we focus only on
+      the first half — getting the right shape — by filling each entry with
+      <code>1.0</code>. Once that index plumbing works, swapping in real
+      physics values is trivial.
+    </p>
+
+    <h4>Three new ideas you need before reading the code</h4>
+
+    <p style="margin-bottom:6px;"><strong>1. What is a <em>sparse</em> matrix?</strong></p>
+    <p>
+      A regular ("dense") matrix stores every entry, even the zeros. A 100&thinsp;000 ×
+      100&thinsp;000 dense matrix needs 80&nbsp;GB of memory — impossible on a laptop.
+      In our triangle problem almost every entry of $A$ is zero (a node is
+      connected to maybe 6–8 neighbours out of thousands of mesh nodes), so
+      we use a <strong>sparse matrix</strong>: a data structure that only
+      stores the non-zero entries together with their $(i, j)$ positions. In
+      Julia, sparse matrices live in the <code>SparseArrays</code> standard
+      library — <code>using SparseArrays</code> at the top of the file.
+    </p>
+
+    <p style="margin-bottom:6px;"><strong>2. What is the COO format?</strong></p>
+    <p>
+      "COO" stands for <em>coordinate format</em> — the simplest way to build
+      a sparse matrix. You keep three parallel arrays:
+    </p>
+    <ul>
+      <li><code>I</code> — the row of each non-zero entry,</li>
+      <li><code>J</code> — the column of each non-zero entry,</li>
+      <li><code>V</code> — the value at that <code>(I[k], J[k])</code> position.</li>
+    </ul>
+    <p>
+      So if <code>I = [1, 3, 3]</code>, <code>J = [2, 2, 5]</code>,
+      <code>V = [4.0, 7.0, 9.0]</code>, then $A_{1,2}=4$, $A_{3,2}=7$,
+      $A_{3,5}=9$, and every other entry is zero. The Julia builder
+      <code>sparse(I, J, V, m, n)</code> turns those three arrays into an
+      $m \times n$ sparse matrix in one call.
+    </p>
+
+    <p style="margin-bottom:6px;"><strong>3. What does "assembly" mean?</strong></p>
+    <p>
+      <em>Assembly</em> is the process of building the global matrix $A$ by
+      visiting every element (triangle) one by one, computing a tiny local
+      contribution for that element, and adding it into $A$ at the right
+      global positions. Picture it as: each triangle hands in a 3 × 3 form
+      saying <em>"my three corners are global nodes 6, 3, and 11, and here
+      are the nine numbers I want added at rows/columns 6, 3, 11"</em>. The
+      assembler stamps those nine numbers into the big matrix and moves on
+      to the next triangle. Two triangles that share a node both stamp into
+      the same row/column — those contributions <em>add up</em>, which is
+      exactly the physics of "this node feels both neighbouring elements".
+    </p>
+
+    <h4>The code, line by line</h4>
+    <p>
+      Visit every triangle. For each ordered pair $(a, b)$ of its three local
+      nodes — that is all 9 combinations, including the diagonal $a = b$ —
+      record one COO triplet at the matching <em>global</em> indices. With
+      a unit value <code>1.0</code> we end up with the same non-zero pattern
+      that a real P1 finite-element stiffness matrix would have on this mesh:
     </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">function assemble_adjacency(tri_nodes, n_nodes)
-    I = Int[]; J = Int[]; V = Float64[]
-    for k in axes(tri_nodes, 2)
-        nodes_k = tri_nodes[:, k]      # 3 global node IDs
-        for a in 1:3, b in 1:3
-            push!(I, nodes_k[a])       # global row
-            push!(J, nodes_k[b])       # global column
-            push!(V, 1.0)              # local entry value
+    I = Int[]; J = Int[]; V = Float64[]      # three empty arrays we will grow
+    for k in axes(tri_nodes, 2)              # for every triangle (column of tri_nodes)
+        nodes_k = tri_nodes[:, k]            # the 3 GLOBAL node IDs of triangle k
+        for a in 1:3, b in 1:3               # all 9 (a,b) local pairs incl. a==b
+            push!(I, nodes_k[a])             # global row    = global ID of local a
+            push!(J, nodes_k[b])             # global column = global ID of local b
+            push!(V, 1.0)                    # value (here just 1; in real FEM: K_ab)
         end
     end
-    return sparse(I, J, V, n_nodes, n_nodes)  # duplicates auto-summed
+    return sparse(I, J, V, n_nodes, n_nodes) # build the sparse matrix; duplicates SUM
 end
 
-n_nodes = size(xy, 2)
-A = assemble_adjacency(tri_nodes, n_nodes)</code></pre>
+n_nodes = size(xy, 2)                        # number of mesh nodes
+A = assemble_adjacency(tri_nodes, n_nodes)   # the n × n sparse matrix</code></pre>
+    </div>
+
+    <p>
+      Reading the code from the inside out:
+    </p>
+    <ul>
+      <li><code>tri_nodes[:, k]</code> grabs <em>all rows</em> of column
+        <code>k</code>: a length-3 vector of global node IDs for triangle
+        <code>k</code>. For our mesh, <code>tri_nodes[:, 1] == [6, 3, 11]</code>
+        — those are T1's three corners.</li>
+      <li>The <code>for a in 1:3, b in 1:3</code> loop is Julia shorthand for a
+        nested loop: 3 × 3 = 9 iterations per triangle. Each iteration
+        picks one (local row, local column) pair $(a, b)$ inside the local
+        3×3 block.</li>
+      <li><code>nodes_k[a]</code> looks up the <em>global</em> ID of local
+        corner <code>a</code>. So when <code>(a, b) = (1, 2)</code> on T1, we
+        push row $= 6$, column $= 3$ — that is, "T1 contributes something to
+        $A_{6,3}$".</li>
+      <li><code>push!(V, 1.0)</code> records the value to add. For a real
+        Laplacian you would compute the 3×3 element stiffness matrix
+        $K^{(k)}$ and push <code>K[a, b]</code> instead — but the <em>indices
+        I and J never change</em>. That is why this index plumbing is the
+        only hard part of FEM/FVM assembly.</li>
+      <li><code>sparse(I, J, V, n_nodes, n_nodes)</code> hands the three
+        arrays to <code>SparseArrays</code>, which builds the matrix and
+        <strong>auto-sums</strong> every triplet that lands at the same
+        $(i, j)$ position. No special code needed for shared nodes — Julia
+        does it for you.</li>
+    </ul>
+
+    <h4>Why does <code>sparse</code> auto-summing matter so much?</h4>
+    <p>
+      Imagine node 11 is a corner of both T1 and T9. When we process T1 we
+      push something at $(11, 11)$. Later when we process T9 we push another
+      thing at $(11, 11)$. Without auto-summing we would have to either
+      (a) check whether that entry already exists and update it (slow,
+      complicated), or (b) collect every contribution and merge them at the
+      end (extra code). <code>SparseArrays</code> handles option (b)
+      transparently inside <code>sparse(...)</code>, so our assembly loop
+      stays only a few lines. This is the same idea every FEM library uses
+      under the hood — Julia just exposes it directly.
+    </p>
+
+    <h4>Worked example for our 12-node mesh</h4>
+    <p>
+      Triangle T1 has corners <code>[6, 3, 11]</code>. The 9 triplets it
+      pushes are:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">triplets pushed by T1</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-text">(I, J, V):
+ (6,  6, 1.0)   (6,  3, 1.0)   (6, 11, 1.0)
+ (3,  6, 1.0)   (3,  3, 1.0)   (3, 11, 1.0)
+ (11, 6, 1.0)   (11, 3, 1.0)   (11,11, 1.0)</code></pre>
     </div>
     <p>
-      The COO triplets <code>(I, J, V)</code> are the natural output of
-      element assembly; <code>sparse</code> automatically sums duplicate
-      $(i,j)$ pairs — exactly what <em>“adding contributions from every
-      element touching that node”</em> means. Replace the <code>1.0</code>
-      with the entries of a real 3×3 local stiffness matrix and you have a
-      working FEM Laplacian — the index plumbing is unchanged.
+      Those are the 9 red rings on the right of the figure below. Triangle T9
+      shares nodes 11 and 6 with T1, so when T9 is processed it pushes
+      another <code>(11, 11, 1.0)</code> and another <code>(6, 11, 1.0)</code>
+      — and <code>sparse</code> sums them, giving $A_{11,11} \ge 2$ and
+      $A_{6,11} \ge 2$. That is "node 11 belongs to two triangles" written
+      in matrix language.
     </p>
+
+    <h4>Why <em>this</em> non-zero pattern equals a real FEM stiffness matrix</h4>
+    <p>
+      In a P1 (linear) finite-element method, the basis function for node $i$
+      is non-zero only on the triangles that touch node $i$. The matrix entry
+      $K_{ij} = \int_\Omega \nabla \phi_i \cdot \nabla \phi_j\,d\Omega$ is
+      therefore non-zero <em>iff</em> nodes $i$ and $j$ both touch at least
+      one common triangle — the exact condition we check here. So the
+      sparsity pattern of our toy adjacency matrix is identical to the
+      sparsity pattern of the real FEM matrix; only the numerical values
+      differ. Once the indexing is right, plugging in the physics is a
+      one-line change:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the only change to make a real FEM Laplacian</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Inside the loop, replace `push!(V, 1.0)` with:
+K_local = element_stiffness(xy[:, nodes_k])    # 3×3 dense matrix from your physics
+push!(V, K_local[a, b])</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Take-away</strong>
+      The <em>indexing</em> part of FEM/FVM assembly is universal: visit each
+      element, expand its local 3×3 (or 4×4 for tets) block into 9 (or 16)
+      COO triplets at the matching global rows/columns, hand the lot to
+      <code>sparse</code>. The physics only changes which numbers go into
+      <code>V</code> — never <code>I</code> or <code>J</code>.
+    </div>
 
     <h3>How mesh indices and matrix indices line up</h3>
     <p>
@@ -2064,7 +3707,7 @@ A = assemble_adjacency(tri_nodes, n_nodes)</code></pre>
            alt="Left: a Gmsh-generated triangular mesh of the unit square with numbered nodes. Right: the sparsity pattern of the assembled matrix, with the 9 entries from triangle T1 ringed in red."
            style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
       <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
-        <strong>Figure.</strong> Output of the two functions above (lc = 0.5).
+        <strong>Figure 8.</strong> Output of the two functions above (lc = 0.5).
         Left: the Gmsh mesh, with each node and each triangle labelled.
         Right: the sparsity pattern of <code>A</code>; an entry
         $A_{ij}$ is non-zero iff nodes $i$ and $j$ share at least one
@@ -2074,19 +3717,451 @@ A = assemble_adjacency(tri_nodes, n_nodes)</code></pre>
       </figcaption>
     </figure>
 
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
+        Calls <code>gmsh_unit_square</code> and
+        <code>assemble_adjacency</code> from the two earlier code
+        blocks, then plots the mesh and a custom spy of the resulting
+        sparse matrix side-by-side.
+      </p>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_mesh_to_matrix()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors, SparseArrays
+
+function fig_mesh_to_matrix()
+    xy, tri_nodes = gmsh_unit_square(lc=0.5)
+    n_nodes = size(xy, 2)
+    n_tri   = size(tri_nodes, 2)
+    A       = assemble_adjacency(tri_nodes, n_nodes)
+    tri_hl  = tri_nodes[:, 1]                         # T1's three node IDs
+
+    BLUE = "#1F4E79"
+
+    # Left panel: the mesh with every node and triangle labelled
+    p1 = plot(legend=false, framestyle=:box, aspect_ratio=:equal,
+              xlim=(-0.15, 1.15), ylim=(-0.15, 1.15),
+              xlabel="x", ylabel="y",
+              title="Mesh — $n_nodes nodes, $n_tri triangles  (T1 highlighted)",
+              titlefontsize=11, titlefontcolor=parse(Colorant, BLUE))
+
+    for k in 1:n_tri
+        a, b, c = tri_nodes[1, k], tri_nodes[2, k], tri_nodes[3, k]
+        xs = [xy[1, a], xy[1, b], xy[1, c], xy[1, a]]
+        ys = [xy[2, a], xy[2, b], xy[2, c], xy[2, a]]
+        fc = (k == 1) ? :gold : :lightblue
+        fa = (k == 1) ? 0.55 : 0.20
+        plot!(p1, xs, ys, seriestype=:shape,
+              fillcolor=fc, fillalpha=fa,
+              linecolor=parse(Colorant, BLUE), linewidth=1.4)
+        cx = (xy[1, a] + xy[1, b] + xy[1, c]) / 3
+        cy = (xy[2, a] + xy[2, b] + xy[2, c]) / 3
+        annotate!(p1, cx, cy, text("T$k", :gray30, :center, 8, :italic))
+    end
+    for i in 1:n_nodes
+        scatter!(p1, [xy[1, i]], [xy[2, i]], ms=12, color=:white,
+                 markerstrokecolor=parse(Colorant, BLUE), markerstrokewidth=2)
+        annotate!(p1, xy[1, i], xy[2, i],
+                  text("$i", parse(Colorant, BLUE), :center, 9, :bold))
+    end
+
+    # Right panel: spy plot of A with T1's 9 entries ringed
+    rows, cols, _ = findnz(A)
+    p2 = scatter(cols, rows, ms=8, color=:steelblue,
+                 markerstrokecolor=parse(Colorant, BLUE),
+                 markerstrokewidth=1, legend=false, framestyle=:box,
+                 xlim=(0.5, n_nodes + 0.5), ylim=(0.5, n_nodes + 0.5),
+                 yflip=true, aspect_ratio=:equal,
+                 xticks=1:n_nodes, yticks=1:n_nodes,
+                 xlabel="column j  (node j)", ylabel="row i  (node i)",
+                 title="Sparsity of A — red rings = T1's 9 entries",
+                 titlefontsize=11, titlefontcolor=parse(Colorant, BLUE))
+    for i in tri_hl, j in tri_hl
+        scatter!(p2, [j], [i], ms=14, color=:transparent,
+                 markerstrokecolor=:firebrick, markerstrokewidth=2.5)
+    end
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 560), dpi=150,
+               left_margin=4Plots.mm, bottom_margin=4Plots.mm,
+               top_margin=8Plots.mm,
+               plot_title="From Gmsh mesh to sparse matrix:  T1 = nodes {$(tri_hl[1]), $(tri_hl[2]), $(tri_hl[3])} ⇒ 9 entries A[i,j] with i,j ∈ T1",
+               plot_titlefontsize=11,
+               plot_titlefontcolor=parse(Colorant, BLUE))
+    savefig(plt, "mesh_to_matrix.png")
+end
+
+fig_mesh_to_matrix()</code></pre>
+      </div>
+    </details>
+
     <p style="margin-top:1.4em;"><strong>Practical implications:</strong></p>
     <ul>
-      <li>Sparsity ≈ average node degree of the mesh — typically 6–8
-        neighbours in 2D, so $A$ holds $\approx 7n$ non-zeros instead of $n^2$.</li>
-      <li>Reordering nodes (Cuthill–McKee, METIS) does <em>not</em> change
-        the physics; it only relabels indices and can dramatically reduce
-        fill-in for sparse direct solvers.</li>
-      <li>Boundary conditions are applied by editing the rows and columns
-        of $A$ whose indices match boundary node IDs — the same node-to-row
-        mapping is reused.</li>
-      <li>Higher-order elements (P2, P3, …) add edge/face degrees of
-        freedom; the connectivity table just grows more rows, but the
-        global-DOF-to-matrix-row rule is unchanged.</li>
+      <li><strong>Memory savings are huge.</strong> The sparsity of $A$ is
+        roughly the <em>average node degree</em> of the mesh — in 2D
+        triangulations every interior node typically has 6–8 neighbours,
+        so $A$ stores about $7n$ non-zeros instead of the $n^2$ a dense
+        representation would need. For a 1-million-node mesh that is
+        ~7 MB of doubles instead of ~8 TB. This is why every realistic
+        FEM/FVM code uses sparse storage end-to-end.</li>
+      <li><strong>Reordering nodes can speed up the solve.</strong>
+        Sparse direct solvers are much faster when non-zero entries cluster
+        near the diagonal (small "bandwidth"). Algorithms like
+        <em>Cuthill–McKee</em> or graph partitioners like <em>METIS</em>
+        relabel the nodes — that is, permute the rows and columns of $A$
+        — to push non-zeros towards the diagonal. They do not change the
+        physics; they just renumber. With a good ordering you can solve
+        problems an order of magnitude faster on the same hardware.</li>
+      <li><strong>Boundary conditions become row/column edits.</strong>
+        Once the mesh-to-matrix mapping is in place, applying a Dirichlet
+        BC ("$u = 0$ on this part of the boundary") just means editing
+        the rows of $A$ whose indices match boundary nodes — set the row
+        to a unit row and put the boundary value in $\mathbf{b}$. The
+        same node-to-row mapping is reused; no extra bookkeeping needed.</li>
+      <li><strong>Higher-order elements reuse the same code.</strong>
+        With <em>linear</em> P1 triangles, each element has 3 degrees of
+        freedom (one per node). With P2 (quadratic) you gain extra DOFs
+        on edges; with P3 you gain DOFs on the interior of each triangle.
+        From the assembler's point of view, the only thing that changes
+        is the size of <code>tri_nodes</code> (more rows) — the
+        global-DOF-to-matrix-row rule is unchanged. This is the magic
+        of element assembly: once it works for P1, you can swap in a
+        P2 or P3 element matrix without touching the outer loop.</li>
+      <li><strong>The same pattern works in 3D.</strong> A tetrahedral
+        mesh has 4 nodes per element, so each element contributes a
+        4 × 4 = 16 entries to $A$ instead of 9. Otherwise the loop is
+        line-for-line identical. That is why teaching this on the unit
+        square pays off — you have already learned the 3D version.</li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>Where to go from here</strong>
+      The same toolchain — Gmsh for meshing, COO assembly into a sparse
+      matrix, <code>\</code> or an iterative solver for the solve —
+      scales from a 12-node toy on the unit square to multi-million-DOF
+      production simulations on HPC clusters. Higher-level frameworks
+      like <code>Ferrite.jl</code> and <code>Gridap.jl</code> automate
+      the boilerplate (basis functions, quadrature, BC application) but
+      the conceptual model never changes.
+    </div>
+
+    <h3 style="margin-top:2.2em;">Gmsh recipes — four classic 2-D geometries</h3>
+    <p>
+      The unit square is the simplest possible domain. Real problems use
+      anything from refined rectangles to L-shapes to discs to plates
+      with holes. Each of the four recipes below is a self-contained
+      Julia function that meshes one classic shape and returns the same
+      <code>(xy, tri_nodes)</code> arrays as <code>gmsh_unit_square</code>
+      — so the entire downstream sparse-matrix code keeps working with
+      no changes. The figure at the bottom is the actual output of
+      running these four functions.
+    </p>
+
+    <p>
+      Two Gmsh kernels appear below — Gmsh's built-in geometry kernel
+      (<code>gmsh.model.geo</code>) and the OpenCASCADE CAD kernel
+      (<code>gmsh.model.occ</code>). Use <code>geo</code> for polygons
+      defined by points and lines; reach for <code>occ</code> when you
+      need curved primitives (discs, splines) or boolean operations
+      (union, intersection, cut). After populating the model with either
+      kernel, call its <code>synchronize()</code> before
+      <code>mesh.generate(2)</code>.
+    </p>
+
+    <h4>Recipe 1 — Square with local refinement</h4>
+    <p>
+      Same square, but ask Gmsh for a <em>much</em> finer element size at
+      one corner. The mesher smoothly grades the size away from that
+      corner. This is the cheap way to put resolution where it matters
+      — near a singularity, a moving front, or a boundary layer:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Recipe 1: refined square</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function gmsh_square_refined()
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("square_refined")
+
+    # Per-point size hints: corners 1–3 are coarse, corner 4 is FINE
+    p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, 0.4)
+    p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, 0.4)
+    p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, 0.4)
+    p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, 0.05)   # ← refined corner
+
+    l1 = gmsh.model.geo.addLine(p1, p2)
+    l2 = gmsh.model.geo.addLine(p2, p3)
+    l3 = gmsh.model.geo.addLine(p3, p4)
+    l4 = gmsh.model.geo.addLine(p4, p1)
+    cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
+    gmsh.model.geo.addPlaneSurface([cl])
+
+    gmsh.model.geo.synchronize()
+    gmsh.model.mesh.generate(2)
+    # ... pull nodes/triangles back the same way as gmsh_unit_square
+end</code></pre>
+    </div>
+
+    <h4>Recipe 2 — L-shape (re-entrant corner)</h4>
+    <p>
+      The L-shape is the textbook hard case for elliptic PDEs:
+      Poisson's equation on this domain has a <em>singular</em> gradient
+      at the inner corner $(0.5,\,0.5)$, so naive uniform meshes
+      converge slowly. Mesh refinement near that corner (or higher-order
+      elements) is what gets the error back under control. We construct
+      it by walking six points counter-clockwise:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Recipe 2: L-shape</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function gmsh_lshape()
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("lshape")
+
+    coords = [(0.0, 0.0), (1.0, 0.0), (1.0, 0.5),
+              (0.5, 0.5), (0.5, 1.0), (0.0, 1.0)]   # 6 vertices
+
+    pts   = [gmsh.model.geo.addPoint(x, y, 0.0, 0.12) for (x, y) in coords]
+    lines = [gmsh.model.geo.addLine(pts[i], pts[mod1(i + 1, length(pts))])
+             for i in eachindex(pts)]
+    cl    = gmsh.model.geo.addCurveLoop(lines)
+    gmsh.model.geo.addPlaneSurface([cl])
+
+    gmsh.model.geo.synchronize()
+    gmsh.model.mesh.generate(2)
+    # ... pull nodes/triangles back
+end</code></pre>
+    </div>
+
+    <h4>Recipe 3 — Unit disc (curved boundary)</h4>
+    <p>
+      A circle is impossible to describe exactly with straight lines, so
+      we switch to OpenCASCADE — Gmsh's CAD kernel. <code>addDisk</code>
+      takes the centre, then two radii (equal radii ⇒ a circle, unequal
+      ⇒ an ellipse). We set a single global maximum size hint with
+      <code>Mesh.CharacteristicLengthMax</code> instead of decorating
+      every point:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Recipe 3: disc</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function gmsh_disc()
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("disc")
+
+    # OpenCASCADE: addDisk(x, y, z, rx, ry) — rx==ry gives a circle
+    gmsh.model.occ.addDisk(0.0, 0.0, 0.0, 1.0, 1.0)
+    gmsh.model.occ.synchronize()
+
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.18)
+    gmsh.model.mesh.generate(2)
+    # ... pull nodes/triangles back
+end</code></pre>
+    </div>
+
+    <h4>Recipe 4 — Square with a circular hole (boolean cut)</h4>
+    <p>
+      A canonical CFD test geometry: a unit square with a circular hole
+      in the middle (steady Stokes / Navier–Stokes flow past a cylinder
+      lives on a long version of this). With OpenCASCADE you build the
+      two solids, then call <code>cut</code> — Gmsh handles the topology
+      and gives you back a single domain with a circular interior
+      boundary:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Recipe 4: square with hole</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function gmsh_square_with_hole()
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("square_hole")
+
+    rect = gmsh.model.occ.addRectangle(0.0, 0.0, 0.0, 1.0, 1.0)
+    hole = gmsh.model.occ.addDisk(0.5, 0.5, 0.0, 0.22, 0.22)
+
+    # Boolean cut: rectangle MINUS disc → a square with a hole
+    # cut(objectDimTags, toolDimTags) — entities are (dim, tag) tuples
+    gmsh.model.occ.cut([(2, rect)], [(2, hole)])
+    gmsh.model.occ.synchronize()
+
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.12)
+    gmsh.model.mesh.generate(2)
+    # ... pull nodes/triangles back
+end</code></pre>
+    </div>
+
+    <figure class="figure">
+      <img src="../output/figures/gmsh_gallery.png"
+           alt="Four classic Gmsh-generated 2-D meshes: a refined square, an L-shape, a disc, and a square with a circular hole."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 9.</strong> The four recipes above, run end-to-end.
+        Notice how Recipe 1 grades the element size from coarse on the
+        bottom-right to fine in the top-left, how Recipe 2's mesh
+        respects the inner corner, how Recipe 3's circular boundary is
+        approximated by short straight edges, and how Recipe 4 gives you
+        a domain with both an outer square boundary and an inner
+        circular boundary — exactly what you need for flow-past-a-
+        cylinder problems.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
+        A single <code>gmsh_geometry(symbol)</code> dispatcher meshes any
+        of the four shapes; the plotting loop draws each mesh into one
+        of four panels.
+      </p>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_gmsh_gallery()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors, Gmsh
+using Gmsh: gmsh
+
+# Dispatcher — same return convention as gmsh_unit_square
+function gmsh_geometry(geom_name::Symbol)
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add(string(geom_name))
+
+    if geom_name == :square_refined
+        p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, 0.4)
+        p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, 0.4)
+        p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, 0.4)
+        p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, 0.05)
+        l1 = gmsh.model.geo.addLine(p1, p2)
+        l2 = gmsh.model.geo.addLine(p2, p3)
+        l3 = gmsh.model.geo.addLine(p3, p4)
+        l4 = gmsh.model.geo.addLine(p4, p1)
+        cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
+        gmsh.model.geo.addPlaneSurface([cl])
+        gmsh.model.geo.synchronize()
+    elseif geom_name == :lshape
+        coords = [(0.0,0.0),(1.0,0.0),(1.0,0.5),(0.5,0.5),(0.5,1.0),(0.0,1.0)]
+        pts   = [gmsh.model.geo.addPoint(x, y, 0.0, 0.12) for (x, y) in coords]
+        lines = [gmsh.model.geo.addLine(pts[i], pts[mod1(i + 1, length(pts))])
+                 for i in eachindex(pts)]
+        cl = gmsh.model.geo.addCurveLoop(lines)
+        gmsh.model.geo.addPlaneSurface([cl])
+        gmsh.model.geo.synchronize()
+    elseif geom_name == :disc
+        gmsh.model.occ.addDisk(0.0, 0.0, 0.0, 1.0, 1.0)
+        gmsh.model.occ.synchronize()
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.18)
+    elseif geom_name == :square_hole
+        rect = gmsh.model.occ.addRectangle(0.0, 0.0, 0.0, 1.0, 1.0)
+        hole = gmsh.model.occ.addDisk(0.5, 0.5, 0.0, 0.22, 0.22)
+        gmsh.model.occ.cut([(2, rect)], [(2, hole)])
+        gmsh.model.occ.synchronize()
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.12)
+    end
+
+    gmsh.model.mesh.generate(2)
+
+    node_tags, coord, _   = gmsh.model.mesh.getNodes()
+    _, _, elem_node_tags  = gmsh.model.mesh.getElements(2)
+    n_nodes   = length(node_tags)
+    xy        = reshape(coord, 3, n_nodes)[1:2, :]
+    tag2idx   = Dict(Int(t) =&gt; i for (i, t) in enumerate(node_tags))
+    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]
+    tri_nodes = reshape(flat_conn, 3, :)
+
+    gmsh.finalize()
+    return xy, tri_nodes
+end
+
+# Plot all four into a 2×2 figure
+function fig_gmsh_gallery()
+    BLUE   = "#1F4E79"
+    geoms  = [:square_refined, :lshape, :disc, :square_hole]
+    titles = ["Refined square (fine top-left)", "L-shape (re-entrant corner)",
+              "Unit disc (OpenCASCADE)",        "Square with circular hole"]
+    xlims  = [(-0.10,1.10), (-0.10,1.10), (-1.15,1.15), (-0.10,1.10)]
+    ylims  = [(-0.10,1.10), (-0.10,1.10), (-1.15,1.15), (-0.10,1.10)]
+    panels = []
+
+    for (i, g) in enumerate(geoms)
+        xy, tri_nodes = gmsh_geometry(g)
+        n_nodes = size(xy, 2);  n_tri = size(tri_nodes, 2)
+        p = plot(legend=false, framestyle=:box, aspect_ratio=:equal,
+                 xlim=xlims[i], ylim=ylims[i],
+                 xlabel="x", ylabel="y",
+                 title="$(titles[i]) — $n_nodes nodes, $n_tri tris",
+                 titlefontsize=10, titlefontcolor=parse(Colorant, BLUE))
+        for k in 1:n_tri
+            a, b, c = tri_nodes[1, k], tri_nodes[2, k], tri_nodes[3, k]
+            xs = [xy[1, a], xy[1, b], xy[1, c], xy[1, a]]
+            ys = [xy[2, a], xy[2, b], xy[2, c], xy[2, a]]
+            plot!(p, xs, ys, seriestype=:shape,
+                  fillcolor=:lightblue, fillalpha=0.30,
+                  linecolor=parse(Colorant, BLUE), linewidth=0.8)
+        end
+        push!(panels, p)
+    end
+
+    plt = plot(panels..., layout=(2, 2), size=(1300, 920), dpi=150,
+               left_margin=4Plots.mm, bottom_margin=4Plots.mm,
+               top_margin=6Plots.mm,
+               plot_title="Gmsh recipes — four classic 2-D geometries",
+               plot_titlefontsize=13,
+               plot_titlefontcolor=parse(Colorant, BLUE))
+    savefig(plt, "gmsh_gallery.png")
+end
+
+fig_gmsh_gallery()</code></pre>
+      </div>
+    </details>
+
+    <h4>How to extract nodes and triangles — same code for every recipe</h4>
+    <p>
+      Each of the four functions above ends with a call to
+      <code>gmsh.model.mesh.generate(2)</code>. After that, the
+      "<em>pull nodes/triangles back</em>" step is identical to what we
+      saw earlier in <code>gmsh_unit_square</code> — Gmsh stores the
+      mesh in its own internal arrays and we copy them out into Julia
+      arrays with dense 1-based indices:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — universal "read mesh back" tail</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">    node_tags, coord, _   = gmsh.model.mesh.getNodes()
+    _, _, elem_node_tags  = gmsh.model.mesh.getElements(2)
+
+    n_nodes = length(node_tags)
+    xy      = reshape(coord, 3, n_nodes)[1:2, :]      # drop z
+
+    tag2idx   = Dict(Int(t) =&gt; i for (i, t) in enumerate(node_tags))
+    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]
+    tri_nodes = reshape(flat_conn, 3, :)
+
+    gmsh.finalize()
+    return xy, tri_nodes
+end</code></pre>
+    </div>
+
+    <h4>Things to try after running these recipes</h4>
+    <ul>
+      <li><strong>Reuse the assembler.</strong> Pass any of the four
+        <code>(xy, tri_nodes)</code> outputs into
+        <code>assemble_adjacency(tri_nodes, n_nodes)</code> — the
+        sparsity pattern of the resulting matrix is the connectivity
+        of the new geometry. Plot it the same way as before. Notice how
+        the bandwidth (how far off-diagonal the non-zeros sit) depends
+        strongly on the geometry and on the order Gmsh assigned to the
+        nodes.</li>
+      <li><strong>Refine globally.</strong> Lower the
+        <code>CharacteristicLengthMax</code> by a factor of 2 and watch
+        the node count grow roughly 4× — the same factor as our
+        $O(h^2)$ convergence theory.</li>
+      <li><strong>Mix kernels.</strong> You can build a polygon with
+        <code>geo</code> and a curved hole with <code>occ</code> in the
+        same model, then synchronise both — handy when the outer
+        boundary is straight but the interior has curved features.</li>
+      <li><strong>Save the mesh.</strong> Call
+        <code>gmsh.write("mesh.msh")</code> before
+        <code>gmsh.finalize()</code> to dump the mesh to disk in Gmsh's
+        own format. Other Julia FEM packages (e.g.
+        <code>Ferrite.jl</code>) read it directly.</li>
     </ul>
   </section>
 
@@ -2095,24 +4170,65 @@ A = assemble_adjacency(tri_nodes, n_nodes)</code></pre>
   <!-- ══ STEP 6 ══════════════════════════════════════════════ -->
   <section class="section" id="step6">
     <h2><span class="step-badge">Step 6</span>Configure VS Code for Julia + WSL</h2>
+
+    <h3>Why VS Code?</h3>
+    <p>
+      You can absolutely write Julia in any editor — Vim, Emacs, plain
+      <code>nano</code>. We recommend <strong>VS Code</strong> because of
+      one specific feature: it can <em>connect</em> seamlessly to your
+      WSL Ubuntu (and later, to the cluster over SSH) and edit files
+      there as if they were local. The editor runs on Windows, the
+      language server and the Julia process run inside WSL — best of
+      both worlds. Setup is a one-time, ~5-minute job.
+    </p>
+
+    <h3>6.1 Install the right extensions</h3>
+    <p>
+      Open the Extensions sidebar (Ctrl+Shift+X) and install these four
+      from Microsoft's marketplace. Each does exactly one job:
+    </p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Extension</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><strong>WSL</strong></td><td>Connect VS Code to your WSL environment</td></tr>
-          <tr><td><strong>Julia</strong></td><td>Syntax highlighting, IntelliSense, REPL integration</td></tr>
-          <tr><td><strong>Jupyter</strong></td><td>Run .ipynb notebooks with a Julia kernel</td></tr>
-          <tr><td><strong>Remote — SSH</strong></td><td>Edit files on the HPC cluster</td></tr>
+          <tr><td><strong>WSL</strong></td><td>Lets VS Code "open a folder in WSL" — runs the editor's backend inside Linux so paths, terminals, and Julia all match the cluster.</td></tr>
+          <tr><td><strong>Julia</strong></td><td>Adds syntax highlighting, code completion (IntelliSense), inline error reporting, and an integrated REPL inside VS Code.</td></tr>
+          <tr><td><strong>Jupyter</strong></td><td>Lets you open <code>.ipynb</code> notebooks and run them with a Julia kernel — useful for exploratory analysis.</td></tr>
+          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 7).</td></tr>
         </tbody>
       </table>
     </div>
-    <h3>Pluto.jl — reactive notebooks</h3>
+
+    <h3>6.2 Open your package in WSL mode</h3>
+    <p>
+      Press <kbd>F1</kbd> (or <kbd>Ctrl+Shift+P</kbd>) to open the command
+      palette, type <em>"WSL: Open Folder in WSL"</em>, then point to
+      <code>~/projects/julia-docx-tutorial/juliaPDEs</code>. The bottom-
+      left status bar should now say <em>WSL: Ubuntu</em>. Open the
+      integrated terminal (Ctrl+`) — you are inside WSL, ready to run
+      <code>julia --project=.</code> exactly as in Step 4.5.
+    </p>
+
+    <h3>6.3 Pluto.jl — reactive notebooks</h3>
+    <p>
+      <strong>Pluto.jl</strong> is a Julia-native alternative to Jupyter.
+      The killer feature: cells are <em>reactive</em> — change a variable
+      definition in one cell and every cell that depends on it
+      automatically re-runs in the right order. There are no hidden
+      out-of-order states. Great for live exploration of PDE parameters
+      with sliders:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using Pkg; Pkg.add(["Pluto", "PlutoUI"])
 using Pluto
 Pluto.run()    # opens at localhost:1234</code></pre>
     </div>
+    <p>
+      Your default browser opens a Pluto landing page; create a new
+      notebook or open <code>pde_explorer.jl</code> from this repo to see
+      the heat / wave / Poisson examples with parameter sliders.
+    </p>
   </section>
 
   <hr class="divider" />
@@ -2120,6 +4236,36 @@ Pluto.run()    # opens at localhost:1234</code></pre>
   <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
   <section class="section" id="step7">
     <h2><span class="step-badge">Step 7</span>Connect to the HPC Cluster</h2>
+
+    <h3>What is SSH and why do we need keys?</h3>
+    <p>
+      <strong>SSH</strong> ("secure shell") is the standard protocol for
+      logging into remote Unix machines over the network. You run a
+      client on your laptop, the cluster runs an SSH server, and the
+      session is encrypted end-to-end. Almost every HPC interaction —
+      submitting jobs, copying data, opening interactive shells — uses
+      SSH underneath.
+    </p>
+    <p>
+      Authenticating with a password every time gets old fast and is
+      less secure than the alternative. The pro way is
+      <strong>public-key authentication</strong>:
+    </p>
+    <ol>
+      <li>You generate a <em>key pair</em> — two files: a
+        <strong>private key</strong> that stays on your laptop and a
+        <strong>public key</strong> that you give to the server.</li>
+      <li>The server adds your public key to its
+        <code>~/.ssh/authorized_keys</code> file.</li>
+      <li>From then on, when you SSH in, the two keys cryptographically
+        prove who you are — no password typing.</li>
+    </ol>
+    <p>
+      Treat the private key like a password: never share it, never email
+      it, never commit it to git. The public key is safe to hand out.
+    </p>
+
+    <h3>7.1 Generate a key pair and install it on the cluster</h3>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">ssh-keygen -t ed25519 -C "your_email@example.com"
@@ -2127,11 +4273,59 @@ ssh-copy-id user@cluster.example.edu
 ssh user@cluster.example.edu
 module load julia/1.10 && julia --version</code></pre>
     </div>
-    <h3>Sync your project</h3>
+    <p>What each line does:</p>
+    <ul>
+      <li><code>ssh-keygen -t ed25519 -C "..."</code> creates a modern
+        Ed25519 key pair (faster and stronger than the older RSA
+        default). The <code>-C</code> comment is just a label so you can
+        identify which laptop the key came from. Press Enter to accept
+        the default file location (<code>~/.ssh/id_ed25519</code>); you
+        may set a passphrase or leave it empty.</li>
+      <li><code>ssh-copy-id user@cluster.example.edu</code> appends your
+        public key to the cluster's <code>authorized_keys</code>. This
+        is the only step that needs your password.</li>
+      <li><code>ssh user@cluster.example.edu</code> logs in. From now on,
+        no password prompt — the keys do the talking.</li>
+      <li><code>module load julia/1.10</code> — most clusters use the
+        <em>environment modules</em> system to swap in the right
+        compiler/runtime versions. <code>module avail julia</code> lists
+        what is installed; <code>module load julia/1.10</code> activates
+        the 1.10 LTS.</li>
+    </ul>
+
+    <h3>7.2 Sync your project to the cluster</h3>
+    <p>
+      <strong>rsync</strong> is the workhorse for moving files between
+      machines. Unlike <code>scp</code>, it transfers only the changed
+      bytes — fast for repeated pushes during development:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">rsync -avz ~/julia-pde/ user@cluster:~/julia-pde/
 ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instantiate()'"</code></pre>
+    </div>
+    <p>The flags:</p>
+    <ul>
+      <li><code>-a</code> archive mode — preserves permissions, timestamps, symlinks.</li>
+      <li><code>-v</code> verbose — show files as they transfer.</li>
+      <li><code>-z</code> compress in flight — faster on slow links.</li>
+    </ul>
+    <p>
+      The trailing <code>/</code> on <code>~/julia-pde/</code> matters:
+      with the slash you copy <em>the contents</em>; without it you
+      create a sub-folder. The second line runs
+      <code>Pkg.instantiate()</code> on the cluster, which reads the
+      shipped <code>Manifest.toml</code> and downloads the same exact
+      package versions you developed against. Reproducibility, secured.
+    </p>
+
+    <div class="callout tip">
+      <strong>Use a <code>~/.ssh/config</code> alias</strong>
+      Add this to your local <code>~/.ssh/config</code>:
+      <code>Host hpc</code> / <code>HostName cluster.example.edu</code> /
+      <code>User you</code>. Now <code>ssh hpc</code> is enough — the
+      same alias works in <code>rsync</code>, <code>scp</code>, and the
+      VS Code Remote-SSH extension.
     </div>
   </section>
 
@@ -2140,18 +4334,45 @@ ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instant
   <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
   <section class="section" id="step8">
     <h2><span class="step-badge">Step 8</span>Submitting Julia Jobs with Slurm</h2>
+
+    <h3>What is Slurm and why do we use it?</h3>
+    <p>
+      An HPC cluster is a shared resource: hundreds of users want a piece
+      of it at the same time. Letting everyone log in and run programs
+      directly would be chaos. Instead, you describe what you want to run
+      in a small text file (a <em>job script</em>) and hand it to the
+      <strong>workload manager</strong>. The manager queues the job, waits
+      until the requested resources are free, then runs your script on
+      the assigned nodes for at most the requested time. When the job
+      finishes (or is killed for going over budget), the resources are
+      released to the next user.
+    </p>
+    <p>
+      <strong>Slurm</strong> (the Simple Linux Utility for Resource
+      Management) is the workload manager used by most academic clusters.
+      You will use only a handful of commands to interact with it day to
+      day:
+    </p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Command</th><th>Action</th></tr></thead>
         <tbody>
-          <tr><td><code>sbatch job.sh</code></td><td>Submit a job</td></tr>
-          <tr><td><code>squeue -u $USER</code></td><td>Show your jobs</td></tr>
-          <tr><td><code>scancel JOBID</code></td><td>Cancel a job</td></tr>
-          <tr><td><code>sinfo</code></td><td>Show available nodes</td></tr>
-          <tr><td><code>sacct -j JOBID</code></td><td>Stats after run</td></tr>
+          <tr><td><code>sbatch job.sh</code></td><td>Submit a job. Returns a numeric job ID.</td></tr>
+          <tr><td><code>squeue -u $USER</code></td><td>Show <em>your</em> queued and running jobs.</td></tr>
+          <tr><td><code>scancel JOBID</code></td><td>Cancel a queued or running job.</td></tr>
+          <tr><td><code>sinfo</code></td><td>Show which nodes are idle, busy, or down.</td></tr>
+          <tr><td><code>sacct -j JOBID</code></td><td>Job history: CPU time used, memory peak, exit code.</td></tr>
         </tbody>
       </table>
     </div>
+
+    <h3>8.1 Anatomy of a Slurm job script</h3>
+    <p>
+      A job script is just a normal bash script with extra
+      <code>#SBATCH</code> comment lines at the top. Slurm parses those
+      comments to figure out what resources to allocate; the rest of the
+      file runs as a plain shell session on the allocated node:
+    </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash (job.sh)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">#!/bin/bash
@@ -2164,10 +4385,76 @@ ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instant
 module load julia/1.10
 julia --threads=4 --project=. heat_equation.jl</code></pre>
     </div>
+    <p>What each <code>#SBATCH</code> directive means:</p>
+    <ul>
+      <li><code>--job-name=heat_eq</code> — a label that shows up in
+        <code>squeue</code>. Make it descriptive — your future self will
+        thank you when scrolling through 30 queued jobs.</li>
+      <li><code>--cpus-per-task=4</code> — give this job 4 CPU cores.
+        Ask for what you need; over-asking means longer queue times.</li>
+      <li><code>--mem=4G</code> — 4 GB of RAM. If your job goes over,
+        Slurm kills it ("OOM"). Estimate from how big your arrays are
+        (Float64 = 8 bytes × array length).</li>
+      <li><code>--time=00:30:00</code> — wall-clock limit
+        (HH:MM:SS). Slurm kills the job at the limit. Pick a generous
+        limit on first runs; tighten it once you know the runtime —
+        shorter requests start sooner.</li>
+      <li><code>--output=heat_%j.out</code> — redirect stdout to a file;
+        <code>%j</code> expands to the job ID so files do not overwrite
+        each other.</li>
+    </ul>
+    <p>The two non-<code>#SBATCH</code> lines run on the allocated node:</p>
+    <ul>
+      <li><code>module load julia/1.10</code> — make the cluster's Julia
+        installation available (Step 7 covered the module system).</li>
+      <li><code>julia --threads=4 --project=. heat_equation.jl</code> —
+        start Julia with 4 threads, in your project's environment, and
+        run the script. We will see how to use those threads next.</li>
+    </ul>
+
+    <h3>8.2 Threading inside Julia</h3>
+    <p>
+      <code>--threads=N</code> tells Julia how many threads to make
+      available; <code>--cpus-per-task=N</code> tells Slurm how many
+      cores to allocate. <em>Both numbers should match</em> — fewer
+      threads than cores wastes the allocation, more threads than cores
+      causes oversubscription and slowdowns. Inside your Julia code,
+      parallelise loops with one macro:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Threads.@threads for i in 1:N
+    do_independent_work(i)
+end</code></pre>
+    </div>
+    <p>
+      Each thread handles a slice of the iteration range concurrently.
+      The work in each iteration must be independent — no thread should
+      write to memory that another thread reads. Inside the heat-equation
+      time loop the body is simple enough that the compiler often
+      vectorises a single thread well; threading pays off for larger
+      grids and for parameter sweeps where each <code>i</code> is its
+      own simulation.
+    </p>
+
     <div class="callout info">
-      <strong>Threading</strong>
-      <code>--threads=4</code> and <code>--cpus-per-task=4</code> must match.
-      Use <code>Threads.@threads for i in 1:N</code> to parallelize loops.
+      <strong>Threading vs MPI vs GPU</strong>
+      <code>Threads</code> = shared memory on a single node (4–128 cores
+      typical). <code>MPI.jl</code> = distributed memory across many
+      nodes (your code runs as $N$ copies that send messages to each
+      other). <code>CUDA.jl</code> = run array operations on a GPU
+      (massive parallelism if your kernel is array-friendly). Start with
+      threading; reach for MPI/CUDA when single-node memory or compute
+      is no longer enough.
+    </div>
+
+    <div class="callout tip">
+      <strong>Workflow on the cluster</strong>
+      <code>sbatch job.sh</code> → note the JOB_ID it prints →
+      <code>squeue -u $USER</code> until status is "R" (running) or
+      gone → check <code>heat_JOBID.out</code> for output →
+      <code>sacct -j JOBID --format=JobID,Elapsed,MaxRSS,State</code>
+      to inspect memory and time used after the fact.
     </div>
   </section>
 

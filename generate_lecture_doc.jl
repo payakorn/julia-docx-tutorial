@@ -561,7 +561,8 @@ function fig_mesh_to_matrix()
     p1 = plot(legend=false, framestyle=:box, aspect_ratio=:equal,
               xlim=(-0.15, 1.15), ylim=(-0.15, 1.15),
               xlabel="x", ylabel="y",
-              title="Gmsh mesh: $n_nodes nodes, $n_tri triangles",
+              title="Mesh — $n_nodes nodes, $n_tri triangles  (T1 highlighted)",
+              titlefontsize=11,
               titlefontcolor=parse(Colorant, BLUE))
 
     for k in 1:n_tri
@@ -588,31 +589,156 @@ function fig_mesh_to_matrix()
     # ---- Right panel: spy-style plot of A ----
     rows, cols, _ = findnz(A)
 
-    p2 = scatter(cols, rows, ms=11, color=parse(Colorant, ACCENT),
+    p2 = scatter(cols, rows, ms=8, color=parse(Colorant, ACCENT),
                  markerstrokecolor=parse(Colorant, BLUE), markerstrokewidth=1,
                  legend=false, framestyle=:box,
                  xlim=(0.5, n_nodes + 0.5), ylim=(0.5, n_nodes + 0.5),
                  yflip=true, aspect_ratio=:equal,
                  xticks=1:n_nodes, yticks=1:n_nodes,
                  xlabel="column j  (node j)", ylabel="row i  (node i)",
-                 title="Sparsity of A — non-zero ⇔ nodes share a triangle",
+                 title="Sparsity of A — red rings = T1's 9 entries",
+                 titlefontsize=11,
                  titlefontcolor=parse(Colorant, BLUE))
 
     # ring the 9 entries contributed by triangle T1
     for i in tri_hl, j in tri_hl
-        scatter!(p2, [j], [i], ms=17, color=:transparent,
+        scatter!(p2, [j], [i], ms=14, color=:transparent,
                  markerstrokecolor=:firebrick, markerstrokewidth=2.5)
     end
-    annotate!(p2, (n_nodes + 1) / 2, n_nodes + 0.9,
-              text("red rings = the 9 entries A[i,j], i,j ∈ {$(tri_hl[1]),$(tri_hl[2]),$(tri_hl[3])} from T1",
-                   :firebrick, :center, 8, :italic))
 
     plt = plot(p1, p2, layout=(1, 2),
-               size=(CFG.fig_width, 540), dpi=CFG.fig_dpi,
-               plot_title="From Gmsh mesh to sparse matrix: every triangle T contributes 9 entries A[i,j] with i,j ∈ T",
-               plot_titlefontsize=12,
+               size=(CFG.fig_width, 560), dpi=CFG.fig_dpi,
+               left_margin=4Plots.mm, bottom_margin=4Plots.mm,
+               top_margin=8Plots.mm,
+               plot_title="From Gmsh mesh to sparse matrix:  T1 = nodes {$(tri_hl[1]), $(tri_hl[2]), $(tri_hl[3])} ⇒ 9 entries A[i,j] with i,j ∈ T1",
+               plot_titlefontsize=11,
                plot_titlefontcolor=parse(Colorant, BLUE))
     savefig(plt, joinpath(CFG.figures_dir, "mesh_to_matrix.png"))
+end
+
+"""
+    gmsh_geometry(geom_name::Symbol)
+
+Mesh one of four classic 2-D geometries with Gmsh and return
+`(xy, tri_nodes)` in the same dense (1..n_nodes) indexing convention as
+`gmsh_unit_square`. Each branch demonstrates a different Gmsh feature:
+
+- `:square_refined` — built-in geo kernel with per-point size hints
+- `:lshape`         — built-in geo kernel, six-corner re-entrant domain
+- `:disc`           — OpenCASCADE kernel, single-call disc primitive
+- `:square_hole`    — OpenCASCADE boolean cut (rectangle minus disc)
+"""
+function gmsh_geometry(geom_name::Symbol)
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add(string(geom_name))
+
+    if geom_name == :square_refined
+        # Same square as before, but the top-left corner asks for a
+        # MUCH finer local size — Gmsh smoothly grades from coarse
+        # (lc=0.4) to fine (lc=0.05) across the domain.
+        p1 = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, 0.4)
+        p2 = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, 0.4)
+        p3 = gmsh.model.geo.addPoint(1.0, 1.0, 0.0, 0.4)
+        p4 = gmsh.model.geo.addPoint(0.0, 1.0, 0.0, 0.05)   # fine corner
+        l1 = gmsh.model.geo.addLine(p1, p2)
+        l2 = gmsh.model.geo.addLine(p2, p3)
+        l3 = gmsh.model.geo.addLine(p3, p4)
+        l4 = gmsh.model.geo.addLine(p4, p1)
+        cl = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
+        gmsh.model.geo.addPlaneSurface([cl])
+        gmsh.model.geo.synchronize()
+
+    elseif geom_name == :lshape
+        # Classic re-entrant-corner domain — the hard case for elliptic
+        # PDEs because the solution has a singular gradient at the
+        # inner corner. Six points walked counter-clockwise.
+        coords = [(0.0, 0.0), (1.0, 0.0), (1.0, 0.5),
+                  (0.5, 0.5), (0.5, 1.0), (0.0, 1.0)]
+        pts = [gmsh.model.geo.addPoint(x, y, 0.0, 0.12) for (x, y) in coords]
+        lines = [gmsh.model.geo.addLine(pts[i], pts[mod1(i + 1, length(pts))])
+                 for i in eachindex(pts)]
+        cl = gmsh.model.geo.addCurveLoop(lines)
+        gmsh.model.geo.addPlaneSurface([cl])
+        gmsh.model.geo.synchronize()
+
+    elseif geom_name == :disc
+        # OpenCASCADE makes curved primitives trivial: one call, done.
+        gmsh.model.occ.addDisk(0.0, 0.0, 0.0, 1.0, 1.0)
+        gmsh.model.occ.synchronize()
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.18)
+
+    elseif geom_name == :square_hole
+        # Rectangle MINUS a smaller disc — boolean operations are why
+        # OpenCASCADE exists. (dim, tag) tuples identify entities.
+        rect = gmsh.model.occ.addRectangle(0.0, 0.0, 0.0, 1.0, 1.0)
+        hole = gmsh.model.occ.addDisk(0.5, 0.5, 0.0, 0.22, 0.22)
+        gmsh.model.occ.cut([(2, rect)], [(2, hole)])
+        gmsh.model.occ.synchronize()
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.12)
+
+    else
+        gmsh.finalize()
+        error("Unknown geometry: $geom_name")
+    end
+
+    gmsh.model.mesh.generate(2)
+
+    node_tags, coord, _   = gmsh.model.mesh.getNodes()
+    _, _, elem_node_tags  = gmsh.model.mesh.getElements(2)
+
+    n_nodes = length(node_tags)
+    xy      = reshape(coord, 3, n_nodes)[1:2, :]
+    tag2idx = Dict(Int(t) => i for (i, t) in enumerate(node_tags))
+    flat_conn = [tag2idx[Int(t)] for t in elem_node_tags[1]]
+    tri_nodes = reshape(flat_conn, 3, :)
+
+    gmsh.finalize()
+    return xy, tri_nodes
+end
+
+function fig_gmsh_gallery()
+    @info "Generating Figure 9: Gmsh gallery of classic geometries"
+
+    geoms = [:square_refined, :lshape, :disc, :square_hole]
+    titles = ["Refined square (fine top-left)", "L-shape (re-entrant corner)",
+              "Unit disc (OpenCASCADE)",        "Square with circular hole"]
+    xlims = [(-0.10, 1.10), (-0.10, 1.10), (-1.15, 1.15), (-0.10, 1.10)]
+    ylims = [(-0.10, 1.10), (-0.10, 1.10), (-1.15, 1.15), (-0.10, 1.10)]
+
+    panels = Plots.Plot[]
+    for (i, g) in enumerate(geoms)
+        xy, tri_nodes = gmsh_geometry(g)
+        n_nodes = size(xy, 2)
+        n_tri   = size(tri_nodes, 2)
+
+        p = plot(legend=false, framestyle=:box, aspect_ratio=:equal,
+                 xlim=xlims[i], ylim=ylims[i],
+                 xlabel="x", ylabel="y",
+                 title="$(titles[i]) — $n_nodes nodes, $n_tri tris",
+                 titlefontsize=10,
+                 titlefontcolor=parse(Colorant, BLUE))
+
+        for k in 1:n_tri
+            a, b, c = tri_nodes[1, k], tri_nodes[2, k], tri_nodes[3, k]
+            xs = [xy[1, a], xy[1, b], xy[1, c], xy[1, a]]
+            ys = [xy[2, a], xy[2, b], xy[2, c], xy[2, a]]
+            plot!(p, xs, ys, seriestype=:shape,
+                  fillcolor=:lightblue, fillalpha=0.30,
+                  linecolor=parse(Colorant, BLUE), linewidth=0.8)
+        end
+
+        push!(panels, p)
+    end
+
+    plt = plot(panels..., layout=(2, 2),
+               size=(CFG.fig_width, 920), dpi=CFG.fig_dpi,
+               left_margin=4Plots.mm, bottom_margin=4Plots.mm,
+               top_margin=6Plots.mm,
+               plot_title="Gmsh recipes — four classic 2-D geometries",
+               plot_titlefontsize=13,
+               plot_titlefontcolor=parse(Colorant, BLUE))
+    savefig(plt, joinpath(CFG.figures_dir, "gmsh_gallery.png"))
 end
 
 function generate_all_figures()
@@ -625,6 +751,7 @@ function generate_all_figures()
     fig_navier_stokes()
     fig_convergence_study()
     fig_mesh_to_matrix()
+    fig_gmsh_gallery()
     @info "All figures saved to $(CFG.figures_dir)"
 end
 
@@ -810,22 +937,27 @@ function build_docx()
     add_para("This guide walks you through setting up a complete Julia " *
              "environment for scientific computing and HPC on Windows. " *
              "Steps 1–3 install Julia. Step 4 introduces PDE packages. " *
-             "Step 5 walks the full PDE-solving workflow with worked " *
-             "examples for the heat, wave, Poisson, and Navier-Stokes " *
-             "equations and a section on unstructured meshing with Gmsh. " *
-             "Steps 6–8 connect to the HPC cluster.")
+             "Step 4.5 builds the juliaPDEs package — the same one shipped " *
+             "in the juliaPDEs/ folder of this repo — so you have a real " *
+             "module with Revise live-reload and a test suite before " *
+             "tackling the worked examples. Step 5 walks the full PDE-" *
+             "solving workflow with worked examples for the heat, wave, " *
+             "Poisson, and Navier-Stokes equations and a section on " *
+             "unstructured meshing with Gmsh. Steps 6–8 connect to the " *
+             "HPC cluster.")
     add_heading("Time Estimate", 2)
     add_table(["Step", "Estimated Time"],
               [["1 — Install WSL2",                "10–15 min"],
                ["2 — juliaup + Julia",             "5–10 min"],
                ["3 — Install Julia Packages",      "10–15 min"],
                ["4 — Learn PDE Packages",          "15–20 min"],
+               ["4.5 — Build juliaPDEs Package",   "20–30 min"],
                ["5 — PDE Workflow + Examples",     "30–60 min"],
                ["5.6 — Gmsh: mesh → matrix",       "15–20 min"],
                ["6 — Configure VS Code",           "5–10 min"],
                ["7 — HPC SSH Setup",               "10 min"],
                ["8 — Submit Slurm Jobs",           "10–15 min"],
-               ["Total",                           "~110–175 min"]])
+               ["Total",                           "~130–205 min"]])
     add_page_break()
 
     # ─── STEP 1: WSL ────────────────────────────────────────────────────
@@ -887,6 +1019,234 @@ function build_docx()
                ["Oceananigans.jl",            "Production CFD on HPC"],
                ["Plots.jl / Makie.jl",        "Visualization"],
                ["MPI.jl / CUDA.jl",           "HPC parallelism"]])
+    add_page_break()
+
+    # ─── STEP 4.5: BUILD JULIAPDES PACKAGE ──────────────────────────────
+    add_heading("Step 4.5 — Build the juliaPDEs Package", 1)
+    add_para("Before tackling the worked examples in Step 5, package the " *
+             "code into a real Julia package called juliaPDEs. The same " *
+             "module — with src/heat.jl, src/wave.jl, and " *
+             "src/Navier_Stokes.jl — is what ships in the juliaPDEs/ folder " *
+             "of this repo. Working from a package gives you Revise live-" *
+             "reload, a test suite, and one stable import you can call from " *
+             "the REPL, from tests, and from Slurm job scripts.")
+
+    add_heading("4.5.1  Step A — Generate the skeleton", 2)
+    add_para("One command creates the folder and the boilerplate Project.toml " *
+             "plus module file. Add a test/ folder yourself — Julia uses it " *
+             "automatically:")
+    add_code(["using Pkg",
+              "Pkg.generate(\"juliaPDEs\")   # creates juliaPDEs/Project.toml + src/juliaPDEs.jl",
+              "mkdir juliaPDEs/test          # add a test/ folder yourself",
+              "touch juliaPDEs/test/runtests.jl"])
+
+    add_heading("4.5.2  Step B — Add the dependencies", 2)
+    add_para("Activate the new package's own environment and install everything " *
+             "the three solvers need. Plots is for visualization, Revise for " *
+             "live reload, and Oceananigans is the CFD engine called by the " *
+             "Navier-Stokes solver. The remaining packages match the " *
+             "Project.toml that ships with the repo:")
+    add_code(["cd juliaPDEs",
+              "julia --project=.",
+              "# In package mode (press ]):",
+              "(@juliaPDEs) pkg> add Plots Revise Oceananigans LinearAlgebra SparseArrays Gmsh Makie CUDA"])
+    add_para("Julia writes the deps into Project.toml and pins exact versions " *
+             "in Manifest.toml — commit both to git so the cluster gets the " *
+             "same versions you developed against.")
+
+    add_heading("4.5.3  Step C — The module entry point: src/juliaPDEs.jl", 2)
+    add_para("Everything inside `module … end` is private by default. " *
+             "`using` brings third-party packages into the module once. " *
+             "`include()` pastes a sub-file in so it sees the module's scope. " *
+             "`export` declares the names visible after `using juliaPDEs`:")
+    add_code(["module juliaPDEs",
+              "",
+              "using Plots, Revise, Oceananigans",
+              "",
+              "include(\"heat.jl\")",
+              "include(\"wave.jl\")",
+              "include(\"Navier_Stokes.jl\")",
+              "",
+              "export solve_heat_1d, solve_wave_1d, solve_navier_stokes,",
+              "       animate_wave_1d, animate_navier_stokes",
+              "",
+              "end # module juliaPDEs"])
+    add_page_break()
+
+    add_heading("4.5.4  Step D — The heat solver: src/heat.jl", 2)
+    add_para("A 1-D explicit Euler heat solver: Dirichlet BCs (the endpoints " *
+             "stay 0), Gaussian initial pulse. The CFL factor 0.4 keeps " *
+             "r = α·dt/dx² ≤ 0.5 so the explicit scheme is stable.")
+    add_code(["function solve_heat_1d(; N=200, α=0.01, L=1.0, T=1.0)",
+              "    dx     = L / (N + 1)",
+              "    x      = range(dx, L - dx, length=N)",
+              "    dt     = 0.4 * dx^2 / α          # CFL: r ≤ 0.5",
+              "    nsteps = ceil(Int, T / dt)",
+              "    u = @. exp(-100 * (x - 0.5)^2)   # Gaussian initial condition",
+              "    for _ in 1:nsteps",
+              "        # Explicit Euler + 3-point stencil:",
+              "        #   u_i^{n+1} = u_i^n + r·(u_{i+1} - 2u_i + u_{i-1})",
+              "        u[2:end-1] .+= (α * dt / dx^2) .*",
+              "            (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])",
+              "        # Dirichlet BCs: u[1] = u[end] = 0 — never updated",
+              "    end",
+              "    return collect(x), u",
+              "end"])
+    add_page_break()
+
+    add_heading("4.5.5  Step E — The wave solver: src/wave.jl", 2)
+    add_para("The wave solver groups its parameters in a WaveEquation struct " *
+             "so callers can mix-and-match grid size, boundary condition " *
+             "(:Dirichlet, :Neumann, :Periodic, :Absorbing), and initial " *
+             "shape independently. Base.@kwdef auto-generates a keyword " *
+             "constructor with defaults, so WaveEquation(nx=400, T=2.0) " *
+             "leaves everything else default:")
+    add_code(["Base.@kwdef struct WaveEquation",
+              "    nx::Int = 300",
+              "    nt::Int = 300",
+              "    c::Float64 = 1.0",
+              "    L::Float64 = 1.0",
+              "    T::Float64 = 1.5",
+              "    bc::Symbol = :Dirichlet  # :Dirichlet | :Neumann | :Periodic | :Absorbing",
+              "    f_init::Function = x -> sin.(pi * x)",
+              "    dx::Float64 = L / (nx - 1)",
+              "    dt::Float64 = T / nt",
+              "    x::Any = range(0, L, length=nx)",
+              "end"])
+    add_para("The leap-frog update uses the same 3-point Laplacian stencil " *
+             "as the heat equation, but stepped in time with two history " *
+             "slots (u_prev, u_curr). CFL: λ = c·dt/dx ≤ 1.")
+    add_code(["function solve_wave_1d(problem::WaveEquation; return_history=false)",
+              "    dx, dt, x = problem.dx, problem.dt, problem.x",
+              "    λ = (problem.c * dt / dx)^2",
+              "    u_curr = problem.f_init.(x)",
+              "    apply_boundary_conditions!(u_curr, u_curr, problem; is_initial=true)",
+              "    u_prev = copy(u_curr); u_next = copy(u_curr)",
+              "    for i in 1:problem.nt",
+              "        # Leap-frog: u^{n+1} = 2u^n - u^{n-1} + λ²·(stencil)",
+              "        u_next[2:end-1] .= 2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+",
+              "            λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1] .+ u_curr[1:end-2])",
+              "        apply_boundary_conditions!(u_next, u_curr, problem)",
+              "        u_prev, u_curr = copy(u_curr), copy(u_next)",
+              "    end",
+              "    return collect(x), u_curr",
+              "end"])
+    add_para("The full file also defines apply_boundary_conditions! (one " *
+             "branch per BC symbol), animate_wave_1d (saves a GIF), and an " *
+             "analytic wave_1d_exact reference solution — see " *
+             "juliaPDEs/src/wave.jl in the repo for the complete code.")
+    add_page_break()
+
+    add_heading("4.5.6  Step F — The Navier-Stokes solver: src/Navier_Stokes.jl", 2)
+    add_para("The incompressible Navier-Stokes equations are two coupled " *
+             "PDEs in the velocity field u(x,y,t) = (u, v) and the pressure " *
+             "p(x,y,t):")
+    add_code(["∂u/∂t + (u · ∇)u = -∇p + ν·∇²u        # momentum",
+              "             ∇ · u = 0                # incompressibility"])
+    add_para("Each term has a physical meaning: (u·∇)u is advection (fluid " *
+             "carrying its own momentum — the nonlinear part), -∇p is the " *
+             "pressure gradient that enforces incompressibility, ν·∇²u is " *
+             "viscous diffusion, and ∇·u = 0 keeps the flow divergence-free " *
+             "at every step.")
+    add_para("We solve the classic lid-driven cavity benchmark on Ω = " *
+             "[0,1]×[0,1]:")
+    add_bullet("Top lid (north):  u = 1, v = 0 — drives the flow.")
+    add_bullet("Other walls:      u = v = 0 (no-slip) — the default.")
+    add_bullet("Initial condition: u(x,y,0) = 0.")
+    add_bullet("Reynolds number:  Re = U·L / ν = (1·1)/0.01 = 100, set by " *
+               "choosing ν = 1e-2 in ScalarDiffusivity.")
+    add_para("Rather than discretising and writing a projection method by " *
+             "hand, we delegate to Oceananigans.jl. Oceananigans handles the " *
+             "staggered finite-volume grid, a 5th-order upwind-biased " *
+             "advection scheme, the divergence-free pressure projection, and " *
+             "a 3rd-order Runge-Kutta time integrator — all on CPU or GPU. " *
+             "The simulation runs for t ∈ [0, 10] with Δt = 1e-3 and pushes " *
+             "a snapshot of the speed field √(u² + v²) into speed_hist every " *
+             "100 iterations so we can animate it later with " *
+             "animate_navier_stokes:")
+    add_code(["function solve_navier_stokes()",
+              "    grid = Oceananigans.RectilinearGrid(size=(64, 64),",
+              "        x=(0, 1), y=(0, 1), topology=(Bounded, Bounded, Flat))",
+              "",
+              "    # Top lid moves at speed 1",
+              "    u_bcs = Oceananigans.FieldBoundaryConditions(",
+              "        north = Oceananigans.ValueBoundaryCondition(1.0))",
+              "",
+              "    model = Oceananigans.NonhydrostaticModel(grid;",
+              "        advection   = Oceananigans.UpwindBiased(order=5),",
+              "        timestepper = :RungeKutta3,",
+              "        boundary_conditions = (u=u_bcs,),",
+              "        closure     = Oceananigans.ScalarDiffusivity(ν=1e-2))   # ν = 1/Re",
+              "",
+              "    Oceananigans.set!(model, u=0, v=0)",
+              "    simulation = Oceananigans.Simulation(model, Δt=1e-3, stop_time=10.0)",
+              "",
+              "    speed_field = Oceananigans.Field(",
+              "        sqrt(model.velocities.u^2 + model.velocities.v^2))",
+              "    speed_hist  = []",
+              "",
+              "    function save_state(sim)",
+              "        Oceananigans.compute!(speed_field)",
+              "        push!(speed_hist, copy(Oceananigans.interior(speed_field, :, :, 1)))",
+              "    end",
+              "    simulation.callbacks[:save] = Oceananigans.Callback(",
+              "        save_state, Oceananigans.IterationInterval(100))",
+              "",
+              "    Oceananigans.run!(simulation)",
+              "    return (speed_hist=speed_hist, Δt=0.1)",
+              "end"])
+    add_page_break()
+
+    add_heading("4.5.7  Step G — Load the package & run it", 2)
+    add_para("Pkg.develop links the package into your environment by path — " *
+             "no install, no version pin. Edits to src/ files take effect " *
+             "immediately (with Revise, see 4.5.9):")
+    add_code(["# From the directory that CONTAINS the juliaPDEs/ folder:",
+              "using Pkg",
+              "Pkg.develop(path=\"./juliaPDEs\")",
+              "",
+              "using juliaPDEs",
+              "x, u  = solve_heat_1d()                            # heat",
+              "x, u  = solve_wave_1d(juliaPDEs.WaveEquation())    # wave (defaults)",
+              "hist  = solve_navier_stokes()                      # Navier-Stokes",
+              "animate_navier_stokes(hist)                        # → .gif"])
+
+    add_heading("4.5.8  Step H — Write tests", 2)
+    add_para("Tests live in test/runtests.jl. Run them with `(@juliaPDEs) " *
+             "pkg> test`:")
+    add_code(["using juliaPDEs, Test",
+              "",
+              "@testset \"Heat equation\" begin",
+              "    x, u = solve_heat_1d(N=50, T=0.1)",
+              "    @test length(x) == 50",
+              "    @test maximum(u) < 1.0",
+              "    @test u[1]   ≈ 0.0 atol=1e-10",
+              "    @test u[end] ≈ 0.0 atol=1e-10",
+              "end",
+              "",
+              "@testset \"Wave equation\" begin",
+              "    prob = juliaPDEs.WaveEquation(nx=100, nt=200, T=0.5)",
+              "    x, u = solve_wave_1d(prob)",
+              "    @test length(x) == 100",
+              "    @test all(isfinite, u)",
+              "end"])
+
+    add_heading("4.5.9  Revise — live reload during development", 2)
+    add_para("Add Revise to your global environment so changes to src/ files " *
+             "take effect without restarting Julia:")
+    add_code(["(@v1.10) pkg> add Revise"])
+    add_para("Make Revise auto-load in every session by adding this to " *
+             "~/.julia/config/startup.jl:")
+    add_code(["try",
+              "    using Revise",
+              "catch e",
+              "    @warn \"Could not load Revise\" exception = e",
+              "end"])
+    add_para("Then your day-to-day loop is: edit a src/*.jl file, save, call " *
+             "the function in the REPL — the new version runs immediately. " *
+             "Revise handles function bodies and module-level code; struct " *
+             "redefinitions and changes to top-level `using` still need a " *
+             "restart.")
     add_page_break()
 
     # ─── STEP 5: PDE WORKFLOW ───────────────────────────────────────────
