@@ -13,11 +13,12 @@ WORKDIR /app
 COPY Project.toml Manifest.toml ./
 COPY CondaPkg.toml ./
 
-# Precompile Julia packages
-RUN julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+# Instantiate Julia packages without precompiling during the build
+ENV JULIA_PKG_PRECOMPILE_AUTO=0
+RUN julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Copy the rest of the application
 COPY . .
 
-# Set default command to generate the document
-CMD ["julia", "--project=.", "generate_lecture_doc.jl"]
+# Set default command to run the web server
+CMD ["julia", "--project=.", "serv.jl", "9000"]

@@ -1,10 +1,4 @@
 services:
-  # Service to generate the lecture document
-  generator:
-    build: .
-    volumes:
-      - .:/app
-    command: sh -c "julia --project=. -e 'using Pkg; Pkg.instantiate()' && julia --project=. generate_lecture_doc.jl"
 
   # Local dev server for viewing the site and generated document output
   server:
