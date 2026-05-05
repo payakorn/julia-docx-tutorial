@@ -1,0 +1,29 @@
+services:
+  # Service to generate the lecture document
+  generator:
+    build: .
+    volumes:
+      - .:/app
+    command: sh -c "julia --project=. -e 'using Pkg; Pkg.instantiate()' && julia --project=. generate_lecture_doc.jl"
+
+  # Local dev server for viewing the site and generated document output
+  server:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - "9000:9000"
+    command: sh -c "julia --project=. -e 'using Pkg; Pkg.instantiate()' && julia --project=. serv.jl 9000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Interactive Pluto notebook explorer
+  pluto:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - "1234:1234"
+    command: >
+      sh -c "julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.add([\"Pluto\", \"PlutoUI\"])' && 
+      julia --project=. -e 'using Pluto; Pluto.run(host=\"0.0.0.0\", port=1234, require_secret_for_open_links=false, require_secret_for_access=false)'"
