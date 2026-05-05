@@ -43,8 +43,8 @@ gr()
 # =============================================================================
 Base.@kwdef mutable struct Config
     # ---- output paths ----
-    output_dir   :: String = "output"
-    figures_dir  :: String = "output/figures"
+    output_dir   :: String = "output"            # where the .docx lands
+    figures_dir  :: String = "site/output/figures"  # served at /output/figures/ on the site
     docx_name    :: String = "julia_hpc_setup_guide.docx"
 
     # ---- figure styling ----
@@ -380,50 +380,140 @@ function fig_poisson_equation()
     savefig(plt, joinpath(CFG.figures_dir, "poisson_equation.png"))
 end
 
-function fig_navier_stokes()
-    @info "Generating Figure 6: Navier-Stokes (lid-driven cavity)"
+"""
+    solve_lid_cavity_psi_omega(; N, Re, T, U_lid)
 
-    # Left panel: cavity schematic
+Lid-driven cavity at moderate Reynolds number using the streamfunction-
+vorticity formulation. Semi-implicit time stepping (implicit diffusion,
+explicit convection) so the only stability constraint is the
+convective CFL `U·dt/h ≤ 1`. Returns N×N arrays where `arr[i, j]` is
+the value at grid point `(x_i, y_j)`, plus the grid spacing `h`.
+
+Equations:
+    ω = -∇²ψ                                 (vorticity from streamfunction)
+    ∂ω/∂t + (∂ψ/∂y)(∂ω/∂x) - (∂ψ/∂x)(∂ω/∂y) = ν∇²ω    (vorticity transport)
+    u =  ∂ψ/∂y,   v = -∂ψ/∂x                (velocity from ψ)
+
+Boundary conditions:
+    ψ = 0 on every wall  (no normal flow)
+    Thom's formula gives the wall vorticity from ψ at the first interior layer
+    Top wall additionally has  u = U_lid  (moving lid)
+"""
+function solve_lid_cavity_psi_omega(; N::Int=48, Re::Float64=100.0,
+                                    T::Float64=10.0, U_lid::Float64=1.0)
+    L = 1.0
+    h = L / (N - 1)
+    ν = U_lid * L / Re
+
+    # Convection-limited time step (diffusion is implicit).
+    dt     = 0.30 * h / U_lid
+    nsteps = ceil(Int, T / dt)
+
+    ψ = zeros(N, N)
+    ω = zeros(N, N)
+
+    # Build the discrete 2-D Laplacian on the (N-2)×(N-2) interior, with
+    # Dirichlet zero implicitly assumed at the boundaries.
+    n_int = N - 2
+    nn    = n_int^2
+    II = Int[];  JJ = Int[];  VV = Float64[]
+    for jj in 1:n_int, ii in 1:n_int
+        k = (jj - 1) * n_int + ii
+        push!(II, k); push!(JJ, k); push!(VV, -4.0)
+        if ii > 1     ; push!(II, k); push!(JJ, k - 1);     push!(VV, 1.0); end
+        if ii < n_int ; push!(II, k); push!(JJ, k + 1);     push!(VV, 1.0); end
+        if jj > 1     ; push!(II, k); push!(JJ, k - n_int); push!(VV, 1.0); end
+        if jj < n_int ; push!(II, k); push!(JJ, k + n_int); push!(VV, 1.0); end
+    end
+    Lap = sparse(II, JJ, VV, nn, nn) ./ h^2
+
+    Inn    = sparse(I, nn, nn)
+    A_diff = lu(Inn - dt * ν * Lap)        # for vorticity diffusion
+    Lap_lu = lu(Lap)                       # for streamfunction Poisson
+    coeff  = ν * dt / h^2                  # near-wall stencil weight
+
+    for _ in 1:nsteps
+        # 1. Wall vorticity from ψ via Thom's formula
+        @views ω[2:N-1, N] .= -2 .* ψ[2:N-1, N-1] ./ h^2 .- 2 * U_lid / h  # top lid
+        @views ω[2:N-1, 1] .= -2 .* ψ[2:N-1, 2]   ./ h^2                    # bottom
+        @views ω[1, 2:N-1] .= -2 .* ψ[2,   2:N-1] ./ h^2                    # left
+        @views ω[N, 2:N-1] .= -2 .* ψ[N-1, 2:N-1] ./ h^2                    # right
+
+        # 2. Explicit advection at every interior node
+        ψy = (ψ[2:N-1, 3:N]   .- ψ[2:N-1, 1:N-2]) ./ (2h)
+        ψx = (ψ[3:N,   2:N-1] .- ψ[1:N-2, 2:N-1]) ./ (2h)
+        ωx = (ω[3:N,   2:N-1] .- ω[1:N-2, 2:N-1]) ./ (2h)
+        ωy = (ω[2:N-1, 3:N]   .- ω[2:N-1, 1:N-2]) ./ (2h)
+        adv = ψy .* ωx .- ψx .* ωy
+
+        # 3. Build the right-hand side for the implicit diffusion solve
+        rhs_int = ω[2:N-1, 2:N-1] .- dt .* adv
+        rhs_int[1,   :] .+= coeff .* ω[1,   2:N-1]
+        rhs_int[end, :] .+= coeff .* ω[N,   2:N-1]
+        rhs_int[:,   1] .+= coeff .* ω[2:N-1, 1]
+        rhs_int[:, end] .+= coeff .* ω[2:N-1, N]
+
+        # 4. (I - νΔt L) ω_int^{n+1} = rhs
+        ω_int_new = A_diff \ vec(rhs_int)
+        ω[2:N-1, 2:N-1] .= reshape(ω_int_new, n_int, n_int)
+
+        # 5. Solve  L ψ = -ω  on the interior  (ψ = 0 on walls)
+        ψ_int_new = Lap_lu \ -vec(ω[2:N-1, 2:N-1])
+        ψ[2:N-1, 2:N-1] .= reshape(ψ_int_new, n_int, n_int)
+    end
+
+    # Recover velocity field by central differences of ψ
+    u = zeros(N, N)
+    v = zeros(N, N)
+    u[:, 2:N-1] .=  (ψ[:, 3:N]   .- ψ[:, 1:N-2])   ./ (2h)
+    v[2:N-1, :] .= -(ψ[3:N, :]   .- ψ[1:N-2, :])   ./ (2h)
+    u[:, N] .= U_lid                                 # lid velocity
+
+    speed = sqrt.(u.^2 .+ v.^2)
+    return ψ, ω, u, v, speed, h
+end
+
+function fig_navier_stokes()
+    @info "Generating Figure 6: Navier-Stokes (lid-driven cavity, ψ-ω solver)"
+
+    # ---- Left panel: cavity schematic (unchanged) ----
     p1 = plot(legend=false, framestyle=:none, aspect_ratio=:equal,
               xlim=(-0.2, 1.2), ylim=(-0.2, 1.4),
               title="Lid-Driven Cavity (NS benchmark)",
               titlefontcolor=parse(Colorant, BLUE))
-    # walls
     plot!(p1, [0,1,1,0,0], [0,0,1,1,0], color=:black, lw=2.5)
-    # lid arrow
     plot!(p1, [0.15, 0.85], [1.05, 1.05], arrow=true, color=:firebrick, lw=2.5)
     annotate!(p1, 0.5, 1.18,
               text("moving lid  U = $(CFG.ns_U_lid)", :firebrick, :center, 11, :bold))
-    # wall labels
-    annotate!(p1, -0.07, 0.5, text("u=v=0", parse(Colorant, BLUE), :right, 10))
-    annotate!(p1, 1.07, 0.5,  text("u=v=0", parse(Colorant, BLUE), :left, 10))
-    annotate!(p1, 0.5, -0.10, text("u=v=0", parse(Colorant, BLUE), :center, 10))
-    # vortex circles
+    annotate!(p1, -0.07, 0.5, text("u=v=0", parse(Colorant, BLUE), :right,  10))
+    annotate!(p1,  1.07, 0.5, text("u=v=0", parse(Colorant, BLUE), :left,   10))
+    annotate!(p1,  0.5, -0.10, text("u=v=0", parse(Colorant, BLUE), :center, 10))
     θ = range(0, 2π, length=100)
-    for r in [0.15, 0.25, 0.35]
+    for r in (0.15, 0.25, 0.35)
         plot!(p1, 0.5 .+ r .* cos.(θ), 0.55 .+ r .* sin.(θ),
               color=:seagreen, lw=1, alpha=0.6)
     end
-    annotate!(p1, 0.5, 0.55,
-              text("vortex", :seagreen, :center, 11, :bold))
+    annotate!(p1, 0.5, 0.55, text("vortex", :seagreen, :center, 11, :bold))
 
-    # Right panel: streamlines (illustrative analytical approximation)
-    n = CFG.ns_grid_n
-    xg = range(0, 1, length=n)
-    yg = range(0, 1, length=n)
-    X = [x for y in yg, x in xg]
-    Y = [y for y in yg, x in xg]
-    # crude stream function for visualization
-    Ψ = @. X*(1-X)*Y^2*(1-Y) * sin(π*X)
-    # contour plot of stream function = streamlines
-    p2 = contour(xg, yg, Ψ, levels=20, c=:plasma, fill=false, lw=1.2,
+    # ---- Right panel: REAL numerical solution (ψ-ω solver) ----
+    N_grid = 48
+    ψ, ω, u, v, speed, h = solve_lid_cavity_psi_omega(
+        N=N_grid, Re=CFG.ns_Re, T=10.0, U_lid=CFG.ns_U_lid)
+    xg = range(0, 1, length=N_grid)
+    yg = range(0, 1, length=N_grid)
+
+    # Heatmap of speed (transposed because Plots' heatmap expects M[y, x]).
+    p2 = heatmap(xg, yg, speed', c=:plasma, aspect_ratio=:equal,
+                 xlims=(0, 1), ylims=(0, 1),
                  xlabel="x", ylabel="y",
-                 title="Streamlines (illustrative)",
-                 titlefontcolor=parse(Colorant, BLUE),
-                 aspect_ratio=:equal, colorbar_title="Ψ")
+                 title=@sprintf("Numerical |u|  at  t=10  (Re=%.0f, %d×%d grid)",
+                                CFG.ns_Re, N_grid, N_grid),
+                 titlefontcolor=parse(Colorant, BLUE), colorbar_title="|u|")
+    # Overlay streamlines as contours of ψ
+    contour!(p2, xg, yg, ψ', levels=18, color=:white, lw=0.7, alpha=0.85)
 
-    plt = plot(p1, p2, layout=(1,2),
-               size=(CFG.fig_width, CFG.fig_height+50), dpi=CFG.fig_dpi,
+    plt = plot(p1, p2, layout=(1, 2),
+               size=(CFG.fig_width, CFG.fig_height + 50), dpi=CFG.fig_dpi,
                plot_title="Navier-Stokes:  ∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u   (incompressible)",
                plot_titlefontsize=13,
                plot_titlefontcolor=parse(Colorant, BLUE))
