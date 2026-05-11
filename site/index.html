@@ -20,42 +20,40 @@
   </div>
   <nav>
     <a href="#overview">Overview</a>
-    <div class="section-label">Setup</div>
-    <a href="#step1">Step 1 — WSL2</a>
-    <a href="#step2">Step 2 — juliaup &amp; Julia</a>
-    <a href="#step3">Step 3 — Packages</a>
-    <a href="#step4">Step 4 — PDE Packages</a>
-    <div class="section-label">Julia Basics</div>
+    <div class="section-label">Set up your computer</div>
+    <a href="#step1">Step 1 — Install WSL2</a>
+    <a href="#step2">Step 2 — Install Julia (juliaup)</a>
+    <a href="#step7">Step 3 — Configure VS Code</a>
+    <div class="section-label">Learn Julia (basics)</div>
     <a href="#basics-functions">Functions</a>
-    <a href="#basics-arrays">Vectors &amp; Matrices</a>
-    <a href="#basics-linalg">Linear Algebra</a>
-    <a href="#basics-builtins">Useful Built-ins</a>
-    <div class="section-label">Writing Julia</div>
-    <a href="#pkg-create">Create a Package</a>
+    <a href="#basics-arrays">Vectors &amp; matrices</a>
+    <a href="#basics-builtins">Useful built-ins</a>
+    <a href="#basics-linalg">Linear algebra</a>
+    <div class="section-label">Use existing packages</div>
+    <a href="#step3">Step 4 — Install packages</a>
+    <a href="#step4">Step 5 — PDE-related packages</a>
+    <div class="section-label">Build your own package</div>
+    <a href="#pkg-create">Create a package (juliaPDEs)</a>
     <a href="#pkg-structure" class="sub">Package structure</a>
     <a href="#pkg-revise"    class="sub">Revise — live reload</a>
     <a href="#pkg-workflow"  class="sub">Dev workflow loop</a>
-    <a href="#step5">Step 5 — PDE Workflow</a>
-    <a href="#step5-model"   class="sub">5.1 Classification</a>
-    <a href="#step5-discret" class="sub">5.2 Discretization Rules</a>
-    <a href="#pde-heat"      class="sub">→ Heat equation</a>
-    <a href="#pde-wave"      class="sub">→ Wave equation</a>
-    <a href="#pde-poisson"   class="sub">→ Poisson equation</a>
-    <a href="#pde-ns"        class="sub">→ Navier-Stokes</a>
-    <a href="#step5-verify"  class="sub">5.4 Verify &amp; Converge</a>
-    <a href="#step5-gmsh"    class="sub">5.5 Mesh → Matrix (Gmsh)</a>
-    <div class="section-label">Package Patterns</div>
-    <a href="#step6">Step 6 — Package Design</a>
-    <a href="#step6-arch"   class="sub">6.1 Three-type arch</a>
-    <a href="#step6-grid"   class="sub">6.2 Grid struct</a>
-    <a href="#step6-prob"   class="sub">6.3 Problem structs</a>
-    <a href="#step6-solve"  class="sub">6.4 solve() dispatch</a>
-    <a href="#step6-plot"   class="sub">6.5 Plot dispatch</a>
-    <a href="#step6-layout" class="sub">6.6 Package layout</a>
-    <div class="section-label">Tooling</div>
-    <a href="#step7">Step 7 — VS Code</a>
-    <a href="#step8">Step 8 — HPC SSH</a>
-    <a href="#step9">Step 9 — Slurm Jobs</a>
+    <div class="section-label">Solve PDEs (easy → hard)</div>
+    <a href="#step5">Step 7 — The PDE workflow</a>
+    <a href="#step5-model"   class="sub">7.1 Classify the PDE</a>
+    <a href="#step5-discret" class="sub">7.2 Discretization rules</a>
+    <a href="#pde-heat"      class="sub">A. Heat (easiest)</a>
+    <a href="#pde-wave"      class="sub">B. Wave</a>
+    <a href="#pde-poisson"   class="sub">C. Poisson</a>
+    <a href="#pde-ns"        class="sub">D. Navier-Stokes (hardest)</a>
+    <a href="#step5-verify"  class="sub">7.4 Verify &amp; converge</a>
+    <a href="#step5-gmsh"    class="sub">7.5 Mesh → matrix (Gmsh)</a>
+    <div class="section-label">Polish your code</div>
+    <a href="#step6">Step 8 — Package design patterns</a>
+    <div class="section-label">Run on the HPC cluster</div>
+    <a href="#step8">Step 9 — SSH to the cluster</a>
+    <a href="#step9">Step 10 — Submit Slurm jobs</a>
+    <div class="section-label">Share your code</div>
+    <a href="#step-git">Git &amp; GitHub</a>
   </nav>
 </aside>
 
@@ -131,12 +129,12 @@
       <li><strong>juliaup (Step 2)</strong> lets you install many Julia
         versions side-by-side. The cluster might have Julia 1.10 LTS while
         you want to try 1.11 at home; juliaup keeps both.</li>
-      <li><strong>Project environments (Step 3)</strong> pin every package
+      <li><strong>Project environments (Step 4)</strong> pin every package
         to an exact version and write that information into
         <code>Manifest.toml</code>. Send that file to a colleague and they
         get bit-identical packages — that is how published computational
         results stay reproducible years later.</li>
-      <li><strong>PDE packages (Step 4)</strong> save you from rewriting
+      <li><strong>PDE packages (Step 5)</strong> save you from rewriting
         well-tested numerical algorithms (sparse linear solvers, mesh
         generators, finite-element assemblers) from scratch.</li>
     </ul>
@@ -157,8 +155,8 @@
       the first install, and basic terminal familiarity — knowing what
       <code>cd</code>, <code>ls</code>, and <code>pwd</code> do is enough.
       Maths-wise: comfort with calculus (partial derivatives) helps in
-      Step 5; a bit of linear algebra (matrix–vector products) helps in
-      Step 5.5. You do not need any prior programming course beyond what
+      Step 7; a bit of linear algebra (matrix–vector products) helps in
+      Step 7.5. You do not need any prior programming course beyond what
       a typical engineering or science freshman has done.
     </div>
 
@@ -174,19 +172,17 @@
     <h3>Time Estimate</h3>
     <div class="time-card"><span class="time-icon">🖥️</span><span class="label">Step 1 — Install WSL2</span><span class="dur">10–15 min</span></div>
     <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 2 — juliaup + Julia</span><span class="dur">5–10 min</span></div>
-    <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 3 — Julia Packages</span><span class="dur">10–15 min</span></div>
-    <div class="time-card"><span class="time-icon">📐</span><span class="label">Step 4 — PDE Packages</span><span class="dur">15–20 min</span></div>
+    <div class="time-card"><span class="time-icon">📦</span><span class="label">Step 4 — Julia Packages</span><span class="dur">10–15 min</span></div>
+    <div class="time-card"><span class="time-icon">📐</span><span class="label">Step 5 — PDE Packages</span><span class="dur">15–20 min</span></div>
     <div class="time-card"><span class="time-icon">📝</span><span class="label">Julia Basics — Functions, Arrays, Linear Algebra</span><span class="dur">20–30 min</span></div>
-    <div class="time-card"><span class="time-icon">🧮</span><span class="label">Step 5 — PDE Workflow + Examples</span><span class="dur">30–60 min</span></div>
-    <div class="time-card"><span class="time-icon">🔺</span><span class="label">5.5 — Gmsh: mesh → matrix</span><span class="dur">15–20 min</span></div>
-    <div class="time-card"><span class="time-icon">🏗️</span><span class="label">Step 6 — Package Design Patterns</span><span class="dur">20–30 min</span></div>
-    <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 7 — Configure VS Code</span><span class="dur">5–10 min</span></div>
-    <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 8 — HPC SSH Setup</span><span class="dur">10 min</span></div>
-    <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 9 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
+    <div class="time-card"><span class="time-icon">🧮</span><span class="label">Step 7 — PDE Workflow + Examples</span><span class="dur">30–60 min</span></div>
+    <div class="time-card"><span class="time-icon">🔺</span><span class="label">7.5 — Gmsh: mesh → matrix</span><span class="dur">15–20 min</span></div>
+    <div class="time-card"><span class="time-icon">🏗️</span><span class="label">Step 8 — Package Design Patterns</span><span class="dur">20–30 min</span></div>
+    <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 3 — Configure VS Code</span><span class="dur">5–10 min</span></div>
+    <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 9 — HPC SSH Setup</span><span class="dur">10 min</span></div>
+    <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 10 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
     <div class="time-card" style="border-color:#1F4E79;"><span class="time-icon">🕐</span><span class="label" style="color:#1F4E79;">Total</span><span class="dur" style="font-weight:700;">~130–205 min</span></div>
   </section>
-
-  <hr class="divider" />
 
   <!-- ══ STEP 1 ══════════════════════════════════════════════ -->
   <section class="section" id="step1">
@@ -306,8 +302,6 @@ sudo apt install -y curl wget git build-essential</code></pre>
       Windows 11 enables both by default.
     </div>
   </section>
-
-  <hr class="divider" />
 
   <!-- ══ STEP 2 ══════════════════════════════════════════════ -->
   <section class="section" id="step2">
@@ -436,218 +430,73 @@ println(f(1.0))</code></pre>
       compiled version in memory. So the REPL is not just a toy interactive
       prompt — it is a full-speed environment where you can develop and
       benchmark code as you write it. We will build on this with Revise in
-      Step 4.5.
+      Step 6.
     </div>
   </section>
 
-  <hr class="divider" />
+  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
+  <section class="section" id="step7">
+    <h2><span class="step-badge">Step 3</span>Configure VS Code for Julia + WSL</h2>
 
-  <!-- ══ STEP 3 ══════════════════════════════════════════════ -->
-  <section class="section" id="step3">
-    <h2><span class="step-badge">Step 3</span>Installing Julia Packages</h2>
-
-    <h3>What is a "package" and what is an "environment"?</h3>
+    <h3>Why VS Code?</h3>
     <p>
-      A <strong>package</strong> in Julia is a self-contained piece of
-      software you can re-use — a plotting library, a sparse-matrix solver,
-      a CFD engine. <code>Plots.jl</code>, <code>SparseArrays</code>,
-      <code>DifferentialEquations.jl</code> are all packages.
-    </p>
-    <p>
-      An <strong>environment</strong> is just a folder that says "for this
-      project, use these specific package versions". Concretely, the folder
-      contains two files:
-    </p>
-    <ul>
-      <li><code>Project.toml</code> — the high-level list:
-        <em>"this project depends on Plots and SparseArrays"</em>.</li>
-      <li><code>Manifest.toml</code> — the low-level lock file:
-        <em>"Plots is exactly version 1.41.6, which itself depends on
-        Showoff 1.1.0, GR 0.73.7, ..."</em>. Every transitive dependency is
-        pinned to an exact version.</li>
-    </ul>
-    <p>
-      Together they make your work <strong>reproducible</strong>. If you
-      hand someone these two files plus your code, they can recreate your
-      Julia setup byte-for-byte by running one command
-      (<code>Pkg.instantiate()</code>). This is how published computational
-      results stay reproducible years after the paper.
+      You can absolutely write Julia in any editor — Vim, Emacs, plain
+      <code>nano</code>. We recommend <strong>VS Code</strong> because of
+      one specific feature: it can <em>connect</em> seamlessly to your
+      WSL Ubuntu (and later, to the cluster over SSH) and edit files
+      there as if they were local. The editor runs on Windows, the
+      language server and the Julia process run inside WSL — best of
+      both worlds. Setup is a one-time, ~5-minute job.
     </p>
 
-    <div class="callout info">
-      <strong>Compare with Python</strong>
-      <code>Project.toml</code> is the equivalent of
-      <code>requirements.txt</code> or <code>pyproject.toml</code>;
-      <code>Manifest.toml</code> is the equivalent of a
-      <code>pip freeze</code>/<code>poetry.lock</code> output. The
-      difference: in Julia these files are first-class language features,
-      not third-party tooling, so <em>everyone</em> uses them.
-    </div>
-
-    <h3>3.1 Create a project folder and activate its environment</h3>
+    <h3>3.1 Install the right extensions</h3>
     <p>
-      The convention is one folder per project. Inside that folder, start
-      Julia with <code>--project=.</code> so it uses the local environment
-      rather than your global default:
+      Open the Extensions sidebar (Ctrl+Shift+X) and install these four
+      from Microsoft's marketplace. Each does exactly one job:
     </p>
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-bash">mkdir -p ~/julia-pde && cd ~/julia-pde
-julia --project=.</code></pre>
-    </div>
-    <p>
-      <code>mkdir -p</code> creates the folder (the <code>-p</code> flag
-      means "don't error if it already exists, and create parents as
-      needed"). <code>cd</code> moves into it.
-      <code>julia --project=.</code> starts Julia and uses the current
-      directory as the project. The first time, both
-      <code>Project.toml</code> and <code>Manifest.toml</code> will be
-      created automatically when you add your first package.
-    </p>
-
-    <h3>3.2 Add packages in package mode</h3>
-    <p>
-      Inside the REPL, press <code>]</code> to enter package mode. The
-      prompt changes from <code>julia&gt;</code> to
-      <code>(@julia-pde) pkg&gt;</code> — that <code>(@julia-pde)</code>
-      part is the active environment. Now run:
-    </p>
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">(@julia-pde) pkg> add DifferentialEquations Plots SparseArrays</code></pre>
-    </div>
-    <p>
-      Julia downloads each package and all its transitive dependencies,
-      precompiles them, and writes the choices into <code>Project.toml</code>
-      and <code>Manifest.toml</code>. The first run takes a few minutes
-      because there is a lot to download; subsequent <code>add</code> calls
-      take seconds.
-    </p>
-
-    <h3>3.3 Package-mode cheatsheet</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Package mode</th><th>What it does</th></tr></thead>
+        <thead><tr><th>Extension</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>add Plots</code></td><td>Install <code>Plots.jl</code> into the active environment</td></tr>
-          <tr><td><code>rm Plots</code></td><td>Remove a package from <code>Project.toml</code></td></tr>
-          <tr><td><code>update</code></td><td>Update every package to the latest compatible version</td></tr>
-          <tr><td><code>status</code></td><td>List installed packages with their versions</td></tr>
-          <tr><td><code>instantiate</code></td><td>Re-create the environment from <code>Manifest.toml</code> (after cloning a project)</td></tr>
-          <tr><td><code>activate /path/to/proj</code></td><td>Switch the REPL to a different environment</td></tr>
-          <tr><td><code>test</code></td><td>Run the test suite of the active package</td></tr>
+          <tr><td><strong>WSL</strong></td><td>Lets VS Code "open a folder in WSL" — runs the editor's backend inside Linux so paths, terminals, and Julia all match the cluster.</td></tr>
+          <tr><td><strong>Julia</strong></td><td>Adds syntax highlighting, code completion (IntelliSense), inline error reporting, and an integrated REPL inside VS Code.</td></tr>
+          <tr><td><strong>Jupyter</strong></td><td>Lets you open <code>.ipynb</code> notebooks and run them with a Julia kernel — useful for exploratory analysis.</td></tr>
+          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 9).</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="callout tip">
-      <strong>Always commit both <code>.toml</code> files to git</strong>
-      <code>Project.toml</code> alone says "I depend on Plots". The exact
-      version comes from <code>Manifest.toml</code>. Without the manifest,
-      a colleague who clones your repo a year later might get a newer Plots
-      that breaks your code. Commit both, then anyone can restore your
-      environment with <code>] instantiate</code>.
-    </div>
-
-    <div class="callout warn">
-      <strong>If <code>add</code> hangs on first run</strong>
-      The very first <code>add</code> command needs to clone the General
-      package registry (~50 MB). On a slow network this can take a few
-      minutes; let it finish. If it errors out, run
-      <code>] registry update</code> and try again.
-    </div>
-  </section>
-
-  <hr class="divider" />
-
-  <!-- ══ STEP 4 ══════════════════════════════════════════════ -->
-  <section class="section" id="step4">
-    <h2><span class="step-badge">Step 4</span>Key Julia Packages for Scientific Computing</h2>
+    <h3>3.2 Open your package in WSL mode</h3>
     <p>
-      A whirlwind tour of the libraries you will hear mentioned in PDE
-      papers, lectures, and on the cluster. You do not need to install all
-      of these now — Step 4.5 will tell you exactly which ones the
-      <code>juliaPDEs</code> package needs. Use this table as a reference
-      for "what package would I reach for if I needed feature X".
+      Press <kbd>F1</kbd> (or <kbd>Ctrl+Shift+P</kbd>) to open the command
+      palette, type <em>"WSL: Open Folder in WSL"</em>, then point to
+      <code>~/projects/julia-docx-tutorial/juliaPDEs</code>. The bottom-
+      left status bar should now say <em>WSL: Ubuntu</em>. Open the
+      integrated terminal (Ctrl+`) — you are inside WSL, ready to run
+      <code>julia --project=.</code> exactly as in Step 6.
     </p>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Package</th><th>Use case</th></tr></thead>
-        <tbody>
-          <tr><td><code>LinearAlgebra</code> (stdlib)</td><td>Dense matrix ops, eigensystems</td></tr>
-          <tr><td><code>SparseArrays</code> (stdlib)</td><td>Sparse PDE matrices</td></tr>
-          <tr><td><code>FFTW.jl</code></td><td>Spectral methods (FFT)</td></tr>
-          <tr><td><code>DifferentialEquations.jl</code></td><td>ODE/PDE solver suite</td></tr>
-          <tr><td><code>Gmsh.jl</code></td><td>Unstructured mesh generation (used in §5.5)</td></tr>
-          <tr><td><code>Ferrite.jl</code> / <code>Gridap.jl</code></td><td>Finite element methods</td></tr>
-          <tr><td><code>Oceananigans.jl</code></td><td>Production CFD on HPC</td></tr>
-          <tr><td><code>Plots.jl</code> / <code>Makie.jl</code></td><td>Visualization</td></tr>
-          <tr><td><code>MPI.jl</code> / <code>CUDA.jl</code></td><td>HPC parallelism</td></tr>
-        </tbody>
-      </table>
-    </div>
 
-    <h3>What each category is for, in plain English</h3>
-    <ul>
-      <li><strong>Standard libraries</strong> — <code>LinearAlgebra</code>
-        gives you matrix multiplication, eigenvalues, SVD, the backslash
-        operator <code>A \ b</code> for solving linear systems, and so on.
-        <code>SparseArrays</code> stores matrices that are mostly zero
-        without wasting memory on the zeros — essential for any PDE on a
-        large grid. Both ship with Julia, no install needed; you just write
-        <code>using LinearAlgebra</code>.</li>
-      <li><strong>Spectral methods</strong> — when your geometry is
-        periodic (think: simulating turbulence in a cube with periodic
-        boundaries) you can solve PDEs by switching to Fourier space, doing
-        derivatives there as multiplications, and switching back. The fast
-        switch is the FFT, and <code>FFTW.jl</code> wraps the famous FFTW
-        C library.</li>
-      <li><strong>ODE/PDE suites</strong> —
-        <code>DifferentialEquations.jl</code> is a one-stop shop with
-        dozens of time-integrators (Euler, RK4, Tsit5, Rosenbrock23, ...)
-        and quality-of-life features like adaptive timestepping, event
-        handling, and easy GPU offload. Use it once you outgrow the simple
-        explicit-Euler loops we will write in Step 5.</li>
-      <li><strong>Mesh generation</strong> — most real geometry (engine
-        parts, blood vessels) is too irregular for a uniform grid.
-        <code>Gmsh.jl</code> drives the open-source Gmsh mesher to
-        triangulate arbitrary 2D/3D domains, with refinement near
-        interesting features. Section 5.5 walks through this.</li>
-      <li><strong>Finite element frameworks</strong> —
-        <code>Ferrite.jl</code> and <code>Gridap.jl</code> are higher-level
-        frameworks that handle FEM bookkeeping for you (basis functions,
-        quadrature, assembly). Useful when you want to solve a real PDE,
-        not just learn how the pieces fit together.</li>
-      <li><strong>Domain-specific solvers</strong> —
-        <code>Oceananigans.jl</code> is a production-grade incompressible
-        Navier–Stokes solver, optimised for ocean and atmosphere
-        simulations on CPU and GPU. It is what we will call from
-        <code>src/Navier_Stokes.jl</code> in Step 4.5 because we are not
-        going to reinvent CFD from scratch.</li>
-      <li><strong>Visualisation</strong> — <code>Plots.jl</code> is the
-        easy-to-use, MATLAB-style plotting library; great for quick
-        figures. <code>Makie.jl</code> is a more powerful (and prettier)
-        modern plotting library for 3D and interactive visualisation —
-        slower to start up but worth it for anything publication-quality.</li>
-      <li><strong>Parallelism</strong> — <code>MPI.jl</code> wraps the
-        Message Passing Interface that powers most multi-node HPC code:
-        you launch many copies of your program on different nodes and they
-        send messages to each other. <code>CUDA.jl</code> targets NVIDIA
-        GPUs from Julia almost as easily as writing a normal array
-        operation — <code>x .+ y</code> on a <code>CuArray</code> runs on
-        the GPU.</li>
-    </ul>
-
-    <div class="callout info">
-      <strong>What does <code>.jl</code> mean?</strong>
-      The <code>.jl</code> suffix is purely a naming convention — it tells
-      you the project is a Julia package, the way <code>.py</code> hints at
-      Python. The actual package name in Julia code is just the part before
-      it: <code>using Plots</code>, not <code>using Plots.jl</code>.
+    <h3>3.3 Pluto.jl — reactive notebooks</h3>
+    <p>
+      <strong>Pluto.jl</strong> is a Julia-native alternative to Jupyter.
+      The killer feature: cells are <em>reactive</em> — change a variable
+      definition in one cell and every cell that depends on it
+      automatically re-runs in the right order. There are no hidden
+      out-of-order states. Great for live exploration of PDE parameters
+      with sliders:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg; Pkg.add(["Pluto", "PlutoUI"])
+using Pluto
+Pluto.run()    # opens at localhost:1234</code></pre>
     </div>
+    <p>
+      Your default browser opens a Pluto landing page; create a new
+      notebook or open <code>pde_explorer.jl</code> from this repo to see
+      the heat / wave / Poisson examples with parameter sliders.
+    </p>
   </section>
-
-  <hr class="divider" />
 
   <!-- ══ BASICS: FUNCTIONS ════════════════════════════════════ -->
   <section class="section" id="basics-functions">
@@ -816,8 +665,6 @@ sort!(v)            # v is now [1, 1, 3, 4, 5, 9]
       When in doubt, prefer the non-<code>!</code> form and assign the result.
     </div>
   </section>
-
-  <hr class="divider" />
 
   <!-- ══ BASICS: ARRAYS ═══════════════════════════════════════ -->
   <section class="section" id="basics-arrays">
@@ -996,7 +843,114 @@ hcat(a, b)          # 3×2 matrix     (horizontal / column-wise)
     </div>
   </section>
 
-  <hr class="divider" />
+  <!-- ══ BASICS: USEFUL BUILT-INS ═════════════════════════════ -->
+  <section class="section" id="basics-builtins">
+    <h2>Useful Built-in Functions</h2>
+    <p>
+      A short reference of the everyday functions you will use to
+      <em>inspect</em>, <em>summarise</em>, and <em>reshape</em> arrays.
+      All of these live in Julia's <code>Base</code> module — they are
+      always available, no <code>using</code> required. Treat this as a
+      cheat-sheet you can come back to.
+    </p>
+
+    <h3>Array inspection</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = rand(3, 4)
+
+size(A)        # (3, 4)
+size(A, 1)     # 3   (number of rows)
+size(A, 2)     # 4   (number of columns)
+length(A)      # 12  (total elements)
+ndims(A)       # 2
+eltype(A)      # Float64</code></pre>
+    </div>
+
+    <h3>Reductions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
+
+sum(v)           # 23.0
+prod(v)          # 540.0
+minimum(v)       # 1.0
+maximum(v)       # 9.0
+argmin(v)        # 2  (index of minimum)
+argmax(v)        # 6  (index of maximum)
+mean(v)          # 3.833...  (needs Statistics: using Statistics)
+cumsum(v)        # running total
+
+# Along a dimension of a matrix
+A = [1 2; 3 4]
+sum(A, dims=1)   # sum each column  →  [4 6]
+sum(A, dims=2)   # sum each row     →  [3; 7]</code></pre>
+    </div>
+
+    <h3>Reshaping and iteration</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = 1:12
+
+reshape(v, 3, 4)    # 3×4 matrix (column-major fill)
+reshape(v, 2, 2, 3) # 3-D array
+
+# Iterating
+for (i, val) in enumerate(v)
+    println(i, " => ", val)
+end
+
+# map / filter
+squares = map(x -> x^2, 1:5)        # [1, 4, 9, 16, 25]
+evens   = filter(x -> x % 2 == 0, 1:10)  # [2, 4, 6, 8, 10]</code></pre>
+    </div>
+
+    <h3>Math constants and common functions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">π          # 3.14159...  (type \pi + Tab)
+ℯ          # 2.71828...  (type \euler + Tab)
+Inf        # infinity
+NaN        # not a number
+
+abs(-3.0)  # 3.0
+sqrt(9.0)  # 3.0
+cbrt(8.0)  # 2.0
+floor(2.9) # 2.0
+ceil(2.1)  # 3.0
+round(2.5) # 2.0  (banker's rounding)
+clamp(x, lo, hi)  # keep x within [lo, hi]
+
+isnan(NaN)     # true
+isinf(Inf)     # true
+isfinite(1.0)  # true</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Task</th><th>Julia</th></tr></thead>
+        <tbody>
+          <tr><td>Print with newline</td><td><code>println("value = ", x)</code></td></tr>
+          <tr><td>Print without newline</td><td><code>print("x = ", x)</code></td></tr>
+          <tr><td>String interpolation</td><td><code>"x is $(x), x² is $(x^2)"</code></td></tr>
+          <tr><td>Type of value</td><td><code>typeof(x)</code></td></tr>
+          <tr><td>Convert type</td><td><code>Float64(3)</code>, <code>Int(2.0)</code></td></tr>
+          <tr><td>Check type</td><td><code>x isa Float64</code></td></tr>
+          <tr><td>Ternary expression</td><td><code>x > 0 ? "pos" : "non-pos"</code></td></tr>
+          <tr><td>Short-circuit and/or</td><td><code>&amp;&amp;</code> / <code>||</code></td></tr>
+          <tr><td>Element-wise compare</td><td><code>v .== 3</code>, <code>v .&gt; 0</code></td></tr>
+          <tr><td>Find indices where true</td><td><code>findall(v .&gt; 0)</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>Unicode identifiers</strong>
+      Julia accepts Unicode variable names. Type <code>\alpha</code> then Tab to get
+      <code>α</code>, <code>\Delta</code> for <code>Δ</code>, <code>\^2</code> for superscript ².
+      This lets your code look exactly like the math on the page.
+    </div>
+  </section>
 
   <!-- ══ BASICS: LINEAR ALGEBRA ═══════════════════════════════ -->
   <section class="section" id="basics-linalg">
@@ -1159,122 +1113,212 @@ x = T \ b</code></pre>
     </div>
   </section>
 
-  <hr class="divider" />
+  <!-- ══ STEP 3 ══════════════════════════════════════════════ -->
+  <section class="section" id="step3">
+    <h2><span class="step-badge">Step 4</span>Installing Julia Packages</h2>
 
-  <!-- ══ BASICS: USEFUL BUILT-INS ═════════════════════════════ -->
-  <section class="section" id="basics-builtins">
-    <h2>Useful Built-in Functions</h2>
+    <h3>What is a "package" and what is an "environment"?</h3>
     <p>
-      A short reference of the everyday functions you will use to
-      <em>inspect</em>, <em>summarise</em>, and <em>reshape</em> arrays.
-      All of these live in Julia's <code>Base</code> module — they are
-      always available, no <code>using</code> required. Treat this as a
-      cheat-sheet you can come back to.
+      A <strong>package</strong> in Julia is a self-contained piece of
+      software you can re-use — a plotting library, a sparse-matrix solver,
+      a CFD engine. <code>Plots.jl</code>, <code>SparseArrays</code>,
+      <code>DifferentialEquations.jl</code> are all packages.
+    </p>
+    <p>
+      An <strong>environment</strong> is just a folder that says "for this
+      project, use these specific package versions". Concretely, the folder
+      contains two files:
+    </p>
+    <ul>
+      <li><code>Project.toml</code> — the high-level list:
+        <em>"this project depends on Plots and SparseArrays"</em>.</li>
+      <li><code>Manifest.toml</code> — the low-level lock file:
+        <em>"Plots is exactly version 1.41.6, which itself depends on
+        Showoff 1.1.0, GR 0.73.7, ..."</em>. Every transitive dependency is
+        pinned to an exact version.</li>
+    </ul>
+    <p>
+      Together they make your work <strong>reproducible</strong>. If you
+      hand someone these two files plus your code, they can recreate your
+      Julia setup byte-for-byte by running one command
+      (<code>Pkg.instantiate()</code>). This is how published computational
+      results stay reproducible years after the paper.
     </p>
 
-    <h3>Array inspection</h3>
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">A = rand(3, 4)
-
-size(A)        # (3, 4)
-size(A, 1)     # 3   (number of rows)
-size(A, 2)     # 4   (number of columns)
-length(A)      # 12  (total elements)
-ndims(A)       # 2
-eltype(A)      # Float64</code></pre>
+    <div class="callout info">
+      <strong>Compare with Python</strong>
+      <code>Project.toml</code> is the equivalent of
+      <code>requirements.txt</code> or <code>pyproject.toml</code>;
+      <code>Manifest.toml</code> is the equivalent of a
+      <code>pip freeze</code>/<code>poetry.lock</code> output. The
+      difference: in Julia these files are first-class language features,
+      not third-party tooling, so <em>everyone</em> uses them.
     </div>
 
-    <h3>Reductions</h3>
+    <h3>4.1 Create a project folder and activate its environment</h3>
+    <p>
+      The convention is one folder per project. Inside that folder, start
+      Julia with <code>--project=.</code> so it uses the local environment
+      rather than your global default:
+    </p>
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">v = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
-
-sum(v)           # 23.0
-prod(v)          # 540.0
-minimum(v)       # 1.0
-maximum(v)       # 9.0
-argmin(v)        # 2  (index of minimum)
-argmax(v)        # 6  (index of maximum)
-mean(v)          # 3.833...  (needs Statistics: using Statistics)
-cumsum(v)        # running total
-
-# Along a dimension of a matrix
-A = [1 2; 3 4]
-sum(A, dims=1)   # sum each column  →  [4 6]
-sum(A, dims=2)   # sum each row     →  [3; 7]</code></pre>
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir -p ~/julia-pde && cd ~/julia-pde
+julia --project=.</code></pre>
     </div>
+    <p>
+      <code>mkdir -p</code> creates the folder (the <code>-p</code> flag
+      means "don't error if it already exists, and create parents as
+      needed"). <code>cd</code> moves into it.
+      <code>julia --project=.</code> starts Julia and uses the current
+      directory as the project. The first time, both
+      <code>Project.toml</code> and <code>Manifest.toml</code> will be
+      created automatically when you add your first package.
+    </p>
 
-    <h3>Reshaping and iteration</h3>
+    <h3>4.2 Add packages in package mode</h3>
+    <p>
+      Inside the REPL, press <code>]</code> to enter package mode. The
+      prompt changes from <code>julia&gt;</code> to
+      <code>(@julia-pde) pkg&gt;</code> — that <code>(@julia-pde)</code>
+      part is the active environment. Now run:
+    </p>
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">v = 1:12
-
-reshape(v, 3, 4)    # 3×4 matrix (column-major fill)
-reshape(v, 2, 2, 3) # 3-D array
-
-# Iterating
-for (i, val) in enumerate(v)
-    println(i, " => ", val)
-end
-
-# map / filter
-squares = map(x -> x^2, 1:5)        # [1, 4, 9, 16, 25]
-evens   = filter(x -> x % 2 == 0, 1:10)  # [2, 4, 6, 8, 10]</code></pre>
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@julia-pde) pkg> add DifferentialEquations Plots SparseArrays</code></pre>
     </div>
+    <p>
+      Julia downloads each package and all its transitive dependencies,
+      precompiles them, and writes the choices into <code>Project.toml</code>
+      and <code>Manifest.toml</code>. The first run takes a few minutes
+      because there is a lot to download; subsequent <code>add</code> calls
+      take seconds.
+    </p>
 
-    <h3>Math constants and common functions</h3>
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">π          # 3.14159...  (type \pi + Tab)
-ℯ          # 2.71828...  (type \euler + Tab)
-Inf        # infinity
-NaN        # not a number
-
-abs(-3.0)  # 3.0
-sqrt(9.0)  # 3.0
-cbrt(8.0)  # 2.0
-floor(2.9) # 2.0
-ceil(2.1)  # 3.0
-round(2.5) # 2.0  (banker's rounding)
-clamp(x, lo, hi)  # keep x within [lo, hi]
-
-isnan(NaN)     # true
-isinf(Inf)     # true
-isfinite(1.0)  # true</code></pre>
-    </div>
-
+    <h3>4.3 Package-mode cheatsheet</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Task</th><th>Julia</th></tr></thead>
+        <thead><tr><th>Package mode</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td>Print with newline</td><td><code>println("value = ", x)</code></td></tr>
-          <tr><td>Print without newline</td><td><code>print("x = ", x)</code></td></tr>
-          <tr><td>String interpolation</td><td><code>"x is $(x), x² is $(x^2)"</code></td></tr>
-          <tr><td>Type of value</td><td><code>typeof(x)</code></td></tr>
-          <tr><td>Convert type</td><td><code>Float64(3)</code>, <code>Int(2.0)</code></td></tr>
-          <tr><td>Check type</td><td><code>x isa Float64</code></td></tr>
-          <tr><td>Ternary expression</td><td><code>x > 0 ? "pos" : "non-pos"</code></td></tr>
-          <tr><td>Short-circuit and/or</td><td><code>&amp;&amp;</code> / <code>||</code></td></tr>
-          <tr><td>Element-wise compare</td><td><code>v .== 3</code>, <code>v .&gt; 0</code></td></tr>
-          <tr><td>Find indices where true</td><td><code>findall(v .&gt; 0)</code></td></tr>
+          <tr><td><code>add Plots</code></td><td>Install <code>Plots.jl</code> into the active environment</td></tr>
+          <tr><td><code>rm Plots</code></td><td>Remove a package from <code>Project.toml</code></td></tr>
+          <tr><td><code>update</code></td><td>Update every package to the latest compatible version</td></tr>
+          <tr><td><code>status</code></td><td>List installed packages with their versions</td></tr>
+          <tr><td><code>instantiate</code></td><td>Re-create the environment from <code>Manifest.toml</code> (after cloning a project)</td></tr>
+          <tr><td><code>activate /path/to/proj</code></td><td>Switch the REPL to a different environment</td></tr>
+          <tr><td><code>test</code></td><td>Run the test suite of the active package</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout tip">
-      <strong>Unicode identifiers</strong>
-      Julia accepts Unicode variable names. Type <code>\alpha</code> then Tab to get
-      <code>α</code>, <code>\Delta</code> for <code>Δ</code>, <code>\^2</code> for superscript ².
-      This lets your code look exactly like the math on the page.
+      <strong>Always commit both <code>.toml</code> files to git</strong>
+      <code>Project.toml</code> alone says "I depend on Plots". The exact
+      version comes from <code>Manifest.toml</code>. Without the manifest,
+      a colleague who clones your repo a year later might get a newer Plots
+      that breaks your code. Commit both, then anyone can restore your
+      environment with <code>] instantiate</code>.
+    </div>
+
+    <div class="callout warn">
+      <strong>If <code>add</code> hangs on first run</strong>
+      The very first <code>add</code> command needs to clone the General
+      package registry (~50 MB). On a slow network this can take a few
+      minutes; let it finish. If it errors out, run
+      <code>] registry update</code> and try again.
     </div>
   </section>
 
-  <hr class="divider" />
+  <!-- ══ STEP 4 ══════════════════════════════════════════════ -->
+  <section class="section" id="step4">
+    <h2><span class="step-badge">Step 5</span>Key Julia Packages for Scientific Computing</h2>
+    <p>
+      A whirlwind tour of the libraries you will hear mentioned in PDE
+      papers, lectures, and on the cluster. You do not need to install all
+      of these now — Step 6 will tell you exactly which ones the
+      <code>juliaPDEs</code> package needs. Use this table as a reference
+      for "what package would I reach for if I needed feature X".
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><code>LinearAlgebra</code> (stdlib)</td><td>Dense matrix ops, eigensystems</td></tr>
+          <tr><td><code>SparseArrays</code> (stdlib)</td><td>Sparse PDE matrices</td></tr>
+          <tr><td><code>FFTW.jl</code></td><td>Spectral methods (FFT)</td></tr>
+          <tr><td><code>DifferentialEquations.jl</code></td><td>ODE/PDE solver suite</td></tr>
+          <tr><td><code>Gmsh.jl</code></td><td>Unstructured mesh generation (used in §5.5)</td></tr>
+          <tr><td><code>Ferrite.jl</code> / <code>Gridap.jl</code></td><td>Finite element methods</td></tr>
+          <tr><td><code>Oceananigans.jl</code></td><td>Production CFD on HPC</td></tr>
+          <tr><td><code>Plots.jl</code> / <code>Makie.jl</code></td><td>Visualization</td></tr>
+          <tr><td><code>MPI.jl</code> / <code>CUDA.jl</code></td><td>HPC parallelism</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What each category is for, in plain English</h3>
+    <ul>
+      <li><strong>Standard libraries</strong> — <code>LinearAlgebra</code>
+        gives you matrix multiplication, eigenvalues, SVD, the backslash
+        operator <code>A \ b</code> for solving linear systems, and so on.
+        <code>SparseArrays</code> stores matrices that are mostly zero
+        without wasting memory on the zeros — essential for any PDE on a
+        large grid. Both ship with Julia, no install needed; you just write
+        <code>using LinearAlgebra</code>.</li>
+      <li><strong>Spectral methods</strong> — when your geometry is
+        periodic (think: simulating turbulence in a cube with periodic
+        boundaries) you can solve PDEs by switching to Fourier space, doing
+        derivatives there as multiplications, and switching back. The fast
+        switch is the FFT, and <code>FFTW.jl</code> wraps the famous FFTW
+        C library.</li>
+      <li><strong>ODE/PDE suites</strong> —
+        <code>DifferentialEquations.jl</code> is a one-stop shop with
+        dozens of time-integrators (Euler, RK4, Tsit5, Rosenbrock23, ...)
+        and quality-of-life features like adaptive timestepping, event
+        handling, and easy GPU offload. Use it once you outgrow the simple
+        explicit-Euler loops we will write in Step 7.</li>
+      <li><strong>Mesh generation</strong> — most real geometry (engine
+        parts, blood vessels) is too irregular for a uniform grid.
+        <code>Gmsh.jl</code> drives the open-source Gmsh mesher to
+        triangulate arbitrary 2D/3D domains, with refinement near
+        interesting features. Section 5.5 walks through this.</li>
+      <li><strong>Finite element frameworks</strong> —
+        <code>Ferrite.jl</code> and <code>Gridap.jl</code> are higher-level
+        frameworks that handle FEM bookkeeping for you (basis functions,
+        quadrature, assembly). Useful when you want to solve a real PDE,
+        not just learn how the pieces fit together.</li>
+      <li><strong>Domain-specific solvers</strong> —
+        <code>Oceananigans.jl</code> is a production-grade incompressible
+        Navier–Stokes solver, optimised for ocean and atmosphere
+        simulations on CPU and GPU. It is what we will call from
+        <code>src/Navier_Stokes.jl</code> in Step 6 because we are not
+        going to reinvent CFD from scratch.</li>
+      <li><strong>Visualisation</strong> — <code>Plots.jl</code> is the
+        easy-to-use, MATLAB-style plotting library; great for quick
+        figures. <code>Makie.jl</code> is a more powerful (and prettier)
+        modern plotting library for 3D and interactive visualisation —
+        slower to start up but worth it for anything publication-quality.</li>
+      <li><strong>Parallelism</strong> — <code>MPI.jl</code> wraps the
+        Message Passing Interface that powers most multi-node HPC code:
+        you launch many copies of your program on different nodes and they
+        send messages to each other. <code>CUDA.jl</code> targets NVIDIA
+        GPUs from Julia almost as easily as writing a normal array
+        operation — <code>x .+ y</code> on a <code>CuArray</code> runs on
+        the GPU.</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>What does <code>.jl</code> mean?</strong>
+      The <code>.jl</code> suffix is purely a naming convention — it tells
+      you the project is a Julia package, the way <code>.py</code> hints at
+      Python. The actual package name in Julia code is just the part before
+      it: <code>using Plots</code>, not <code>using Plots.jl</code>.
+    </div>
+  </section>
 
   <!-- ══ CREATE A PACKAGE + REVISE ════════════════════════════ -->
   <section class="section" id="pkg-create">
-    <h2>Create Your First Julia Package — <code>juliaPDEs</code></h2>
+    <h2><span class="step-badge">Step 6</span>Create Your First Julia Package — <code>juliaPDEs</code></h2>
     <p>
       Up to now we have been adding packages from the registry — using
       other people's code. Now we make our <em>own</em> package. A
@@ -1316,12 +1360,12 @@ isfinite(1.0)  # true</code></pre>
 
     <h3>What we will build in this section</h3>
     <p>
-      In the rest of Step 4.5 we generate a fresh package called
+      In the rest of Step 6 we generate a fresh package called
       <code>juliaPDEs</code> and add three solvers — heat, wave, and
       Navier–Stokes — each in its own file under <code>src/</code>. By
       the end you will have the same layout that ships in the
       <code>juliaPDEs/</code> folder of this repo, plus the
-      Revise + tests workflow that makes Step 5 painless.
+      Revise + tests workflow that makes Step 7 painless.
     </p>
 
     <div class="callout tip">
@@ -1856,20 +1900,18 @@ All tests passed.</pre>
     </div>
 
     <div class="callout info">
-      <strong>Recommended project layout for Step 5 onward</strong>
+      <strong>Recommended project layout for Step 7 onward</strong>
       Keep using the <code>juliaPDEs</code> package you just built — add each
-      new solver from Step 5 as a separate <code>src/</code> file, include it
+      new solver from Step 7 as a separate <code>src/</code> file, include it
       from <code>src/juliaPDEs.jl</code>, and export the entry point.
       This way you can call <code>solve_heat_1d()</code> from the REPL,
       from tests, and from Slurm job scripts — all with the same import.
     </div>
   </section>
 
-  <hr class="divider" />
-
   <!-- ══ STEP 5 ══════════════════════════════════════════════ -->
   <section class="section" id="step5">
-    <h2><span class="step-badge">Step 5</span>The PDE Solving Workflow</h2>
+    <h2><span class="step-badge">Step 7</span>The PDE Solving Workflow</h2>
     <p>
       Every PDE problem you will solve in this guide follows the same
       five-stage pipeline:
@@ -1954,7 +1996,7 @@ fig_pde_pipeline()</code></pre>
 
   <!-- 5.1 Classification -->
   <section class="section" id="step5-model">
-    <h3>5.1 Classify the PDE before writing a single line</h3>
+    <h3>7.1 Classify the PDE before writing a single line</h3>
     <p>
       Before discretising anything, decide what <em>kind</em> of PDE you
       are looking at. The classification matters because it tells you
@@ -1981,8 +2023,8 @@ fig_pde_pipeline()</code></pre>
       <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
         <strong>Figure 2.</strong> The four major PDE families and their
         prototype equations. The classification you pick determines
-        which time scheme is allowed (Step 5.2) and which solver to use
-        (Step 5.4).
+        which time scheme is allowed (Step 7.2) and which solver to use
+        (Step 7.4).
       </figcaption>
     </figure>
 
@@ -2031,7 +2073,7 @@ fig_pde_types()</code></pre>
        5.2  DISCRETIZATION RULES
        ══════════════════════════════════════════════════════════ -->
   <section class="section" id="step5-discret">
-    <h3>5.2 Two rules that appear in every PDE solver</h3>
+    <h3>7.2 Two rules that appear in every PDE solver</h3>
     <p>
       A computer cannot work with continuous functions $u(x, t)$. The
       first job of any numerical method is to replace those continuous
@@ -2244,7 +2286,7 @@ u[2:end-1] .+= dt .* (right_side)
             <span class="deriv-panel-label">Discrete form</span>
             $$\alpha\,\frac{\partial^2 u}{\partial x^2} \;\approx\; \frac{\alpha}{\Delta x^2}\!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
             <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
-              Identical to Rule 1 from Section 5.2 — just scaled by $\alpha / \Delta x^2$.
+              Identical to Rule 1 from Section 7.2 — just scaled by $\alpha / \Delta x^2$.
             </p>
           </div>
           <div class="deriv-code-panel">
@@ -2373,7 +2415,7 @@ plot(x, u, xlabel="x", ylabel="u(x,T)", title="Heat equation  T=1.0", lw=2)</cod
         How this figure was generated (Julia)
       </summary>
       <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
-        Uses the same <code>solve_heat_1d</code> as in Step 4.5, returning
+        Uses the same <code>solve_heat_1d</code> as in Step 6, returning
         the time history as well as the final state.
       </p>
       <div class="code-block" style="margin-top:10px;">
@@ -2993,7 +3035,7 @@ fig_poisson_equation()</code></pre>
       below walks the standard projection-method recipe; in our actual
       <code>juliaPDEs</code> package we hand the heavy lifting to
       <code>Oceananigans.jl</code> rather than rewriting it ourselves
-      (see Step 4.5.6).
+      (see Step 6.6).
     </p>
 
     <div class="deriv-flow">
@@ -3507,7 +3549,7 @@ rhs[:, end] .+= r .* ω[2:N-1, N]                       # top lid (moving)
         diffusion + explicit convection). The implicit diffusion lifts
         the stability constraint to the convective CFL only, so we can
         take far larger time steps than a fully explicit scheme. The
-        package's <code>solve_navier_stokes</code> in Step 4.5.6 uses
+        package's <code>solve_navier_stokes</code> in Step 6.6 uses
         Oceananigans for the same problem; this version is included
         here so the figure script is self-contained.
       </p>
@@ -3635,7 +3677,7 @@ fig_navier_stokes()</code></pre>
 
   <!-- 5.4 Verify -->
   <section class="section" id="step5-verify">
-    <h3>5.4 Verify — Convergence Study</h3>
+    <h3>7.4 Verify — Convergence Study</h3>
     <p>
       A solver that runs without crashing is not the same as a correct
       solver. The single most powerful sanity check in numerical analysis
@@ -3752,11 +3794,9 @@ fig_convergence_study()</code></pre>
     </details>
   </section>
 
-  <hr class="divider" />
-
   <!-- ══ 5.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
   <section class="section" id="step5-gmsh">
-    <h3>5.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
+    <h3>7.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
 
     <h4>Why structured grids are not enough</h4>
     <p>
@@ -4552,11 +4592,9 @@ end</code></pre>
     </ul>
   </section>
 
-  <hr class="divider" />
-
   <!-- ══ STEP 6 ══════════════════════════════════════════════ -->
   <section class="section" id="step6">
-    <h2><span class="step-badge">Step 6</span>Package Design Patterns: Structs, Dispatch &amp; Plots</h2>
+    <h2><span class="step-badge">Step 8</span>Package Design Patterns: Structs, Dispatch &amp; Plots</h2>
     <p>
       A well-designed Julia package separates three concerns into three
       types: the <em>grid</em> (where), the <em>problem</em> (what), and
@@ -4567,7 +4605,7 @@ end</code></pre>
       scratch to show that workflow.
     </p>
 
-    <h3 id="step6-arch">6.1 The Three-Type Architecture</h3>
+    <h3 id="step6-arch">8.1 The Three-Type Architecture</h3>
     <p>
       Grid resolution, physical parameters, and computed results change at
       different rates and for different reasons. Separating them into their
@@ -4586,7 +4624,7 @@ end</code></pre>
       </table>
     </div>
 
-    <h3 id="step6-grid">6.2 The Grid Struct</h3>
+    <h3 id="step6-grid">8.2 The Grid Struct</h3>
     <p>
       <code>Grid1D</code> stores everything about the spatial domain.
       Computed fields (<code>dx</code>, <code>x</code>) are derived from
@@ -4606,7 +4644,7 @@ end</code></pre>
 end</code></pre>
     </div>
 
-    <h3 id="step6-prob">6.3 Problem Structs</h3>
+    <h3 id="step6-prob">8.3 Problem Structs</h3>
     <p>
       Each physics model gets its own struct. Both embed a
       <code>Grid1D</code> so the solver can always reach the mesh through
@@ -4631,7 +4669,7 @@ Base.@kwdef struct WaveProblem
 end</code></pre>
     </div>
 
-    <h3 id="step6-solve">6.4 The Solution Type and solve() Dispatch</h3>
+    <h3 id="step6-solve">8.4 The Solution Type and solve() Dispatch</h3>
     <p>
       <code>Solution1D</code> is parameterised by the problem type
       <code>P</code> so that <code>plot()</code> can dispatch on it at
@@ -4675,7 +4713,7 @@ function solve(prob::WaveProblem)
 end</code></pre>
     </div>
 
-    <h3 id="step6-plot">6.5 Plot Dispatch in the Project Style</h3>
+    <h3 id="step6-plot">8.5 Plot Dispatch in the Project Style</h3>
     <p>
       Extending <code>Plots.plot</code> for your own types uses the same
       dispatch pattern. <strong>Import</strong> the function first (not
@@ -4709,7 +4747,7 @@ function plot(sol::Solution1D{WaveProblem}; kwargs...)
 end</code></pre>
     </div>
 
-    <h3 id="step6-layout">6.6 The Full Package Layout</h3>
+    <h3 id="step6-layout">8.6 The Full Package Layout</h3>
     <p>
       Splitting the four concerns into four files keeps each file under
       200 lines and lets you add new solvers without touching the others.
@@ -4744,7 +4782,7 @@ export Grid1D, HeatProblem, WaveProblem, Solution1D, solve
 end # module PDESolvers</code></pre>
     </div>
 
-    <h3>6.7 Calling the Package</h3>
+    <h3>8.7 Calling the Package</h3>
     <p>
       With the types and dispatch in place, switching between physics models
       is a one-word change at the call site — the grid, the
@@ -4770,77 +4808,9 @@ savefig("wave_solution.png")</code></pre>
     </div>
   </section>
 
-  <hr class="divider" />
-
-  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
-  <section class="section" id="step7">
-    <h2><span class="step-badge">Step 7</span>Configure VS Code for Julia + WSL</h2>
-
-    <h3>Why VS Code?</h3>
-    <p>
-      You can absolutely write Julia in any editor — Vim, Emacs, plain
-      <code>nano</code>. We recommend <strong>VS Code</strong> because of
-      one specific feature: it can <em>connect</em> seamlessly to your
-      WSL Ubuntu (and later, to the cluster over SSH) and edit files
-      there as if they were local. The editor runs on Windows, the
-      language server and the Julia process run inside WSL — best of
-      both worlds. Setup is a one-time, ~5-minute job.
-    </p>
-
-    <h3>7.1 Install the right extensions</h3>
-    <p>
-      Open the Extensions sidebar (Ctrl+Shift+X) and install these four
-      from Microsoft's marketplace. Each does exactly one job:
-    </p>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Extension</th><th>Purpose</th></tr></thead>
-        <tbody>
-          <tr><td><strong>WSL</strong></td><td>Lets VS Code "open a folder in WSL" — runs the editor's backend inside Linux so paths, terminals, and Julia all match the cluster.</td></tr>
-          <tr><td><strong>Julia</strong></td><td>Adds syntax highlighting, code completion (IntelliSense), inline error reporting, and an integrated REPL inside VS Code.</td></tr>
-          <tr><td><strong>Jupyter</strong></td><td>Lets you open <code>.ipynb</code> notebooks and run them with a Julia kernel — useful for exploratory analysis.</td></tr>
-          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 8).</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <h3>7.2 Open your package in WSL mode</h3>
-    <p>
-      Press <kbd>F1</kbd> (or <kbd>Ctrl+Shift+P</kbd>) to open the command
-      palette, type <em>"WSL: Open Folder in WSL"</em>, then point to
-      <code>~/projects/julia-docx-tutorial/juliaPDEs</code>. The bottom-
-      left status bar should now say <em>WSL: Ubuntu</em>. Open the
-      integrated terminal (Ctrl+`) — you are inside WSL, ready to run
-      <code>julia --project=.</code> exactly as in Step 4.5.
-    </p>
-
-    <h3>7.3 Pluto.jl — reactive notebooks</h3>
-    <p>
-      <strong>Pluto.jl</strong> is a Julia-native alternative to Jupyter.
-      The killer feature: cells are <em>reactive</em> — change a variable
-      definition in one cell and every cell that depends on it
-      automatically re-runs in the right order. There are no hidden
-      out-of-order states. Great for live exploration of PDE parameters
-      with sliders:
-    </p>
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">using Pkg; Pkg.add(["Pluto", "PlutoUI"])
-using Pluto
-Pluto.run()    # opens at localhost:1234</code></pre>
-    </div>
-    <p>
-      Your default browser opens a Pluto landing page; create a new
-      notebook or open <code>pde_explorer.jl</code> from this repo to see
-      the heat / wave / Poisson examples with parameter sliders.
-    </p>
-  </section>
-
-  <hr class="divider" />
-
   <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
   <section class="section" id="step8">
-    <h2><span class="step-badge">Step 8</span>Connect to the HPC Cluster</h2>
+    <h2><span class="step-badge">Step 9</span>Connect to the HPC Cluster</h2>
 
     <h3>What is SSH and why do we need keys?</h3>
     <p>
@@ -4870,7 +4840,7 @@ Pluto.run()    # opens at localhost:1234</code></pre>
       it, never commit it to git. The public key is safe to hand out.
     </p>
 
-    <h3>7.1 Generate a key pair and install it on the cluster</h3>
+    <h3>9.1 Generate a key pair and install it on the cluster</h3>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-bash">ssh-keygen -t ed25519 -C "your_email@example.com"
@@ -4898,7 +4868,7 @@ module load julia/1.10 && julia --version</code></pre>
         the 1.10 LTS.</li>
     </ul>
 
-    <h3>7.2 Sync your project to the cluster</h3>
+    <h3>9.2 Sync your project to the cluster</h3>
     <p>
       <strong>rsync</strong> is the workhorse for moving files between
       machines. Unlike <code>scp</code>, it transfers only the changed
@@ -4934,11 +4904,9 @@ ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instant
     </div>
   </section>
 
-  <hr class="divider" />
-
   <!-- ══ STEP 9 ══════════════════════════════════════════════ -->
   <section class="section" id="step9">
-    <h2><span class="step-badge">Step 9</span>Submitting Julia Jobs with Slurm</h2>
+    <h2><span class="step-badge">Step 10</span>Submitting Julia Jobs with Slurm</h2>
 
     <h3>What is Slurm and why do we use it?</h3>
     <p>
@@ -4971,7 +4939,7 @@ ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instant
       </table>
     </div>
 
-    <h3>8.1 Anatomy of a Slurm job script</h3>
+    <h3>10.1 Anatomy of a Slurm job script</h3>
     <p>
       A job script is just a normal bash script with extra
       <code>#SBATCH</code> comment lines at the top. Slurm parses those
@@ -5011,13 +4979,13 @@ julia --threads=4 --project=. heat_equation.jl</code></pre>
     <p>The two non-<code>#SBATCH</code> lines run on the allocated node:</p>
     <ul>
       <li><code>module load julia/1.10</code> — make the cluster's Julia
-        installation available (Step 8 covered the module system).</li>
+        installation available (Step 9 covered the module system).</li>
       <li><code>julia --threads=4 --project=. heat_equation.jl</code> —
         start Julia with 4 threads, in your project's environment, and
         run the script. We will see how to use those threads next.</li>
     </ul>
 
-    <h3>8.2 Threading inside Julia</h3>
+    <h3>10.2 Threading inside Julia</h3>
     <p>
       <code>--threads=N</code> tells Julia how many threads to make
       available; <code>--cpus-per-task=N</code> tells Slurm how many
@@ -5062,9 +5030,179 @@ end</code></pre>
       to inspect memory and time used after the fact.
     </div>
   </section>
+  <!-- ══ STEP — SHARE YOUR CODE WITH GIT & GITHUB ════════════════ -->
+  <section class="section" id="step-git">
+    <h2>Share your code with Git &amp; GitHub</h2>
+    <p>
+      You now have a working Julia project with PDE solvers and an HPC job
+      script. The last step is to put your code under <strong>version
+      control</strong> with <strong>Git</strong>, and push a copy to
+      <strong>GitHub</strong> so you can access it from anywhere (including the
+      cluster) and share it with classmates or your advisor.
+    </p>
+
+    <div class="callout info">
+      <strong>What is Git, in one sentence?</strong>
+      Git records snapshots of your project over time so you can see what
+      changed, undo mistakes, and collaborate without emailing zip files.
+      <strong>GitHub</strong> is a website that hosts those snapshots online.
+    </div>
+
+    <h3>1. Install Git (inside WSL)</h3>
+    <p>Open your Ubuntu terminal and run:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">sudo apt update
+sudo apt install -y git
+git --version</code></pre>
+    </div>
+    <p>
+      The last command should print something like <code>git version 2.43.0</code>.
+      That confirms Git is installed.
+    </p>
+
+    <h3>2. Tell Git who you are (one-time setup)</h3>
+    <p>
+      Every snapshot is stamped with your name and email. Set them once and
+      Git remembers them for every project on this computer:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git config --global user.name  "Your Name"
+git config --global user.email "you@example.com"</code></pre>
+    </div>
+    <p>
+      Use the same email as your GitHub account when you create one in step 6.
+    </p>
+
+    <h3>3. Initialise the repo in your project folder</h3>
+    <p>
+      Go to the folder that holds your Julia project (the one with
+      <code>Project.toml</code>) and turn it into a Git repository:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">cd ~/projects/julia-docx-tutorial   # adjust to your folder
+git init
+git status</code></pre>
+    </div>
+    <p>
+      <code>git init</code> creates a hidden <code>.git/</code> folder where Git
+      stores all its history. <code>git status</code> shows every file Git can
+      see; right now they will all be listed as <em>untracked</em>.
+    </p>
+
+    <h3>4. Tell Git which files to ignore</h3>
+    <p>
+      You do <strong>not</strong> want to commit generated PNG figures, the
+      large <code>.docx</code>, Julia&rsquo;s package cache, or editor temp
+      files. Create a <code>.gitignore</code> file at the top of the project
+      with this content:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash"># Julia
+Manifest.toml
+*.jl.cov
+*.jl.mem
+.julia/
+
+# Generated artifacts
+output/
+site/output/figures/
+*.docx
+*.png
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp</code></pre>
+    </div>
+    <p>
+      Each line is a pattern. Anything matching is hidden from Git. You can
+      always remove a line later if you decide you do want to track that file.
+    </p>
+
+    <h3>5. Make your first commit</h3>
+    <p>
+      A <strong>commit</strong> is a labelled snapshot of every file currently
+      staged. Stage all files, then commit with a short message:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git add .
+git status                          # confirm what is staged
+git commit -m "Initial project: Julia PDE solvers and setup guide"</code></pre>
+    </div>
+    <p>
+      Git replies with something like
+      <code>[main (root-commit) 9e4c42c] Initial project ...</code>. That hash
+      is the snapshot&rsquo;s unique ID; you can always come back to it later.
+    </p>
+
+    <div class="callout tip">
+      <strong>Good commit messages</strong>
+      Write what you did and <em>why</em>, in the present tense:
+      &ldquo;Add heat-equation solver and convergence test&rdquo; is better
+      than &ldquo;changes&rdquo; or &ldquo;wip&rdquo;.
+    </div>
+
+    <h3>6. Create a GitHub account and an empty repository</h3>
+    <ol>
+      <li>Go to <a href="https://github.com" target="_blank" rel="noopener">github.com</a> and sign up (free).</li>
+      <li>Click <strong>+ → New repository</strong> in the top-right.</li>
+      <li>
+        Name it (e.g. <code>julia-pde-tutorial</code>), keep it
+        <strong>public</strong> or <strong>private</strong> as you prefer, and
+        <strong>do not</strong> tick &ldquo;Add a README&rdquo; or
+        &ldquo;Add .gitignore&rdquo; — your local folder already has those.
+      </li>
+      <li>Click <strong>Create repository</strong>. GitHub shows a page with the URL of your new (empty) repo.</li>
+    </ol>
+
+    <h3>7. Connect your local repo to GitHub and push</h3>
+    <p>
+      On the GitHub repo page, copy the HTTPS URL (looks like
+      <code>https://github.com/&lt;you&gt;/julia-pde-tutorial.git</code>).
+      Then in your terminal:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git branch -M main
+git remote add origin https://github.com/&lt;your-username&gt;/julia-pde-tutorial.git
+git push -u origin main</code></pre>
+    </div>
+    <p>
+      The first time you push, GitHub will ask for your username and a
+      <strong>personal access token</strong> (PAT) instead of a password. Create
+      one at
+      <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a>
+      → <em>Generate new token (classic)</em>, give it the
+      <code>repo</code> scope, and paste it where Git asks for the password.
+      Git will cache it so you don&rsquo;t have to enter it again.
+    </p>
+
+    <h3>8. Day-to-day loop</h3>
+    <p>From now on, every time you change something you want to keep:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git status                          # what changed?
+git add path/to/file.jl             # stage specific files (or use "git add ." for all)
+git commit -m "Fix CFL bug in wave solver"
+git push                            # send the new commits to GitHub</code></pre>
+    </div>
+
+    <div class="callout success">
+      <strong>You’re done.</strong>
+      Refresh your GitHub repo page in the browser — you should see every
+      file from your project, your commit message at the top, and a clickable
+      history. From here you can <code>git clone</code> the same repo on the
+      HPC cluster and run the exact same code there.
+    </div>
+  </section>
 
   <footer>
-    Julia for HPC — Student Setup Guide &nbsp;·&nbsp; MIT License
+    Julia for HPC — Student Setup Guide &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; v0.1.0
   </footer>
 
 </div>

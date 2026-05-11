@@ -1082,8 +1082,18 @@ function build_docx()
                ["juliaup update",        "Update everything"]])
     add_page_break()
 
+    # ─── STEP 7: VS CODE ────────────────────────────────────────────────
+    add_heading("Step 3 — Configure VS Code for Julia + WSL", 1)
+    add_para("Install these VS Code extensions:")
+    add_table(["Extension", "Purpose"],
+              [["WSL",            "Connect VS Code to WSL"],
+               ["Julia",          "Syntax, IntelliSense, REPL"],
+               ["Jupyter",        "Run notebooks with Julia kernel"],
+               ["Remote — SSH",   "Connect to HPC cluster"]])
+    add_page_break()
+
     # ─── STEP 3: PACKAGES ───────────────────────────────────────────────
-    add_heading("Step 3 — Installing Julia Packages", 1)
+    add_heading("Step 4 — Installing Julia Packages", 1)
     add_para("Julia's package manager (Pkg) is built into the language. " *
              "Press ] in the REPL to enter package mode.")
     add_heading("3.1  Project Environments (best practice)", 2)
@@ -1096,7 +1106,7 @@ function build_docx()
     add_page_break()
 
     # ─── STEP 4: PDE PACKAGES ───────────────────────────────────────────
-    add_heading("Step 4 — Key Julia Packages for PDE Solving", 1)
+    add_heading("Step 5 — Key Julia Packages for PDE Solving", 1)
     add_table(["Package", "Use case"],
               [["LinearAlgebra (stdlib)",     "Dense matrix ops"],
                ["SparseArrays (stdlib)",      "Sparse PDE matrices"],
@@ -1112,7 +1122,7 @@ function build_docx()
     add_page_break()
 
     # ─── STEP 4.5: BUILD JULIAPDES PACKAGE ──────────────────────────────
-    add_heading("Step 4.5 — Build the juliaPDEs Package", 1)
+    add_heading("Step 6 — Build the juliaPDEs Package (was Step 4.5)", 1)
     add_para("Before tackling the worked examples in Step 5, package the " *
              "code into a real Julia package called juliaPDEs. The same " *
              "module — with src/heat.jl, src/wave.jl, and " *
@@ -1340,7 +1350,7 @@ function build_docx()
     add_page_break()
 
     # ─── STEP 5: PDE WORKFLOW ───────────────────────────────────────────
-    add_heading("Step 5 — The PDE Solving Workflow", 1)
+    add_heading("Step 7 — The PDE Solving Workflow (was Step 5)", 1)
     add_para("Solving any PDE follows the same five-stage pipeline. " *
              "Errors at early stages cascade through everything that follows.")
 
@@ -1583,7 +1593,7 @@ function build_docx()
     add_page_break()
 
     # ─── STEP 6: PACKAGE DESIGN PATTERNS ────────────────────────────────
-    add_heading("Step 6 — Package Design Patterns: Structs, Dispatch & Plots", 1)
+    add_heading("Step 8 — Package Design Patterns: Structs, Dispatch & Plots (was Step 6)", 1)
     add_para("A well-designed Julia package separates three concerns into three " *
              "types: the grid (where), the problem (what), and the solution " *
              "(result). Multiple dispatch then lets you write one function name " *
@@ -1755,18 +1765,8 @@ function build_docx()
 
     add_page_break()
 
-    # ─── STEP 7: VS CODE ────────────────────────────────────────────────
-    add_heading("Step 7 — Configure VS Code for Julia + WSL", 1)
-    add_para("Install these VS Code extensions:")
-    add_table(["Extension", "Purpose"],
-              [["WSL",            "Connect VS Code to WSL"],
-               ["Julia",          "Syntax, IntelliSense, REPL"],
-               ["Jupyter",        "Run notebooks with Julia kernel"],
-               ["Remote — SSH",   "Connect to HPC cluster"]])
-    add_page_break()
-
     # ─── STEP 8: HPC SSH ────────────────────────────────────────────────
-    add_heading("Step 8 — Connect to the HPC Cluster", 1)
+    add_heading("Step 9 — Connect to the HPC Cluster", 1)
     add_code(["ssh-keygen -t ed25519 -C \"your_email@example.com\"",
               "ssh-copy-id user@cluster.example.edu",
               "ssh user@cluster.example.edu",
@@ -1779,7 +1779,7 @@ function build_docx()
     add_page_break()
 
     # ─── STEP 9: SLURM ──────────────────────────────────────────────────
-    add_heading("Step 9 — Submitting Julia PDE Jobs with Slurm", 1)
+    add_heading("Step 10 — Submitting Julia PDE Jobs with Slurm", 1)
     add_table(["Command", "Action"],
               [["sbatch job.sh",    "Submit job"],
                ["squeue -u \$USER", "Show your jobs"],
@@ -1806,6 +1806,113 @@ function build_docx()
                ["SSH publickey denied",    "Re-run ssh-copy-id; ask instructor"],
                ["Slurm OOM kill",          "Increase --mem or reduce N"],
                ["CFL instability (NaN)",   "Reduce dt; check stability condition"]])
+
+    add_page_break()
+    # ─── STEP 11: GIT & GITHUB ──────────────────────────────────────────
+    add_heading("Step 11 — Share Your Code with Git & GitHub", 1)
+    add_para("You now have a working Julia project with PDE solvers and a " *
+             "Slurm job script. The last step is to put your code under " *
+             "version control with Git, and push a copy to GitHub so you can " *
+             "access it from anywhere (including the HPC cluster) and share " *
+             "it with classmates or your advisor.")
+    add_para("What is Git? Git records snapshots of your project over time " *
+             "so you can see what changed, undo mistakes, and collaborate " *
+             "without emailing zip files. GitHub is a website that hosts " *
+             "those snapshots online.")
+
+    add_heading("11.1  Install Git (inside WSL)", 2)
+    add_para("Open your Ubuntu terminal and run:")
+    add_code(["sudo apt update",
+              "sudo apt install -y git",
+              "git --version   # should print: git version 2.43.x or similar"])
+
+    add_heading("11.2  Tell Git who you are (one-time setup)", 2)
+    add_para("Every snapshot is stamped with your name and email. Set them " *
+             "once and Git remembers them for every project on this computer.")
+    add_code(["git config --global user.name  \"Your Name\"",
+              "git config --global user.email \"you@example.com\""])
+    add_para("Use the same email as your GitHub account when you create one " *
+             "in step 11.6.")
+
+    add_heading("11.3  Initialise the repo in your project folder", 2)
+    add_para("Go to the folder that holds your Julia project (the one with " *
+             "Project.toml) and turn it into a Git repository:")
+    add_code(["cd ~/projects/julia-docx-tutorial   # adjust to your folder",
+              "git init",
+              "git status"])
+    add_para("git init creates a hidden .git/ folder where Git stores all " *
+             "history. git status shows every file Git can see; right now " *
+             "they will all be listed as untracked.")
+
+    add_heading("11.4  Tell Git which files to ignore", 2)
+    add_para("You do NOT want to commit generated PNG figures, the large " *
+             ".docx, Julia's package cache, or editor temp files. Create a " *
+             "file named .gitignore at the top of the project with this " *
+             "content (one pattern per line):")
+    add_code(["# Julia",
+              "Manifest.toml",
+              "*.jl.cov",
+              "*.jl.mem",
+              ".julia/",
+              "",
+              "# Generated artifacts",
+              "output/",
+              "site/output/figures/",
+              "*.docx",
+              "*.png",
+              "",
+              "# OS / editor",
+              ".DS_Store",
+              ".vscode/",
+              "*.swp"])
+    add_para("Anything matching one of these patterns is hidden from Git. " *
+             "You can always remove a line later if you decide you do want " *
+             "to track that file.")
+
+    add_heading("11.5  Make your first commit", 2)
+    add_para("A commit is a labelled snapshot of every file currently staged. " *
+             "Stage all files, then commit with a short message:")
+    add_code(["git add .",
+              "git status                          # confirm what is staged",
+              "git commit -m \"Initial project: Julia PDE solvers and setup guide\""])
+    add_para("Git replies with something like '[main (root-commit) 9e4c42c] " *
+             "Initial project ...'. That hash is the snapshot's unique ID; " *
+             "you can always come back to it later.")
+    add_para("Good commit messages describe what you did and why, in the " *
+             "present tense. 'Add heat-equation solver and convergence test' " *
+             "is better than 'changes' or 'wip'.")
+
+    add_heading("11.6  Create a GitHub account and an empty repository", 2)
+    add_bullet("Go to https://github.com and sign up (free).")
+    add_bullet("Click + → New repository in the top-right corner.")
+    add_bullet("Name it (for example julia-pde-tutorial), keep it public or private as you prefer.")
+    add_bullet("Do NOT tick 'Add a README' or 'Add .gitignore' — your local folder already has those.")
+    add_bullet("Click Create repository. GitHub shows a page with the URL of your new (empty) repo.")
+
+    add_heading("11.7  Connect your local repo to GitHub and push", 2)
+    add_para("On the GitHub repo page, copy the HTTPS URL (looks like " *
+             "https://github.com/<you>/julia-pde-tutorial.git). Then in your " *
+             "terminal:")
+    add_code(["git branch -M main",
+              "git remote add origin https://github.com/<your-username>/julia-pde-tutorial.git",
+              "git push -u origin main"])
+    add_para("The first time you push, GitHub will ask for your username and " *
+             "a personal access token (PAT) instead of a password. Create one " *
+             "at https://github.com/settings/tokens → Generate new token " *
+             "(classic), give it the 'repo' scope, and paste it where Git " *
+             "asks for the password. Git will cache it so you don't have to " *
+             "enter it again.")
+
+    add_heading("11.8  Day-to-day loop", 2)
+    add_para("From now on, every time you change something you want to keep:")
+    add_code(["git status                          # what changed?",
+              "git add path/to/file.jl             # stage specific files (or 'git add .' for all)",
+              "git commit -m \"Fix CFL bug in wave solver\"",
+              "git push                            # send the new commits to GitHub"])
+    add_para("Refresh your GitHub repo page in the browser — you should see " *
+             "every file from your project, your commit message at the top, " *
+             "and a clickable history. From here you can 'git clone' the " *
+             "same repo on the HPC cluster and run the exact same code there.")
 
     # ─── SAVE ────────────────────────────────────────────────────────────
     out_path = joinpath(CFG.output_dir, CFG.docx_name)
