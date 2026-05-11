@@ -1582,8 +1582,181 @@ function build_docx()
 
     add_page_break()
 
-    # ─── STEP 6: VS CODE ────────────────────────────────────────────────
-    add_heading("Step 6 — Configure VS Code for Julia + WSL", 1)
+    # ─── STEP 6: PACKAGE DESIGN PATTERNS ────────────────────────────────
+    add_heading("Step 6 — Package Design Patterns: Structs, Dispatch & Plots", 1)
+    add_para("A well-designed Julia package separates three concerns into three " *
+             "types: the grid (where), the problem (what), and the solution " *
+             "(result). Multiple dispatch then lets you write one function name " *
+             "— solve, plot — and Julia picks the right method automatically " *
+             "based on which types you pass in. This section builds a minimal " *
+             "PDESolvers package from scratch to show that workflow.")
+
+    add_heading("6.1  The Three-Type Architecture", 2)
+    add_para("Grid resolution, physical parameters, and computed results change " *
+             "at different rates and for different reasons. Separating them into " *
+             "their own types makes it trivial to refine the mesh, swap the " *
+             "boundary condition, or compare two physics models without rewriting " *
+             "the solver logic:")
+    add_table(["Type",        "Holds",                         "Changes when"],
+              [["Grid1D",     "n, dx, x array",                "you want finer resolution"],
+               ["HeatProblem","α, T, u0, a Grid1D",            "you change the physics or IC"],
+               ["Solution1D", "x, u, t, the problem reference","solve() returns one of these"]])
+
+    add_heading("6.2  The Grid Struct", 2)
+    add_para("Grid1D stores everything about the spatial domain. Computed fields " *
+             "(dx, x) are derived from n and L so callers cannot accidentally " *
+             "create an inconsistent grid. Base.@kwdef generates a keyword " *
+             "constructor with defaults — Grid1D() gives a 200-point unit " *
+             "interval and Grid1D(n=800, L=2.0) overrides only what you need:")
+    add_code(["# src/grids.jl",
+              "Base.@kwdef struct Grid1D",
+              "    n  :: Int             = 200",
+              "    L  :: Float64         = 1.0",
+              "    dx :: Float64         = L / (n + 1)",
+              "    x  :: Vector{Float64} = collect(range(dx, L - dx, length=n))",
+              "end"])
+
+    add_heading("6.3  Problem Structs", 2)
+    add_para("Each physics model gets its own struct. Both embed a Grid1D so " *
+             "the solver can always reach the mesh through the problem — no " *
+             "extra arguments needed. Greek-letter field names (α, c) match " *
+             "the mathematical notation used in the PDE:")
+    add_code(["# src/problems.jl",
+              "Base.@kwdef struct HeatProblem",
+              "    grid :: Grid1D   = Grid1D()",
+              "    α    :: Float64  = 0.01              # thermal diffusivity",
+              "    T    :: Float64  = 1.0               # final time",
+              "    u0   :: Function = x -> exp(-100*(x - 0.5)^2)",
+              "end",
+              "",
+              "Base.@kwdef struct WaveProblem",
+              "    grid :: Grid1D   = Grid1D()",
+              "    c    :: Float64  = 1.0               # wave speed",
+              "    T    :: Float64  = 1.5",
+              "    u0   :: Function = x -> sin.(π .* x)",
+              "end"])
+    add_page_break()
+
+    add_heading("6.4  The Solution Type and solve() Dispatch", 2)
+    add_para("Solution1D is parameterised by the problem type P so that plot() " *
+             "can dispatch on it at compile time — zero runtime cost. Two " *
+             "solve() methods share the same name; Julia selects the right one " *
+             "from the argument type alone:")
+    add_code(["# src/solvers.jl",
+              "struct Solution1D{P}",
+              "    prob :: P",
+              "    x    :: Vector{Float64}",
+              "    u    :: Vector{Float64}",
+              "    t    :: Float64",
+              "end",
+              "",
+              "function solve(prob::HeatProblem)",
+              "    g  = prob.grid",
+              "    dt = 0.4 * g.dx^2 / prob.α          # CFL: r = α·dt/dx² ≤ 0.5",
+              "    u  = prob.u0.(g.x)",
+              "    for _ in 1:ceil(Int, prob.T / dt)",
+              "        u[2:end-1] .+= (prob.α * dt / g.dx^2) .*",
+              "            (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])",
+              "    end",
+              "    return Solution1D(prob, g.x, u, prob.T)",
+              "end",
+              "",
+              "function solve(prob::WaveProblem)",
+              "    g  = prob.grid",
+              "    dt = g.dx / prob.c                  # CFL = 1 (exact for leap-frog)",
+              "    λ  = (prob.c * dt / g.dx)^2",
+              "    u_prev = prob.u0.(g.x)",
+              "    u_curr = copy(u_prev); u_next = similar(u_prev)",
+              "    for _ in 1:ceil(Int, prob.T / dt)",
+              "        u_next[2:end-1] .= 2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+",
+              "            λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1] .+ u_curr[1:end-2])",
+              "        u_next[[1,end]] .= 0.0          # Dirichlet BCs",
+              "        u_prev, u_curr, u_next = u_curr, u_next, u_prev",
+              "    end",
+              "    return Solution1D(prob, g.x, u_curr, prob.T)",
+              "end"])
+
+    add_heading("6.5  Plot Dispatch in the Project Style", 2)
+    add_para("Extending Plots.plot for your own types uses the same dispatch. " *
+             "Import the function first so you add a method to the existing " *
+             "generic rather than shadow it. The kwargs... passthrough lets " *
+             "callers override any keyword — color, linestyle, legend — without " *
+             "touching the defaults:")
+    add_code(["# src/visualization.jl",
+              "import Plots: plot",
+              "",
+              "function plot(sol::Solution1D{HeatProblem}; kwargs...)",
+              "    plot(sol.x, sol.u;",
+              "        xlabel = \"x\",",
+              "        ylabel = \"u(x,t)\",",
+              "        title  = \"Heat equation  α=$(sol.prob.α)  t=$(sol.t)\",",
+              "        lw     = 2,",
+              "        label  = \"Numerical\",",
+              "        kwargs...)",
+              "end",
+              "",
+              "function plot(sol::Solution1D{WaveProblem}; kwargs...)",
+              "    plot(sol.x, sol.u;",
+              "        xlabel = \"x\",",
+              "        ylabel = \"u(x,t)\",",
+              "        title  = \"Wave equation  c=$(sol.prob.c)  t=$(sol.t)\",",
+              "        lw     = 2,",
+              "        label  = \"Numerical\",",
+              "        kwargs...)",
+              "end"])
+    add_page_break()
+
+    add_heading("6.6  The Full Package Layout", 2)
+    add_para("Splitting the four concerns into four files keeps each file under " *
+             "200 lines and lets you include only the solver files you need. " *
+             "The module entry point is the only file that contains using and " *
+             "export — sub-files just define functions and types:")
+    add_code(["PDESolvers/",
+              "├── Project.toml",
+              "└── src/",
+              "    ├── PDESolvers.jl      # module entry — using, include, export",
+              "    ├── grids.jl           # Grid1D",
+              "    ├── problems.jl        # HeatProblem, WaveProblem",
+              "    ├── solvers.jl         # solve(::HeatProblem), solve(::WaveProblem)",
+              "    └── visualization.jl   # plot(::Solution1D{P})"])
+    add_code(["# src/PDESolvers.jl",
+              "module PDESolvers",
+              "",
+              "using Plots",
+              "",
+              "include(\"grids.jl\")",
+              "include(\"problems.jl\")",
+              "include(\"solvers.jl\")",
+              "include(\"visualization.jl\")",
+              "",
+              "export Grid1D, HeatProblem, WaveProblem, Solution1D, solve",
+              "",
+              "end # module PDESolvers"])
+
+    add_heading("6.7  Calling the Package", 2)
+    add_para("With the types and dispatch in place, switching between physics " *
+             "models is a one-word change at the call site — the grid, the " *
+             "plot call, and the output pipeline stay identical. This is the " *
+             "payoff of the three-type architecture:")
+    add_code(["using PDESolvers, Plots",
+              "",
+              "# -- Heat: 400-point grid, low diffusivity, run to T=0.5 --",
+              "grid  = Grid1D(n=400, L=2.0)",
+              "hprob = HeatProblem(grid=grid, α=0.005, T=0.5)",
+              "hsol  = solve(hprob)          # dispatches to HeatProblem method",
+              "plot(hsol)                    # dispatches to Solution1D{HeatProblem}",
+              "savefig(\"heat_solution.png\")",
+              "",
+              "# -- Wave: same grid, different physics, identical API --",
+              "wprob = WaveProblem(grid=grid, c=1.5, T=2.0)",
+              "wsol  = solve(wprob)          # dispatches to WaveProblem method",
+              "plot(wsol)                    # dispatches to Solution1D{WaveProblem}",
+              "savefig(\"wave_solution.png\")"])
+
+    add_page_break()
+
+    # ─── STEP 7: VS CODE ────────────────────────────────────────────────
+    add_heading("Step 7 — Configure VS Code for Julia + WSL", 1)
     add_para("Install these VS Code extensions:")
     add_table(["Extension", "Purpose"],
               [["WSL",            "Connect VS Code to WSL"],
@@ -1592,8 +1765,8 @@ function build_docx()
                ["Remote — SSH",   "Connect to HPC cluster"]])
     add_page_break()
 
-    # ─── STEP 7: HPC SSH ────────────────────────────────────────────────
-    add_heading("Step 7 — Connect to the HPC Cluster", 1)
+    # ─── STEP 8: HPC SSH ────────────────────────────────────────────────
+    add_heading("Step 8 — Connect to the HPC Cluster", 1)
     add_code(["ssh-keygen -t ed25519 -C \"your_email@example.com\"",
               "ssh-copy-id user@cluster.example.edu",
               "ssh user@cluster.example.edu",
@@ -1605,8 +1778,8 @@ function build_docx()
               "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instantiate()'"])
     add_page_break()
 
-    # ─── STEP 8: SLURM ──────────────────────────────────────────────────
-    add_heading("Step 8 — Submitting Julia PDE Jobs with Slurm", 1)
+    # ─── STEP 9: SLURM ──────────────────────────────────────────────────
+    add_heading("Step 9 — Submitting Julia PDE Jobs with Slurm", 1)
     add_table(["Command", "Action"],
               [["sbatch job.sh",    "Submit job"],
                ["squeue -u \$USER", "Show your jobs"],

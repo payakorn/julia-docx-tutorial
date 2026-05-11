@@ -44,10 +44,18 @@
     <a href="#pde-ns"        class="sub">→ Navier-Stokes</a>
     <a href="#step5-verify"  class="sub">5.4 Verify &amp; Converge</a>
     <a href="#step5-gmsh"    class="sub">5.5 Mesh → Matrix (Gmsh)</a>
+    <div class="section-label">Package Patterns</div>
+    <a href="#step6">Step 6 — Package Design</a>
+    <a href="#step6-arch"   class="sub">6.1 Three-type arch</a>
+    <a href="#step6-grid"   class="sub">6.2 Grid struct</a>
+    <a href="#step6-prob"   class="sub">6.3 Problem structs</a>
+    <a href="#step6-solve"  class="sub">6.4 solve() dispatch</a>
+    <a href="#step6-plot"   class="sub">6.5 Plot dispatch</a>
+    <a href="#step6-layout" class="sub">6.6 Package layout</a>
     <div class="section-label">Tooling</div>
-    <a href="#step6">Step 6 — VS Code</a>
-    <a href="#step7">Step 7 — HPC SSH</a>
-    <a href="#step8">Step 8 — Slurm Jobs</a>
+    <a href="#step7">Step 7 — VS Code</a>
+    <a href="#step8">Step 8 — HPC SSH</a>
+    <a href="#step9">Step 9 — Slurm Jobs</a>
   </nav>
 </aside>
 
@@ -171,9 +179,10 @@
     <div class="time-card"><span class="time-icon">📝</span><span class="label">Julia Basics — Functions, Arrays, Linear Algebra</span><span class="dur">20–30 min</span></div>
     <div class="time-card"><span class="time-icon">🧮</span><span class="label">Step 5 — PDE Workflow + Examples</span><span class="dur">30–60 min</span></div>
     <div class="time-card"><span class="time-icon">🔺</span><span class="label">5.5 — Gmsh: mesh → matrix</span><span class="dur">15–20 min</span></div>
-    <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 6 — Configure VS Code</span><span class="dur">5–10 min</span></div>
-    <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 7 — HPC SSH Setup</span><span class="dur">10 min</span></div>
-    <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 8 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
+    <div class="time-card"><span class="time-icon">🏗️</span><span class="label">Step 6 — Package Design Patterns</span><span class="dur">20–30 min</span></div>
+    <div class="time-card"><span class="time-icon">💻</span><span class="label">Step 7 — Configure VS Code</span><span class="dur">5–10 min</span></div>
+    <div class="time-card"><span class="time-icon">🔗</span><span class="label">Step 8 — HPC SSH Setup</span><span class="dur">10 min</span></div>
+    <div class="time-card"><span class="time-icon">⚡</span><span class="label">Step 9 — Submit Slurm Jobs</span><span class="dur">10–15 min</span></div>
     <div class="time-card" style="border-color:#1F4E79;"><span class="time-icon">🕐</span><span class="label" style="color:#1F4E79;">Total</span><span class="dur" style="font-weight:700;">~130–205 min</span></div>
   </section>
 
@@ -4547,7 +4556,225 @@ end</code></pre>
 
   <!-- ══ STEP 6 ══════════════════════════════════════════════ -->
   <section class="section" id="step6">
-    <h2><span class="step-badge">Step 6</span>Configure VS Code for Julia + WSL</h2>
+    <h2><span class="step-badge">Step 6</span>Package Design Patterns: Structs, Dispatch &amp; Plots</h2>
+    <p>
+      A well-designed Julia package separates three concerns into three
+      types: the <em>grid</em> (where), the <em>problem</em> (what), and
+      the <em>solution</em> (result). Multiple dispatch then lets you write
+      one function name — <code>solve</code>, <code>plot</code> — and Julia
+      picks the right method automatically based on which types you pass in.
+      This section builds a minimal <code>PDESolvers</code> package from
+      scratch to show that workflow.
+    </p>
+
+    <h3 id="step6-arch">6.1 The Three-Type Architecture</h3>
+    <p>
+      Grid resolution, physical parameters, and computed results change at
+      different rates and for different reasons. Separating them into their
+      own types makes it trivial to refine the mesh, swap the boundary
+      condition, or compare two physics models without rewriting the solver
+      logic:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Holds</th><th>Changes when</th></tr></thead>
+        <tbody>
+          <tr><td><code>Grid1D</code></td><td>n, dx, x array</td><td>you want finer resolution</td></tr>
+          <tr><td><code>HeatProblem</code></td><td>α, T, u0, a Grid1D</td><td>you change the physics or IC</td></tr>
+          <tr><td><code>Solution1D</code></td><td>x, u, t, the problem reference</td><td><code>solve()</code> returns one of these</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="step6-grid">6.2 The Grid Struct</h3>
+    <p>
+      <code>Grid1D</code> stores everything about the spatial domain.
+      Computed fields (<code>dx</code>, <code>x</code>) are derived from
+      <code>n</code> and <code>L</code> so callers cannot accidentally
+      create an inconsistent grid. <code>Base.@kwdef</code> generates a
+      keyword constructor with defaults — <code>Grid1D()</code> gives a
+      200-point unit interval and <code>Grid1D(n=800, L=2.0)</code>
+      overrides only what you need:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/grids.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct Grid1D
+    n  :: Int             = 200
+    L  :: Float64         = 1.0
+    dx :: Float64         = L / (n + 1)
+    x  :: Vector{Float64} = collect(range(dx, L - dx, length=n))
+end</code></pre>
+    </div>
+
+    <h3 id="step6-prob">6.3 Problem Structs</h3>
+    <p>
+      Each physics model gets its own struct. Both embed a
+      <code>Grid1D</code> so the solver can always reach the mesh through
+      the problem — no extra arguments needed. Greek-letter field names
+      (<code>α</code>, <code>c</code>) match the mathematical notation used
+      in the PDE:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/problems.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatProblem
+    grid :: Grid1D   = Grid1D()
+    α    :: Float64  = 0.01              # thermal diffusivity
+    T    :: Float64  = 1.0               # final time
+    u0   :: Function = x -> exp(-100*(x - 0.5)^2)
+end
+
+Base.@kwdef struct WaveProblem
+    grid :: Grid1D   = Grid1D()
+    c    :: Float64  = 1.0               # wave speed
+    T    :: Float64  = 1.5
+    u0   :: Function = x -> sin.(π .* x)
+end</code></pre>
+    </div>
+
+    <h3 id="step6-solve">6.4 The Solution Type and solve() Dispatch</h3>
+    <p>
+      <code>Solution1D</code> is parameterised by the problem type
+      <code>P</code> so that <code>plot()</code> can dispatch on it at
+      compile time — zero runtime cost. Two <code>solve()</code> methods
+      share the same name; Julia selects the right one from the argument
+      type alone:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/solvers.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct Solution1D{P}
+    prob :: P
+    x    :: Vector{Float64}
+    u    :: Vector{Float64}
+    t    :: Float64
+end
+
+function solve(prob::HeatProblem)
+    g  = prob.grid
+    dt = 0.4 * g.dx^2 / prob.α          # CFL: r = α·dt/dx² ≤ 0.5
+    u  = prob.u0.(g.x)
+    for _ in 1:ceil(Int, prob.T / dt)
+        u[2:end-1] .+= (prob.α * dt / g.dx^2) .*
+            (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+    end
+    return Solution1D(prob, g.x, u, prob.T)
+end
+
+function solve(prob::WaveProblem)
+    g  = prob.grid
+    dt = g.dx / prob.c                  # CFL = 1 (exact for leap-frog)
+    λ  = (prob.c * dt / g.dx)^2
+    u_prev = prob.u0.(g.x)
+    u_curr = copy(u_prev); u_next = similar(u_prev)
+    for _ in 1:ceil(Int, prob.T / dt)
+        u_next[2:end-1] .= 2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+            λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1] .+ u_curr[1:end-2])
+        u_next[[1,end]] .= 0.0          # Dirichlet BCs
+        u_prev, u_curr, u_next = u_curr, u_next, u_prev
+    end
+    return Solution1D(prob, g.x, u_curr, prob.T)
+end</code></pre>
+    </div>
+
+    <h3 id="step6-plot">6.5 Plot Dispatch in the Project Style</h3>
+    <p>
+      Extending <code>Plots.plot</code> for your own types uses the same
+      dispatch pattern. <strong>Import</strong> the function first (not
+      <code>using</code>) so you add a method to the existing generic rather
+      than shadow it. The <code>kwargs...</code> passthrough lets callers
+      override any keyword — color, linestyle, legend — without touching
+      the defaults:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/visualization.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">import Plots: plot
+
+function plot(sol::Solution1D{HeatProblem}; kwargs...)
+    plot(sol.x, sol.u;
+        xlabel = "x",
+        ylabel = "u(x,t)",
+        title  = "Heat equation  α=$(sol.prob.α)  t=$(sol.t)",
+        lw     = 2,
+        label  = "Numerical",
+        kwargs...)
+end
+
+function plot(sol::Solution1D{WaveProblem}; kwargs...)
+    plot(sol.x, sol.u;
+        xlabel = "x",
+        ylabel = "u(x,t)",
+        title  = "Wave equation  c=$(sol.prob.c)  t=$(sol.t)",
+        lw     = 2,
+        label  = "Numerical",
+        kwargs...)
+end</code></pre>
+    </div>
+
+    <h3 id="step6-layout">6.6 The Full Package Layout</h3>
+    <p>
+      Splitting the four concerns into four files keeps each file under
+      200 lines and lets you add new solvers without touching the others.
+      The module entry point is the only file that contains
+      <code>using</code> and <code>export</code> — sub-files just define
+      functions and types:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">shell</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">PDESolvers/
+├── Project.toml
+└── src/
+    ├── PDESolvers.jl      # module entry — using, include, export
+    ├── grids.jl           # Grid1D
+    ├── problems.jl        # HeatProblem, WaveProblem
+    ├── solvers.jl         # solve(::HeatProblem), solve(::WaveProblem)
+    └── visualization.jl   # plot(::Solution1D{P})</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/PDESolvers.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">module PDESolvers
+
+using Plots
+
+include("grids.jl")
+include("problems.jl")
+include("solvers.jl")
+include("visualization.jl")
+
+export Grid1D, HeatProblem, WaveProblem, Solution1D, solve
+
+end # module PDESolvers</code></pre>
+    </div>
+
+    <h3>6.7 Calling the Package</h3>
+    <p>
+      With the types and dispatch in place, switching between physics models
+      is a one-word change at the call site — the grid, the
+      <code>plot</code> call, and the output pipeline stay identical. This
+      is the payoff of the three-type architecture:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using PDESolvers, Plots
+
+# -- Heat: 400-point grid, low diffusivity, run to T=0.5 --
+grid  = Grid1D(n=400, L=2.0)
+hprob = HeatProblem(grid=grid, α=0.005, T=0.5)
+hsol  = solve(hprob)          # dispatches to HeatProblem method
+plot(hsol)                    # dispatches to Solution1D{HeatProblem}
+savefig("heat_solution.png")
+
+# -- Wave: same grid, different physics, identical API --
+wprob = WaveProblem(grid=grid, c=1.5, T=2.0)
+wsol  = solve(wprob)          # dispatches to WaveProblem method
+plot(wsol)                    # dispatches to Solution1D{WaveProblem}
+savefig("wave_solution.png")</code></pre>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
+  <section class="section" id="step7">
+    <h2><span class="step-badge">Step 7</span>Configure VS Code for Julia + WSL</h2>
 
     <h3>Why VS Code?</h3>
     <p>
@@ -4560,7 +4787,7 @@ end</code></pre>
       both worlds. Setup is a one-time, ~5-minute job.
     </p>
 
-    <h3>6.1 Install the right extensions</h3>
+    <h3>7.1 Install the right extensions</h3>
     <p>
       Open the Extensions sidebar (Ctrl+Shift+X) and install these four
       from Microsoft's marketplace. Each does exactly one job:
@@ -4572,12 +4799,12 @@ end</code></pre>
           <tr><td><strong>WSL</strong></td><td>Lets VS Code "open a folder in WSL" — runs the editor's backend inside Linux so paths, terminals, and Julia all match the cluster.</td></tr>
           <tr><td><strong>Julia</strong></td><td>Adds syntax highlighting, code completion (IntelliSense), inline error reporting, and an integrated REPL inside VS Code.</td></tr>
           <tr><td><strong>Jupyter</strong></td><td>Lets you open <code>.ipynb</code> notebooks and run them with a Julia kernel — useful for exploratory analysis.</td></tr>
-          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 7).</td></tr>
+          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 8).</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h3>6.2 Open your package in WSL mode</h3>
+    <h3>7.2 Open your package in WSL mode</h3>
     <p>
       Press <kbd>F1</kbd> (or <kbd>Ctrl+Shift+P</kbd>) to open the command
       palette, type <em>"WSL: Open Folder in WSL"</em>, then point to
@@ -4587,7 +4814,7 @@ end</code></pre>
       <code>julia --project=.</code> exactly as in Step 4.5.
     </p>
 
-    <h3>6.3 Pluto.jl — reactive notebooks</h3>
+    <h3>7.3 Pluto.jl — reactive notebooks</h3>
     <p>
       <strong>Pluto.jl</strong> is a Julia-native alternative to Jupyter.
       The killer feature: cells are <em>reactive</em> — change a variable
@@ -4611,9 +4838,9 @@ Pluto.run()    # opens at localhost:1234</code></pre>
 
   <hr class="divider" />
 
-  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
-  <section class="section" id="step7">
-    <h2><span class="step-badge">Step 7</span>Connect to the HPC Cluster</h2>
+  <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
+  <section class="section" id="step8">
+    <h2><span class="step-badge">Step 8</span>Connect to the HPC Cluster</h2>
 
     <h3>What is SSH and why do we need keys?</h3>
     <p>
@@ -4709,9 +4936,9 @@ ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instant
 
   <hr class="divider" />
 
-  <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
-  <section class="section" id="step8">
-    <h2><span class="step-badge">Step 8</span>Submitting Julia Jobs with Slurm</h2>
+  <!-- ══ STEP 9 ══════════════════════════════════════════════ -->
+  <section class="section" id="step9">
+    <h2><span class="step-badge">Step 9</span>Submitting Julia Jobs with Slurm</h2>
 
     <h3>What is Slurm and why do we use it?</h3>
     <p>
@@ -4784,7 +5011,7 @@ julia --threads=4 --project=. heat_equation.jl</code></pre>
     <p>The two non-<code>#SBATCH</code> lines run on the allocated node:</p>
     <ul>
       <li><code>module load julia/1.10</code> — make the cluster's Julia
-        installation available (Step 7 covered the module system).</li>
+        installation available (Step 8 covered the module system).</li>
       <li><code>julia --threads=4 --project=. heat_equation.jl</code> —
         start Julia with 4 threads, in your project's environment, and
         run the script. We will see how to use those threads next.</li>
