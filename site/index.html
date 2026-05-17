@@ -7987,7 +7987,21 @@ git push                            # send the new commits to GitHub</code></pre
 
   <footer>
     Julia for HPC — Student Setup Guide &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; v0.1.0
+    <div id="build-info" style="margin-top:0.5em;font-size:0.85em;opacity:0.7;">loading build info…</div>
   </footer>
+
+  <script>
+    fetch('version.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(v => {
+        const started = new Date(v.started_at).toLocaleString();
+        document.getElementById('build-info').textContent =
+          `commit ${v.commit_short} · last updated ${started}`;
+      })
+      .catch(() => {
+        document.getElementById('build-info').textContent = 'build info unavailable';
+      });
+  </script>
 
 </div>
 
