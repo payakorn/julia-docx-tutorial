@@ -1007,6 +1007,32 @@ function build_docx()
         doc.add_page_break()
     end
 
+    function add_toc()
+        p_heading = doc.add_paragraph()
+        run_h = p_heading.add_run("Table of Contents")
+        run_h.bold = true
+        run_h.font.name = "Arial"
+        run_h.font.size = Pt(22)
+        run_h.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+        p_heading.alignment = WD_ALIGN.CENTER
+
+        p = doc.add_paragraph()
+        run = p.add_run()
+        fldChar_begin = oxml.OxmlElement("w:fldChar")
+        fldChar_begin.set(oxml_ns.qn("w:fldCharType"), "begin")
+        run._r.append(fldChar_begin)
+        instrText = oxml.OxmlElement("w:instrText")
+        instrText.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        instrText.text = " TOC \\o \"1-3\" \\h \\z \\u "
+        run._r.append(instrText)
+        fldChar_sep = oxml.OxmlElement("w:fldChar")
+        fldChar_sep.set(oxml_ns.qn("w:fldCharType"), "separate")
+        run._r.append(fldChar_sep)
+        fldChar_end = oxml.OxmlElement("w:fldChar")
+        fldChar_end.set(oxml_ns.qn("w:fldCharType"), "end")
+        run._r.append(fldChar_end)
+    end
+
     # ─── TITLE PAGE ──────────────────────────────────────────────────────
     for _ in 1:3; doc.add_paragraph(); end
     add_para(CFG.doc_title; bold=true, size=36, color=(0x1F,0x4E,0x79),
@@ -1022,6 +1048,10 @@ function build_docx()
              color=(0x88,0x88,0x88), align=WD_ALIGN.CENTER)
     add_page_break()
 
+    # ─── TABLE OF CONTENTS ───────────────────────────────────────────────
+    add_toc()
+    add_page_break()
+
     # ─── OVERVIEW ───────────────────────────────────────────────────────
     add_heading("Overview & Prerequisites", 1)
     add_para("This guide walks you through setting up a complete Julia " *
@@ -1035,19 +1065,6 @@ function build_docx()
              "Poisson, and Navier-Stokes equations and a section on " *
              "unstructured meshing with Gmsh. Steps 6–8 connect to the " *
              "HPC cluster.")
-    add_heading("Time Estimate", 2)
-    add_table(["Step", "Estimated Time"],
-              [["1 — Install WSL2",                "10–15 min"],
-               ["2 — juliaup + Julia",             "5–10 min"],
-               ["3 — Install Julia Packages",      "10–15 min"],
-               ["4 — Learn PDE Packages",          "15–20 min"],
-               ["4.5 — Build juliaPDEs Package",   "20–30 min"],
-               ["5 — PDE Workflow + Examples",     "30–60 min"],
-               ["5.6 — Gmsh: mesh → matrix",       "15–20 min"],
-               ["6 — Configure VS Code",           "5–10 min"],
-               ["7 — HPC SSH Setup",               "10 min"],
-               ["8 — Submit Slurm Jobs",           "10–15 min"],
-               ["Total",                           "~130–205 min"]])
     add_page_break()
 
     # ─── STEP 1: WSL ────────────────────────────────────────────────────
@@ -1193,6 +1210,67 @@ function build_docx()
               "    return collect(x), u",
               "end"])
     add_page_break()
+
+    add_heading("Beginner Concept Check: Structs, Instances, and Functions", 3)
+    add_para("Notice how the Heat solver above uses plain keyword arguments. As " *
+             "simulations grow more complex, passing individual variables becomes " *
+             "unmanageable. Before moving to the Wave solver, let's clarify how " *
+             "custom data types solve this:")
+    add_para("1. What is a Struct? A struct is a custom composite data type that " *
+             "bundles multiple pieces of related data (called fields) together under " *
+             "a single name. Instead of passing separate variables into every " *
+             "function, we pack them into one structured container blueprint.")
+    add_para("2. How to create a Struct? We write the struct keyword followed by " *
+             "the container name, list its internal fields with their types, and end " *
+             "with end. Using the Base.@kwdef macro above it automatically writes " *
+             "a keyword constructor with convenient default values:")
+    add_code(["Base.@kwdef struct SimpleHeatConfig",
+              "    L::Float64 = 1.0       # Domain length",
+              "    α::Float64 = 0.01      # Thermal diffusivity",
+              "    N::Int     = 100       # Grid resolution",
+              "end"])
+    add_para("3. What is the variable that is the Struct (an Instance)? The code " *
+             "above is just a blueprint. To use it, we call the struct's name like " *
+             "a function to create a concrete object in computer memory, called an " *
+             "instance, and assign it to a variable. We can then read its internal " *
+             "fields using dot notation:")
+    add_code(["# Create an instance; omitted fields automatically use defaults",
+              "my_config = SimpleHeatConfig(α=0.05, N=200)",
+              "",
+              "# Access individual bundled fields using a dot (.):",
+              "println(\"Configured diffusivity: \", my_config.α)",
+              "println(\"Configured grid points: \", my_config.N)"])
+    add_para("4. How to create a Function to receive the Struct? To write a function " *
+             "that operates on our configuration, we define a function that accepts " *
+             "a single argument annotated with our custom struct type. Inside the " *
+             "function body, we use dot notation to unpack the exact fields we need:")
+    add_code(["function print_stability_limit(config::SimpleHeatConfig)",
+              "    dx = config.L / (config.N + 1)",
+              "    max_dt = 0.5 * dx^2 / config.α",
+              "    println(\"Maximum stable time step dt: \", max_dt)",
+              "end",
+              "",
+              "# Pass our struct variable into the function",
+              "print_stability_limit(my_config)"])
+    add_para("5. Structs vs. Functions: Nouns vs. Verbs. A struct holds passive state " *
+             "and data (e.g., domain dimensions, arrays, physical constants). A " *
+             "function defines active behavior and logic (e.g., loops, time-stepping, " *
+             "mathematical updates). Structs are the materials; functions are the " *
+             "machines that transform them.")
+    add_para("6. Global Scope vs. Local Scope (Crucial for Performance). Variables " *
+             "defined directly in the main script body live in the global scope. Because " *
+             "global variables can change their data type at any time, the Julia " *
+             "compiler cannot optimize them, making loops in global scope very slow. " *
+             "Variables defined inside a function body live in a local scope. The compiler " *
+             "knows their exact types, compiling local operations to extremely fast " *
+             "machine code. Best Practice: Always wrap your solver loops and computations " *
+             "inside functions!")
+    add_para("7. Where do you run these scripts? Once you write your code in a file " *
+             "(e.g., solver.jl), you can run it in three ways: (a) Terminal execution: " *
+             "run 'julia solver.jl' directly from your Linux command line. (b) REPL " *
+             "inclusion: open the Julia REPL and type 'include(\"solver.jl\")' to load " *
+             "and execute the file. (c) VS Code execution: open the file in VS Code and " *
+             "press Shift+Enter to run specific blocks interactively.")
 
     add_heading("4.5.5  Step E — The wave solver: src/wave.jl", 2)
     add_para("The wave solver groups its parameters in a WaveEquation struct " *
@@ -1611,6 +1689,66 @@ function build_docx()
               [["Grid1D",     "n, dx, x array",                "you want finer resolution"],
                ["HeatProblem","α, T, u0, a Grid1D",            "you change the physics or IC"],
                ["Solution1D", "x, u, t, the problem reference","solve() returns one of these"]])
+
+    add_heading("Beginner Concept Check: Structs, Instances, and Functions", 3)
+    add_para("If you are new to custom data types, the interaction between structs, " *
+             "variables, and functions can feel abstract. Let's clarify exactly " *
+             "how they work together:")
+    add_para("1. What is a Struct? A struct is a custom composite data type that " *
+             "bundles multiple pieces of related data (called fields) together under " *
+             "a single name. Instead of passing ten individual variables into every " *
+             "function, we pack them into one structured container blueprint.")
+    add_para("2. How to create a Struct? We write the struct keyword followed by " *
+             "the container name, list its internal fields with their types, and end " *
+             "with end. Using the Base.@kwdef macro above it automatically writes " *
+             "a keyword constructor with convenient default values:")
+    add_code(["Base.@kwdef struct SimpleHeatConfig",
+              "    L::Float64 = 1.0       # Domain length",
+              "    α::Float64 = 0.01      # Thermal diffusivity",
+              "    N::Int     = 100       # Grid resolution",
+              "end"])
+    add_para("3. What is the variable that is the Struct (an Instance)? The code " *
+             "above is just a blueprint. To use it, we call the struct's name like " *
+             "a function to create a concrete object in computer memory, called an " *
+             "instance, and assign it to a variable. We can then read its internal " *
+             "fields using dot notation:")
+    add_code(["# Create an instance; omitted fields automatically use defaults",
+              "my_config = SimpleHeatConfig(α=0.05, N=200)",
+              "",
+              "# Access individual bundled fields using a dot (.):",
+              "println(\"Configured diffusivity: \", my_config.α)",
+              "println(\"Configured grid points: \", my_config.N)"])
+    add_para("4. How to create a Function to receive the Struct? To write a function " *
+             "that operates on our configuration, we define a function that accepts " *
+             "a single argument annotated with our custom struct type. Inside the " *
+             "function body, we use dot notation to unpack the exact fields we need:")
+    add_code(["function print_stability_limit(config::SimpleHeatConfig)",
+              "    dx = config.L / (config.N + 1)",
+              "    max_dt = 0.5 * dx^2 / config.α",
+              "    println(\"Maximum stable time step dt: \", max_dt)",
+              "end",
+              "",
+              "# Pass our struct variable into the function",
+              "print_stability_limit(my_config)"])
+    add_para("5. Structs vs. Functions: Nouns vs. Verbs. A struct holds passive state " *
+             "and data (e.g., domain dimensions, arrays, physical constants). A " *
+             "function defines active behavior and logic (e.g., loops, time-stepping, " *
+             "mathematical updates). Structs are the materials; functions are the " *
+             "machines that transform them.")
+    add_para("6. Global Scope vs. Local Scope (Crucial for Performance). Variables " *
+             "defined directly in the main script body live in the global scope. Because " *
+             "global variables can change their data type at any time, the Julia " *
+             "compiler cannot optimize them, making loops in global scope very slow. " *
+             "Variables defined inside a function body live in a local scope. The compiler " *
+             "knows their exact types, compiling local operations to extremely fast " *
+             "machine code. Best Practice: Always wrap your solver loops and computations " *
+             "inside functions!")
+    add_para("7. Where do you run these scripts? Once you write your code in a file " *
+             "(e.g., solver.jl), you can run it in three ways: (a) Terminal execution: " *
+             "run 'julia solver.jl' directly from your Linux command line. (b) REPL " *
+             "inclusion: open the Julia REPL and type 'include(\"solver.jl\")' to load " *
+             "and execute the file. (c) VS Code execution: open the file in VS Code and " *
+             "press Shift+Enter to run specific blocks interactively.")
 
     add_heading("6.2  The Grid Struct", 2)
     add_para("Grid1D stores everything about the spatial domain. Computed fields " *

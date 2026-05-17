@@ -525,6 +525,87 @@ footer {
   color: #c8e0f2;
 }
 
+/* ── Inline citations ────────────────────────────────────── */
+a.cite {
+  display: inline-block;
+  font-size: 0.78rem;
+  color: #1F4E79;
+  background: #e8f0f8;
+  border: 1px solid #c4d5e6;
+  border-radius: 4px;
+  padding: 0 5px;
+  margin: 0 2px;
+  text-decoration: none;
+  vertical-align: super;
+  line-height: 1.4;
+  transition: background 0.15s;
+}
+
+a.cite:hover {
+  background: #1F4E79;
+  color: #fff;
+  border-color: #1F4E79;
+}
+
+/* ── Reference list ──────────────────────────────────────── */
+.ref-list {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #2a3a4a;
+  padding-left: 22px;
+  margin-top: 8px;
+}
+
+.ref-list li {
+  margin-bottom: 8px;
+}
+
+.ref-list em { color: #1F4E79; font-style: italic; }
+
+.ref-list a {
+  color: #2E75B6;
+  word-break: break-word;
+}
+
+.ref-list a:hover { text-decoration: underline; }
+
+/* ── Performance charts ──────────────────────────────────── */
+.perf-chart-wrap {
+  background: #f7f9fc;
+  border: 1px solid #dde6f0;
+  border-radius: 10px;
+  padding: 20px 16px 12px;
+  margin: 16px 0;
+}
+
+.perf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 12px 0;
+}
+
+.perf-table th {
+  background: #1F4E79;
+  color: #fff;
+  padding: 8px 12px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.perf-table th:first-child { text-align: left; }
+
+.perf-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid #e2eaf2;
+  text-align: center;
+  color: #2a3a4a;
+}
+
+.perf-table td:first-child { text-align: left; font-weight: 500; }
+
+.perf-table tr:nth-child(even) td { background: #f4f8fc; }
+
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 680px) {
   .deriv-panels { grid-template-columns: 1fr; }
