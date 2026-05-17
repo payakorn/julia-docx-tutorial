@@ -9,7 +9,7 @@ services:
       - .:/app
     ports:
       - "9000:9000"
-    command: sh -c "julia --project=. -e 'using Pkg; Pkg.instantiate()' && julia --project=. serv.jl 9000"
+    command: ["uv", "run", "--script", "serve.py", "9000"]
     environment:
       - PYTHONUNBUFFERED=1
 
