@@ -5,7 +5,7 @@ set -eu
 
 REPO_DIR="${REPO_DIR:-/repo}"
 BRANCH="${BRANCH:-main}"
-SERVER_CONTAINER="${SERVER_CONTAINER:-julia-docx-server}"
+SERVER_SERVICE="${SERVER_SERVICE:-server}"
 
 cd "$REPO_DIR"
 
@@ -25,6 +25,6 @@ fi
 echo "  updating $LOCAL -> $REMOTE"
 $GIT pull --ff-only --quiet origin "$BRANCH"
 
-echo "  restarting $SERVER_CONTAINER"
-docker restart "$SERVER_CONTAINER"
+echo "  rebuilding + restarting $SERVER_SERVICE"
+docker compose -f "$REPO_DIR/docker-compose.yml" up -d --build "$SERVER_SERVICE"
 echo "  done"

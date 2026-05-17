@@ -4,7 +4,7 @@
 # foreground so the container stays alive.
 set -eu
 
-apk add --no-cache --quiet git openssh-client docker-cli tzdata >/dev/null
+apk add --no-cache --quiet git openssh-client docker-cli docker-cli-compose tzdata >/dev/null
 
 CRON_SCHEDULE="${CRON_SCHEDULE:-0 6 * * *}"
 LOG_FILE="${LOG_FILE:-/var/log/updater.log}"

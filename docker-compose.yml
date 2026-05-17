@@ -40,7 +40,7 @@ services:
       - TZ=${TZ:-UTC}
       - CRON_SCHEDULE=${UPDATER_CRON:-0 6 * * *}
       - BRANCH=main
-      - SERVER_CONTAINER=julia-docx-server
+      - SERVER_SERVICE=server
     entrypoint: ["/bin/sh", "/repo/scripts/updater-entrypoint.sh"]
     depends_on:
       - server
