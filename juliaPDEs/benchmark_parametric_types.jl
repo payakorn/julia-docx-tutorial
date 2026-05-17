@@ -10,18 +10,19 @@ Base.@kwdef struct HeatEquationSlow
     N_grid::Tuple              # Abstract! Julia doesn't know the size.
     Nt::Int    = 1000          # Number of time steps (Δt = T / Nt)
     α::Float64 = 0.01
-    L::Tuple = ntuple(_ -> 1.0, length(N_grid)) # Abstract Tuple
+    a::Tuple   = ntuple(_ -> 0.0, length(N_grid))   # Abstract Tuple
+    b::Tuple   = ntuple(_ -> 1.0, length(N_grid))   # Abstract Tuple
     T::Float64 = 1.0
     f_init::Function           # Abstract! Julia doesn't know WHICH function.
-    N::Int64 = length(N_grid)
+    N::Int64   = length(N_grid)
 end
 
 function solve_slow(p::HeatEquationSlow)
     # N = length(p.N_grid) # We have to find N at runtime
     N = p.N
 
-    d = ntuple(i -> p.L[i] / (p.N_grid[i] + 1), N)
-    axes_coords = ntuple(i -> collect(range(d[i], p.L[i] - d[i], length=p.N_grid[i])), N)
+    d = ntuple(i -> (p.b[i] - p.a[i]) / (p.N_grid[i] + 1), N)
+    axes_coords = ntuple(i -> collect(range(p.a[i] + d[i], p.b[i] - d[i], length=p.N_grid[i])), N)
 
     dt = p.T / p.Nt
     nsteps = p.Nt
@@ -31,7 +32,7 @@ function solve_slow(p::HeatEquationSlow)
     u = zeros(Float64, p.N_grid)
     for I in CartesianIndices(u)
         coords = ntuple(dim -> axes_coords[dim][I[dim]], N)
-        # 🚨 DYNAMIC DISPATCH: 
+        # 🚨 DYNAMIC DISPATCH:
         # Julia must pause and figure out what `f_init` actually is for every single iteration.
         u[I] = p.f_init(coords...)
     end
@@ -45,7 +46,7 @@ function solve_slow(p::HeatEquationSlow)
     inner_range = CartesianIndices(ntuple(i -> 2:(p.N_grid[i]-1), N))
     e = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
 
-    # 🚨 TYPE INSTABILITY: 
+    # 🚨 TYPE INSTABILITY:
     # The lack of strict types cascades into the core simulation loop.
     for _ in 1:nsteps
         for I in inner_range
@@ -72,19 +73,19 @@ T_end = 0.5
 Nt    = 5000          # number of time steps (same for both versions for a fair comparison)
 
 # Fast version using the parameterized struct from juliaPDEs
-fast_prob = HeatEquationND(
-    N_grid=N_pts,
-    Nt=Nt,
-    T=T_end,
-    f_init=(x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
+fast_prob = HeatEquation(
+    N_grid = N_pts,
+    Nt     = Nt,
+    T      = T_end,
+    f_init = (x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
 )
 
 # Slow version using our abstractly typed struct
 slow_prob = HeatEquationSlow(
-    N_grid=N_pts,
-    Nt=Nt,
-    T=T_end,
-    f_init=(x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
+    N_grid = N_pts,
+    Nt     = Nt,
+    T      = T_end,
+    f_init = (x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
 )
 
 println("Warming up JIT compiler...")

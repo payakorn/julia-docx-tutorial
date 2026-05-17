@@ -9,15 +9,20 @@ Base.@kwdef struct NavierStokes <: IncompressibleNSProblem
 end
 
 function solve(p::NavierStokes)
-    ν = 1.0 / p.Re
+    # 1. Time step from user-supplied Nt; kinematic viscosity from Reynolds number.
+    Δt = p.T / p.Nt
+    ν  = 1.0 / p.Re
 
+    # 2. Build a 2-D rectilinear lid-driven-cavity grid via Oceananigans.
     grid = Oceananigans.RectilinearGrid(
         size=(p.nx, p.ny), x=(0, 1), y=(0, 1),
         topology=(Bounded, Bounded, Flat))
 
+    # 3. Boundary conditions: u = lid_speed on the north wall, no-slip elsewhere.
     u_bcs = Oceananigans.FieldBoundaryConditions(
         north=Oceananigans.ValueBoundaryCondition(p.lid_speed))
 
+    # 4. Assemble the nonhydrostatic model (advection + diffusion + BCs).
     model = Oceananigans.NonhydrostaticModel(
         grid;
         advection   = Oceananigans.UpwindBiased(order=5),
@@ -26,8 +31,9 @@ function solve(p::NavierStokes)
         closure     = Oceananigans.ScalarDiffusivity(ν=ν))
 
     Oceananigans.set!(model, u=0, v=0)
-    simulation = Oceananigans.Simulation(model, Δt=p.T / p.Nt, stop_time=p.T)
+    simulation = Oceananigans.Simulation(model, Δt=Δt, stop_time=p.T)
 
+    # 5. Main run — Oceananigans advances the fields to stop_time = p.T.
     speed_field = Oceananigans.Field(
         sqrt(model.velocities.u^2 + model.velocities.v^2))
 
@@ -35,9 +41,10 @@ function solve(p::NavierStokes)
     Oceananigans.run!(simulation)
     Oceananigans.compute!(speed_field)
 
-    x = collect(range(0, 1, length=p.nx))
-    y = collect(range(0, 1, length=p.ny))
-    u = copy(Oceananigans.interior(speed_field, :, :, 1))
+    # 6. Extract the final speed field and wrap it as a PDESolution.
+    _, x = endpoint_grid(1.0, p.nx)
+    _, y = endpoint_grid(1.0, p.ny)
+    u    = copy(Oceananigans.interior(speed_field, :, :, 1))
 
     return PDESolution((x, y), u, p.T, p)
 end
@@ -45,7 +52,9 @@ end
 # ── Animation (runs its own solve with history snapshots) ──────────────────────
 function animate_navier_stokes(p::NavierStokes; fps::Int=30,
                                filename="navier_stokes_animation.gif", skip::Int=1)
-    ν = 1.0 / p.Re
+    # 1. Same set-up as solve() — Δt, ν, grid, BCs, model.
+    Δt = p.T / p.Nt
+    ν  = 1.0 / p.Re
 
     grid = Oceananigans.RectilinearGrid(
         size=(p.nx, p.ny), x=(0, 1), y=(0, 1),
@@ -62,8 +71,9 @@ function animate_navier_stokes(p::NavierStokes; fps::Int=30,
         closure     = Oceananigans.ScalarDiffusivity(ν=ν))
 
     Oceananigans.set!(model, u=0, v=0)
-    simulation = Oceananigans.Simulation(model, Δt=p.T / p.Nt, stop_time=p.T)
+    simulation = Oceananigans.Simulation(model, Δt=Δt, stop_time=p.T)
 
+    # 2. Snapshot the speed field every `save_interval` iterations via a callback.
     speed_field = Oceananigans.Field(
         sqrt(model.velocities.u^2 + model.velocities.v^2))
 
@@ -76,9 +86,11 @@ function animate_navier_stokes(p::NavierStokes; fps::Int=30,
     simulation.callbacks[:save] = Oceananigans.Callback(
         save_frame, Oceananigans.IterationInterval(p.save_interval))
 
+    # 3. Main run — populates speed_hist by the callback above.
     Oceananigans.run!(simulation)
 
-    Δt_frame = p.save_interval * (p.T / p.Nt)
+    # 4. Build the animation, one frame per saved snapshot.
+    Δt_frame = p.save_interval * Δt
     anim = @animate for i in 1:skip:length(speed_hist)
         heatmap(speed_hist[i]',
             xlabel="x", ylabel="y", color=:viridis, aspect_ratio=1,

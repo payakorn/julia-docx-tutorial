@@ -1,102 +1,66 @@
-# ── 1D ────────────────────────────────────────────────────────────────────────
-Base.@kwdef struct HeatEquation <: ParabolicProblem
-    N::Int       = 200
-    Nt::Int      = 1000            # number of time steps (dt = T / Nt)
-    α::Float64   = 0.01
-    L::Float64   = 1.0
-    T::Float64   = 1.0
-    f_init::Function = x -> exp(-100 * (x - 0.5)^2)
+# ── Heat equation — dimension-free ────────────────────────────────────────────
+#
+#   ∂u/∂t = α Δu          on the Cartesian box  ∏ᵢ [aᵢ, bᵢ]    in ℝᴺ
+#   u = 0  on ∂Ω
+#   u(x, 0) = f_init(x...)
+#
+# Parameter `N` is the spatial dimension (inferred from N_grid). Parameter `F`
+# is the type of the initial-condition closure, so Julia specialises the solver
+# for each f_init the user passes.
+#
+Base.@kwdef struct HeatEquation{N, F} <: ParabolicProblem
+    N_grid::NTuple{N, Int} = (200,)                              # interior points per axis (defaults to 1D)
+    a::NTuple{N, Float64} = ntuple(_ -> 0.0, length(N_grid))     # lower bound per axis
+    b::NTuple{N, Float64} = ntuple(_ -> 1.0, length(N_grid))     # upper bound per axis
+    Nt::Int      = 1000                                          # number of time steps (dt = T / Nt)
+    T::Float64   = 1.0                                           # final simulation time
+    α::Float64   = 0.01                                          # diffusivity
+    f_init::F    = x -> exp(-100 * (x - 0.5)^2)                  # default is 1D — override for higher N
 end
 
-function solve(p::HeatEquation)
-    dx = p.L / (p.N + 1)
-    x  = collect(range(dx, p.L - dx, length=p.N))
+function solve(p::HeatEquation{N, F}) where {N, F}
+    # 1. Build the per-axis interior grids via the shared helper.
+    grids = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i]), N)
+    d           = ntuple(i -> grids[i][1], N)
+    axes_coords = ntuple(i -> grids[i][2], N)
+
+    # 2. Time step from user-supplied Nt, with a stability check.
     dt = p.T / p.Nt
-    r  = p.α * dt / dx^2
-    r ≤ 0.5 || @warn "HeatEquation stability: r = α·dt/dx² = $r > 0.5 — increase Nt or reduce N."
+    r  = ntuple(i -> p.α * dt / d[i]^2, N)
+    sum(r) ≤ 0.5 || @warn "HeatEquation stability: Σrᵢ = $(sum(r)) > 0.5 — increase Nt."
+    nsteps = p.Nt
 
-    u = p.f_init.(x)
-    for _ in 1:p.Nt
-        u[2:end-1] .+= r .* (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2])
+    # 3. Initialize the field by sampling f_init on the Cartesian product grid.
+    u = zeros(Float64, p.N_grid)
+    for I in CartesianIndices(u)
+        coords = ntuple(dim -> axes_coords[dim][I[dim]], N)
+        u[I] = p.f_init(coords...)
     end
-    return PDESolution((x,), u, p.T, p)
-end
 
-# ── 2D ────────────────────────────────────────────────────────────────────────
-Base.@kwdef struct HeatEquation2D <: ParabolicProblem
-    Nx::Int      = 50
-    Ny::Int      = 50
-    Nt::Int      = 100             # number of time steps (dt = T / Nt)
-    α::Float64   = 0.01
-    Lx::Float64  = 1.0
-    Ly::Float64  = 1.0
-    T::Float64   = 0.5
-    f_init::Function = (x, y) -> exp(-50 * ((x - 0.5)^2 + (y - 0.5)^2))
-end
-
-function solve(p::HeatEquation2D)
-    dx = p.Lx / (p.Nx + 1)
-    dy = p.Ly / (p.Ny + 1)
-    x  = collect(range(dx, p.Lx - dx, length=p.Nx))
-    y  = collect(range(dy, p.Ly - dy, length=p.Ny))
-    dt = p.T / p.Nt
-    rx = p.α * dt / dx^2
-    ry = p.α * dt / dy^2
-    rx + ry ≤ 0.5 || @warn "HeatEquation2D stability: rx + ry = $(rx + ry) > 0.5 — increase Nt."
-
-    u     = [p.f_init(xi, yi) for xi in x, yi in y]
-    u_new = similar(u)
-    for _ in 1:p.Nt
-        u_new[2:end-1, 2:end-1] .=
-            u[2:end-1, 2:end-1] .+
-            rx .* (u[3:end,   2:end-1] .- 2 .* u[2:end-1, 2:end-1] .+ u[1:end-2, 2:end-1]) .+
-            ry .* (u[2:end-1, 3:end  ] .- 2 .* u[2:end-1, 2:end-1] .+ u[2:end-1, 1:end-2])
-        u_new[1, :] .= 0;  u_new[end, :] .= 0
-        u_new[:, 1] .= 0;  u_new[:, end] .= 0
-        u .= u_new
+    # 4. Enforce Dirichlet zero boundaries ONCE at initialization.
+    for i in 1:N
+        selectdim(u, i, 1) .= 0.0
+        selectdim(u, i, p.N_grid[i]) .= 0.0
     end
-    return PDESolution((x, y), u, p.T, p)
-end
 
-# ── 3D ────────────────────────────────────────────────────────────────────────
-Base.@kwdef struct HeatEquation3D <: ParabolicProblem
-    Nx::Int      = 20
-    Ny::Int      = 20
-    Nz::Int      = 20
-    Nt::Int      = 50              # number of time steps (dt = T / Nt)
-    α::Float64   = 0.01
-    Lx::Float64  = 1.0
-    Ly::Float64  = 1.0
-    Lz::Float64  = 1.0
-    T::Float64   = 0.2
-    f_init::Function = (x, y, z) -> exp(-50 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2))
-end
+    u_new = copy(u)   # Clone to preserve initial boundaries
 
-function solve(p::HeatEquation3D)
-    dx = p.Lx / (p.Nx + 1)
-    dy = p.Ly / (p.Ny + 1)
-    dz = p.Lz / (p.Nz + 1)
-    x  = collect(range(dx, p.Lx - dx, length=p.Nx))
-    y  = collect(range(dy, p.Ly - dy, length=p.Ny))
-    z  = collect(range(dz, p.Lz - dz, length=p.Nz))
-    dt = p.T / p.Nt
-    rx = p.α * dt / dx^2
-    ry = p.α * dt / dy^2
-    rz = p.α * dt / dz^2
-    rx + ry + rz ≤ 0.5 || @warn "HeatEquation3D stability: rx + ry + rz = $(rx+ry+rz) > 0.5 — increase Nt."
+    # Setup inner range and stencil offsets — both fixed at compile time for known N.
+    inner_range = CartesianIndices(ntuple(i -> 2:(p.N_grid[i]-1), N))
+    e = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
 
-    u     = [p.f_init(xi, yi, zi) for xi in x, yi in y, zi in z]
-    u_new = similar(u)
-    for _ in 1:p.Nt
-        u_new[2:end-1, 2:end-1, 2:end-1] .=
-            u[2:end-1, 2:end-1, 2:end-1] .+
-            rx .* (u[3:end,   2:end-1, 2:end-1] .- 2 .* u[2:end-1, 2:end-1, 2:end-1] .+ u[1:end-2, 2:end-1, 2:end-1]) .+
-            ry .* (u[2:end-1, 3:end,   2:end-1] .- 2 .* u[2:end-1, 2:end-1, 2:end-1] .+ u[2:end-1, 1:end-2, 2:end-1]) .+
-            rz .* (u[2:end-1, 2:end-1, 3:end  ] .- 2 .* u[2:end-1, 2:end-1, 2:end-1] .+ u[2:end-1, 2:end-1, 1:end-2])
-        u_new[1, :, :] .= 0;  u_new[end, :, :] .= 0
-        u_new[:, 1, :] .= 0;  u_new[:, end, :] .= 0
-        u_new[:, :, 1] .= 0;  u_new[:, :, end] .= 0
-        u .= u_new
+    # 5. Main time-stepping loop — forward-Euler + (2N+1)-point Laplacian.
+    for _ in 1:nsteps
+        for I in inner_range
+            laplacian = 0.0
+            for i in 1:N
+                @inbounds laplacian += r[i] * (u[I+e[i]] - 2.0 * u[I] + u[I-e[i]])
+            end
+            @inbounds u_new[I] = u[I] + laplacian
+        end
+        # O(1) pointer swap instead of copying data (u .= u_new)
+        u, u_new = u_new, u
     end
-    return PDESolution((x, y, z), u, p.T, p)
+
+    return PDESolution(axes_coords, u, p.T, p)
 end

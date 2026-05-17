@@ -1,55 +1,73 @@
 using SparseArrays, LinearAlgebra
 
-# ── 2D ────────────────────────────────────────────────────────────────────────
-Base.@kwdef struct PoissonEquation <: EllipticProblem
-    N::Int     = 50
-    L::Float64 = 1.0
-    # RHS forcing function f in  −∇²u = f(x,y)
-    f::Function       = (x, y) -> 2π^2 * sin(π*x) * sin(π*y)
-    # Known exact solution (nothing if not available)
-    u_exact::Union{Function, Nothing} = (x, y) -> sin(π*x) * sin(π*y)
+# ── Poisson equation — dimension-free ─────────────────────────────────────────
+#
+#   −Δu = f(x...)          on the Cartesian box  ∏ᵢ [aᵢ, bᵢ]    in ℝᴺ
+#   u = 0  on ∂Ω
+#
+# Parameters:
+#   N   — spatial dimension (inferred from N_grid)
+#   F   — type of the forcing function (specialised per closure)
+#   EF  — type of the exact-solution function (or `Nothing` when unavailable —
+#         that lets `l2_error` resolve the "no exact solution" branch statically)
+#
+Base.@kwdef struct PoissonEquation{N, F, EF} <: EllipticProblem
+    N_grid::NTuple{N, Int} = (50, 50)                            # interior points per axis (defaults to 2D)
+    a::NTuple{N, Float64} = ntuple(_ -> 0.0, length(N_grid))     # lower bound per axis
+    b::NTuple{N, Float64} = ntuple(_ -> 1.0, length(N_grid))     # upper bound per axis
+    f::F        = (x, y) -> 2π^2 * sin(π*x) * sin(π*y)           # default is 2D — override for other N
+    u_exact::EF = (x, y) -> sin(π*x) * sin(π*y)                  # known exact solution, or `nothing`
 end
 
-# ── Solver ─────────────────────────────────────────────────────────────────────
+function solve(p::PoissonEquation{N, F, EF}) where {N, F, EF}
+    # 1. Build the per-axis interior grids via the shared helper.
+    grids = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i]), N)
+    h           = ntuple(i -> grids[i][1], N)
+    axes_coords = ntuple(i -> grids[i][2], N)
+
+    # 2. Assemble the N-D Laplacian as a Kronecker sum of axis-wise operators.
+    A = nd_laplacian(h, p.N_grid)
+
+    # 3. Build the right-hand side by sampling f on the Cartesian product grid.
+    F_arr = [p.f(ntuple(dim -> axes_coords[dim][I[dim]], N)...) for I in CartesianIndices(p.N_grid)]
+
+    # 4. Direct sparse solve (UMFPACK under the hood) and reshape back to N-D.
+    u_vec = A \ vec(F_arr)
+    u_arr = reshape(u_vec, p.N_grid)
+
+    # 5. Wrap the solution with its coordinate grid.
+    return PDESolution(axes_coords, u_arr, 0.0, p)
+end
+
+# ── N-D Laplacian via Kronecker sum ──────────────────────────────────────────
 #
-#  Discretises  −∇²u = f  on [0,L]² with Dirichlet BC u=0 on ∂Ω.
+#  For each axis i, the discrete Laplacian acting along that axis is
+#       Aᵢ = I_N ⊗ ⋯ ⊗ I_{i+1} ⊗ Tᵢ ⊗ I_{i-1} ⊗ ⋯ ⊗ I_1
+#  where Tᵢ is the 1-D tridiagonal Laplacian h⁻² · tridiag(−1, 2, −1).
+#  The full Laplacian is the sum A = Σᵢ Aᵢ.
 #
-#  Grid:  N interior points per side, spacing h = L/(N+1).
-#         x_i = i·h,  y_j = j·h,  i,j = 1…N
+#  Build the chain from the innermost (axis 1, fastest, rightmost in kron) to
+#  the outermost (axis N, slowest, leftmost) — matches Julia's column-major
+#  ordering convention.
 #
-#  5-point stencil (scaled by h²):
-#         −u_{i−1,j} − u_{i+1,j} − u_{i,j−1} − u_{i,j+1} + 4·u_{i,j} = h²·f_{ij}
-#
-#  In matrix form:  A · vec(U) = vec(F)
-#  where  A = I_N ⊗ T₁ + T₁ ⊗ I_N   (Kronecker sum of 1-D Laplacians)
-#  and vec() stacks columns (Julia column-major order).
-#
-function solve(p::PoissonEquation)
-    N, h = p.N, p.L / (p.N + 1)
-
-    x = collect(range(h, p.L - h, length=N))
-    y = collect(range(h, p.L - h, length=N))
-
-    # 1-D tridiagonal Laplacian  T₁ = h⁻² · tridiag(−1, 2, −1)
-    T1 = spdiagm(
-        -1 => fill(-1.0 / h^2, N-1),
-         0 => fill( 2.0 / h^2, N),
-         1 => fill(-1.0 / h^2, N-1)
-    )
-    IN = sparse(I, N, N)
-
-    # 2-D Laplacian via Kronecker sum (column-major: x varies fastest)
-    A = kron(IN, T1) + kron(T1, IN)      # N² × N² sparse, symmetric, positive definite
-
-    # RHS: F[i,j] = f(x_i, y_j) — column-major so i is the fast index
-    F   = [p.f(x[i], y[j]) for i in 1:N, j in 1:N]
-    rhs = vec(F)
-
-    # Direct sparse solve (uses UMFPACK under the hood)
-    u_vec = A \ rhs
-    u_mat = reshape(u_vec, N, N)
-
-    return PDESolution((x, y), u_mat, 0.0, p)
+function nd_laplacian(h::NTuple{N, Float64}, sizes::NTuple{N, Int}) where N
+    total = prod(sizes)
+    A     = spzeros(total, total)
+    for axis in 1:N
+        n  = sizes[axis]
+        T1 = spdiagm(-1 => fill(-1.0 / h[axis]^2, n - 1),
+                      0 => fill( 2.0 / h[axis]^2, n),
+                      1 => fill(-1.0 / h[axis]^2, n - 1))
+        op = T1
+        for j in axis-1:-1:1              # wrap with identities on the inner (right) side
+            op = kron(op, sparse(I, sizes[j], sizes[j]))
+        end
+        for j in axis+1:N                  # wrap with identities on the outer (left) side
+            op = kron(sparse(I, sizes[j], sizes[j]), op)
+        end
+        A = A + op
+    end
+    return A
 end
 
 # ── Error analysis helpers ────────────────────────────────────────────────────
@@ -57,40 +75,48 @@ end
 """
     l2_error(sol::PDESolution)
 
-Compute the discrete L2 error against the exact solution stored in
+Compute the discrete L² error against the exact solution stored in
 `sol.problem.u_exact`. Returns `nothing` if no exact solution is available.
+
+Works for any dimension N: the scaling is √(h₁·h₂·⋯·hₙ).
 """
-function l2_error(sol::PDESolution{T, 2}) where T
+function l2_error(sol::PDESolution{T, N}) where {T, N}
     p = sol.problem
     p isa PoissonEquation || error("l2_error only defined for PoissonEquation")
     isnothing(p.u_exact) && return nothing
 
-    N = size(sol, 1)
-    h = p.L / (N + 1)
+    # 1. Recover the per-axis spacings from the same helper the solver used.
+    h = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i])[1], N)
 
+    # 2. Sum the squared point-wise errors over every grid node.
     err2 = 0.0
-    for j in 1:N, i in 1:N
-        e = sol[i, j] - p.u_exact(sol.x[i], sol.y[j])
+    for I in CartesianIndices(sol.u)
+        coords = ntuple(dim -> sol.grid[dim][I[dim]], N)
+        e = sol.u[I] - p.u_exact(coords...)
         err2 += e^2
     end
-    return h * sqrt(err2)          # discrete L2 norm ≈ ‖e‖_{L²}
+
+    # 3. Discrete L² norm scaling: √(h₁·…·hₙ).
+    return sqrt(prod(h)) * sqrt(err2)
 end
 
 """
-    convergence_table(Ns)
+    convergence_table(Ns; dims=2)
 
-Run `PoissonEquation(N=n)` for each n in `Ns`, collect the L2 error, and
-print a convergence table showing the observed order of accuracy.
+Run the canonical sin·sin… Poisson test problem at `dims` dimensions for each
+`N` in `Ns`, collect the L² error, and print the empirical order column
+`log₂(e_{N/2} / e_N)`. Should land on ~2.0 for the 5-point / 7-point stencil.
 """
-function convergence_table(Ns=[10, 20, 40, 80, 160])
+function convergence_table(Ns=[10, 20, 40, 80, 160]; dims::Int=2)
     println(rpad("N", 6), rpad("h", 12), rpad("L² error", 14), "order")
     println("-"^40)
     prev_err = NaN
     for N in Ns
-        sol = solve(PoissonEquation(N=N))
-        h   = sol.problem.L / (N + 1)
-        err = l2_error(sol)
-        ord = isnan(prev_err) ? "—" : string(round(log2(prev_err / err), digits=2))
+        prob = poisson_test_problem(N, dims)
+        sol  = solve(prob)
+        h, _ = interior_grid(prob.a[1], prob.b[1], N)
+        err  = l2_error(sol)
+        ord  = isnan(prev_err) ? "—" : string(round(log2(prev_err / err), digits=2))
         println(rpad(N, 6),
                 rpad(round(h,   digits=6),   12),
                 rpad(round(err, sigdigits=4), 14),
@@ -99,55 +125,21 @@ function convergence_table(Ns=[10, 20, 40, 80, 160])
     end
 end
 
-# ── 3D ────────────────────────────────────────────────────────────────────────
-#
-#  −∇²u = f  on [0,L]³ with Dirichlet BCs u=0 on ∂Ω.
-#
-#  7-point stencil: 6·u_{i,j,k} − u_{i±1,j,k} − u_{i,j±1,k} − u_{i,j,k±1} = h²·f_{i,j,k}
-#
-#  Matrix: A = I⊗I⊗T1 + I⊗T1⊗I + T1⊗I⊗I  (3D Kronecker sum, N³×N³ sparse)
-#
-Base.@kwdef struct PoissonEquation3D <: EllipticProblem
-    N::Int = 20
-    L::Float64 = 1.0
-    f::Function       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z)
-    u_exact::Union{Function, Nothing} = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z)
-end
-
-function solve(p::PoissonEquation3D)
-    N, h = p.N, p.L / (p.N + 1)
-
-    x = collect(range(h, p.L - h, length=N))
-    y = collect(range(h, p.L - h, length=N))
-    z = collect(range(h, p.L - h, length=N))
-
-    T1 = spdiagm(
-        -1 => fill(-1.0 / h^2, N-1),
-         0 => fill( 2.0 / h^2, N),
-         1 => fill(-1.0 / h^2, N-1)
-    )
-    IN = sparse(I, N, N)
-
-    A = kron(IN, kron(IN, T1)) + kron(IN, kron(T1, IN)) + kron(T1, kron(IN, IN))
-
-    F   = [p.f(x[i], y[j], z[k]) for i in 1:N, j in 1:N, k in 1:N]
-    u_vec = A \ vec(F)
-
-    return PDESolution((x, y, z), reshape(u_vec, N, N, N), 0.0, p)
-end
-
-function l2_error(sol::PDESolution{T, 3}) where T
-    p = sol.problem
-    p isa PoissonEquation3D || error("l2_error only defined for PoissonEquation3D")
-    isnothing(p.u_exact) && return nothing
-
-    N = size(sol, 1)
-    h = p.L / (N + 1)
-
-    err2 = 0.0
-    for k in 1:N, j in 1:N, i in 1:N
-        e = sol[i, j, k] - p.u_exact(sol.x[i], sol.y[j], sol.z[k])
-        err2 += e^2
+# Internal helper — the canonical sin-product test problem at any dimension.
+function poisson_test_problem(N::Int, dims::Int)
+    if dims == 2
+        return PoissonEquation(
+            N_grid  = (N, N),
+            f       = (x, y) -> 2π^2 * sin(π*x) * sin(π*y),
+            u_exact = (x, y) -> sin(π*x) * sin(π*y),
+        )
+    elseif dims == 3
+        return PoissonEquation(
+            N_grid  = (N, N, N),
+            f       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z),
+            u_exact = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z),
+        )
+    else
+        error("poisson_test_problem only defined for dims = 2 or 3 (got $dims).")
     end
-    return h^(3/2) * sqrt(err2)
 end

@@ -71,105 +71,48 @@ Base.show(io::IO, s::PDESolution{T,N}) where {T,N} =
     print(io, "PDESolution{$(N)D}($(join(size(s.u), "×")), t=$(s.t))")
 
 
-# ── Types and Structs ─────────────────────────────────────────────────────────
+# ── Grid builders ─────────────────────────────────────────────────────────────
+#
+# Two conventions show up across the PDE solvers in this package:
+#
+#  • interior_grid — for Dirichlet problems whose boundary values are baked in
+#    and not stored. We solve only for the N interior unknowns; x[1] sits at
+#    Δx, not 0. Used by Heat and Poisson.
+#
+#  • endpoint_grid — for problems whose boundary values are part of the array
+#    (e.g. wave equation, where the leap-frog update reads u[1] and u[end]).
+#    The grid spans the closed interval [0, L] with N evenly-spaced points.
+#
+# Both helpers return (Δx, x). Centralising the formulae here means a fix in
+# one place propagates to every solver.
 
-# abstract type ParabolicProblem end
+"""
+    interior_grid(a, b, N) -> (dx, x)
 
-# Fully parameterized solution struct to guarantee type stability
-# struct PDESolution{A, U, P}
-#     axes::A
-#     u::U
-#     T::Float64
-#     prob::P
-# end
+Uniform grid of `N` interior points on the open interval `(a, b)`.
+`dx = (b - a) / (N + 1)` and `x[i] = a + i·dx`. The boundary nodes
+`a` and `b` are intentionally not stored.
 
-# Parameterize the function type `F` to avoid dynamic dispatch overhead
-Base.@kwdef struct HeatEquationND{N,F} <: ParabolicProblem
-    N_grid::NTuple{N,Int}
-    Nt::Int = 1000                          # number of time steps (dt = T / Nt)
-    α::Float64 = 0.01
-    L::NTuple{N,Float64} = ntuple(_ -> 1.0, length(N_grid))
-    T::Float64 = 1.0
-    f_init::F
+    interior_grid(L, N) = interior_grid(0, L, N)
+"""
+function interior_grid(a::Real, b::Real, N::Integer)
+    dx = (b - a) / (N + 1)
+    x  = collect(range(a + dx, b - dx, length=N))
+    return dx, x
 end
+interior_grid(L::Real, N::Integer) = interior_grid(zero(L), L, N)
 
+"""
+    endpoint_grid(a, b, N) -> (dx, x)
 
-# ── Generic N-Dimensional Solver ──────────────────────────────────────────────
+Uniform grid of `N` points on the closed interval `[a, b]`, endpoints
+included. `dx = (b - a) / (N - 1)` and `x = [a, a+dx, …, b]`.
 
-function solve(p::HeatEquationND{N,F}) where {N,F}
-    # 1. Calculate grid spacings
-    d = ntuple(i -> p.L[i] / (p.N_grid[i] + 1), N)
-
-    # Generate physical coordinates for each axis
-    axes_coords = ntuple(i -> collect(range(d[i], p.L[i] - d[i], length=p.N_grid[i])), N)
-
-    # 2. Time step from user-supplied Nt, with a stability check
-    dt = p.T / p.Nt
-    r  = ntuple(i -> p.α * dt / d[i]^2, N)
-    sum(r) ≤ 0.5 || @warn "HeatEquationND stability: Σrᵢ = $(sum(r)) > 0.5 — increase Nt."
-    nsteps = p.Nt
-
-    # 3. Initialize grid and map indices to physical coordinates
-    u = zeros(Float64, p.N_grid)
-    for I in CartesianIndices(u)
-        coords = ntuple(dim -> axes_coords[dim][I[dim]], N)
-        u[I] = p.f_init(coords...)
-    end
-
-    # 4. Enforce Dirichlet zero boundaries ONCE at initialization
-    for i in 1:N
-        selectdim(u, i, 1) .= 0.0
-        selectdim(u, i, p.N_grid[i]) .= 0.0
-    end
-
-    u_new = copy(u) # Clone to preserve initial boundaries
-
-    # Setup inner range to safely skip boundaries during the loop
-    inner_range = CartesianIndices(ntuple(i -> 2:(p.N_grid[i]-1), N))
-
-    # Pre-compute Cartesian offsets for the stencil (e.g., ±1 in X, Y, Z)
-    e = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
-
-    # 5. Main time-stepping loop
-    for _ in 1:nsteps
-        for I in inner_range
-            laplacian = 0.0
-            for i in 1:N
-                # @inbounds removes safety checks for maximum speed
-                @inbounds laplacian += r[i] * (u[I+e[i]] - 2.0 * u[I] + u[I-e[i]])
-            end
-            @inbounds u_new[I] = u[I] + laplacian
-        end
-
-        # O(1) pointer swap instead of copying data (u .= u_new)
-        u, u_new = u_new, u
-    end
-
-    return PDESolution(axes_coords, u, p.T, p)
+    endpoint_grid(L, N) = endpoint_grid(0, L, N)
+"""
+function endpoint_grid(a::Real, b::Real, N::Integer)
+    dx = (b - a) / (N - 1)
+    x  = collect(range(a, b, length=N))
+    return dx, x
 end
-
-
-# ── Example Usage ─────────────────────────────────────────────────────────────
-
-# 1D Problem
-# prob1d = HeatEquation(
-#     N_grid=(200,),
-#     T=1.0,
-#     f_init=x -> exp(-100 * (x - 0.5)^2)
-# )
-# sol1d = solve(prob1d)
-
-# # 2D Problem
-# prob2d = HeatEquation(
-#     N_grid=(50, 50),
-#     T=0.5,
-#     f_init=(x, y) -> exp(-50 * ((x - 0.5)^2 + (y - 0.5)^2))
-# )
-# sol2d = solve(prob2d)
-
-# # 3D Problem
-# prob3d = HeatEquation(
-#     N_grid=(20, 20, 20),
-#     T=0.2,
-#     f_init=(x, y, z) -> exp(-50 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
-# )
+endpoint_grid(L::Real, N::Integer) = endpoint_grid(zero(L), L, N)

@@ -45,17 +45,18 @@
     <a href="#step5">Step 7 — The PDE workflow</a>
     <a href="#step5-model"   class="sub">7.1 Classify the PDE</a>
     <a href="#step5-discret" class="sub">7.2 Discretization rules</a>
-    <a href="#pde-heat"       class="sub">A. Heat</a>
-    <a href="#pde-heat-2d"   class="sub2">↳ 2D Heat</a>
-    <a href="#pde-heat-3d"   class="sub2">↳ 3D Heat</a>
-    <a href="#pde-wave"      class="sub">B. Wave</a>
-    <a href="#pde-wave-2d"   class="sub2">↳ 2D Wave</a>
-    <a href="#pde-wave-3d"   class="sub2">↳ 3D Wave</a>
-    <a href="#pde-poisson"   class="sub">C. Poisson (2D)</a>
-    <a href="#pde-poisson-3d" class="sub2">↳ 3D Poisson</a>
+    <a href="#pde-heat"       class="sub">A. Heat (any N)</a>
+    <a href="#pde-heat-2d"   class="sub2">↳ 2D example</a>
+    <a href="#pde-heat-3d"   class="sub2">↳ 3D example</a>
+    <a href="#pde-wave"      class="sub">B. Wave (any N)</a>
+    <a href="#pde-wave-2d"   class="sub2">↳ 2D example</a>
+    <a href="#pde-wave-3d"   class="sub2">↳ 3D example</a>
+    <a href="#pde-poisson"   class="sub">C. Poisson (any N)</a>
+    <a href="#pde-poisson-3d" class="sub2">↳ 3D example</a>
     <a href="#pde-ns"        class="sub">D. Navier-Stokes (2D)</a>
     <a href="#step5-verify"  class="sub">7.4 Verify &amp; converge</a>
-    <a href="#step5-gmsh"    class="sub">7.5 Mesh → matrix (Gmsh)</a>
+    <a href="#step5-bc"      class="sub">7.5 Boundary conditions (N-D)</a>
+    <a href="#step5-gmsh"    class="sub">7.6 Mesh → matrix (Gmsh)</a>
     <div class="section-label">Polish your code</div>
     <a href="#step6">Step 8 — Package design patterns</a>
     <a href="#step6-abstract"  class="sub">Abstract type hierarchy</a>
@@ -513,7 +514,7 @@ end
     </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct HeatEquationND{N,F} &lt;: ParabolicProblem</code></pre>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem</code></pre>
     </div>
     <p>
       it can look like a wall of unfamiliar punctuation. Good news: <strong>every
@@ -596,7 +597,7 @@ Complex{Float64}                               &lt;: Number</code></pre>
       The <code>juliaPDEs</code> package builds an analogous hierarchy for PDE
       problems. Read $\subseteq$ wherever you see <code>&lt;:</code>:
     </p>
-    $$\text{HeatEquationND} \;\subseteq\; \text{ParabolicProblem} \;\subseteq\; \text{PDEProblem}$$
+    $$\text{HeatEquation} \;\subseteq\; \text{ParabolicProblem} \;\subseteq\; \text{PDEProblem}$$
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — what types.jl actually says</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">abstract type PDEProblem           end                # "the universe of all PDE problems"
@@ -604,7 +605,7 @@ abstract type ParabolicProblem  &lt;: PDEProblem end     # parabolic PDEs ⊂ al
 abstract type HyperbolicProblem &lt;: PDEProblem end     # hyperbolic    ⊂ all PDEs
 abstract type EllipticProblem   &lt;: PDEProblem end     # elliptic      ⊂ all PDEs
 
-struct HeatEquationND{N,F}      &lt;: ParabolicProblem   # heat equation ⊂ parabolic ⊂ PDE
+struct HeatEquation{N,F}      &lt;: ParabolicProblem   # heat equation ⊂ parabolic ⊂ PDE
     # …fields…
 end</code></pre>
     </div>
@@ -658,14 +659,14 @@ Array{Float64, 3}       # 3D array              — corresponds to ℝᵐˣⁿˣ
     </p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">struct HeatEquationND{N, F} &lt;: ParabolicProblem
+      <pre><code class="language-julia">struct HeatEquation{N, F} &lt;: ParabolicProblem
     # …
 end</code></pre>
     </div>
     <p>you are saying, in mathematical language:</p>
     <div class="callout tip" style="font-style:italic;">
       "Define a <strong>family</strong> of PDE problems
-      $\{\,\mathrm{HeatEquationND}_{N,F}\,\}_{N\in\mathbb{N},\,F\in\mathcal{F}}$,
+      $\{\,\mathrm{HeatEquation}_{N,F}\,\}_{N\in\mathbb{N},\,F\in\mathcal{F}}$,
       each of which is a parabolic problem
       (i.e. a member of $\mathrm{ParabolicProblem}\subseteq\mathrm{PDEProblem}$).
       The first parameter $N$ is the spatial dimension; the second parameter $F$
@@ -730,7 +731,7 @@ end
     <p>Here is the full declaration from <code>juliaPDEs/src/types.jl</code>:</p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct HeatEquationND{N,F} &lt;: ParabolicProblem
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem
     N_grid::NTuple{N,Int}
     Nt::Int    = 1000                                # number of time steps (Δt = T / Nt)
     α::Float64 = 0.01
@@ -747,14 +748,14 @@ end</code></pre>
         — it saves you from writing the inner constructor by hand.)
       </li>
       <li>
-        <strong><code>struct HeatEquationND{N,F}</code></strong> — Define a
-        family of objects $\{\mathrm{HeatEquationND}_{N,F}\}$ indexed by
+        <strong><code>struct HeatEquation{N,F}</code></strong> — Define a
+        family of objects $\{\mathrm{HeatEquation}_{N,F}\}$ indexed by
         $(N, F)$.
       </li>
       <li>
         <strong><code>&lt;: ParabolicProblem</code></strong> — Each member of
         this family is, by definition, a parabolic problem:
-        $\mathrm{HeatEquationND}_{N,F} \subseteq \mathrm{ParabolicProblem}$.
+        $\mathrm{HeatEquation}_{N,F} \subseteq \mathrm{ParabolicProblem}$.
       </li>
       <li>
         <strong><code>N_grid::NTuple{N,Int}</code></strong> — A field
@@ -788,19 +789,19 @@ end</code></pre>
     <p>Calling the struct then looks like:</p>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">prob = HeatEquationND(
+      <pre><code class="language-julia">prob = HeatEquation(
     N_grid = (50, 50, 50),                                              # ⇒ N inferred as 3
     Nt     = 2000,                                                      # number of time steps
     f_init = (x, y, z) -> exp(-((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)),    # ⇒ F inferred as typeof of this λ
 )
 
 typeof(prob)
-# HeatEquationND{3, var"#7#8"}
+# HeatEquation{3, var"#7#8"}
 #                ↑   ↑
 #                N   F   — both parameters are now concrete</code></pre>
     </div>
     <p>
-      Mentally, <code>HeatEquationND{3, var"#7#8"}</code> is the analogue of
+      Mentally, <code>HeatEquation{3, var"#7#8"}</code> is the analogue of
       writing $L^2(\mathbb{R}^3)$ instead of "some $L^p$ space" — every
       parameter is pinned down, and every theorem (read: machine instruction)
       that depends on those parameters can be applied immediately.
@@ -923,7 +924,7 @@ end</code></pre>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — Fast version: parametric types {N, F}</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct HeatEquationND{N,F} &lt;: ParabolicProblem
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem
     N_grid::NTuple{N,Int}                      # ✓ Concrete: N known at compile time
     Nt::Int    = 1000                          # ← number of time steps (Δt = T/Nt)
     α::Float64 = 0.01
@@ -932,7 +933,7 @@ end</code></pre>
     f_init::F                                  # ✓ Each F gets its own specialized solver
 end
 
-function solve(p::HeatEquationND{N,F}) where {N,F}
+function solve(p::HeatEquation{N,F}) where {N,F}
     # ... same body — but every type is now concrete inside the loop ...
     for I in inner_range
         laplacian = 0.0
@@ -1024,7 +1025,7 @@ struct HeatEquationSlow ...
     <div class="callout tip">
       <strong>The pattern in this package</strong><br>
       Every PDE struct in <code>juliaPDEs</code> follows the parametric pattern:
-      <code>HeatEquationND{N,F}</code>, <code>WaveEquation</code>,
+      <code>HeatEquation{N,F}</code>, <code>WaveEquation</code>,
       <code>PoissonEquation</code>. Each field has a concrete or
       parametric type, every solver method declares <code>where {N, F, …}</code>
       so Julia specializes on the exact problem instance.
@@ -1067,7 +1068,7 @@ struct HeatEquationSlow ...
           labels: ['Execution time', 'Memory allocations', 'Heap memory'],
           datasets: [
             {
-              label: 'HeatEquationND{N,F}  (parametric — fast)',
+              label: 'HeatEquation{N,F}  (parametric — fast)',
               data: [1.0, 1.0, 1.0],
               backgroundColor: '#9558B2',
               borderColor: '#6a2a8a',
@@ -3579,54 +3580,82 @@ fig_heat_equation()</code></pre>
       <code>dt</code> is chosen automatically to satisfy the 2D stability condition.
     </p>
 
+    <p>
+      The same parametric <code>HeatEquation{N, F}</code> struct serves every
+      dimension — for 2D you just pass a 2-tuple for <code>N_grid</code>, and
+      Julia specialises the solver automatically for $N = 2$.
+    </p>
+
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/heat.jl (struct)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct HeatEquation2D &lt;: ParabolicProblem
-    Nx::Int    = 50
-    Ny::Int    = 50
-    Nt::Int    = 100               # number of time steps (Δt = T / Nt)
+      <div class="code-header"><span class="code-lang">julia — src/heat.jl (struct, dimension-free)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N, F} &lt;: ParabolicProblem
+    N_grid::NTuple{N, Int}                                       # interior points per axis
+    a::NTuple{N, Float64} = ntuple(_ -> 0.0, length(N_grid))     # lower bound per axis
+    b::NTuple{N, Float64} = ntuple(_ -> 1.0, length(N_grid))     # upper bound per axis
+    Nt::Int    = 1000
+    T::Float64 = 1.0
     α::Float64 = 0.01
-    Lx::Float64 = 1.0
-    Ly::Float64 = 1.0
-    T::Float64  = 0.5
-    f_init::Function = (x, y) -> exp(-50 * ((x - 0.5)^2 + (y - 0.5)^2))
+    f_init::F  = x -> exp(-100 * (x - 0.5)^2)                    # default is 1D
 end</code></pre>
     </div>
 
     <p>
       The PDE and its forward-Euler + 5-point stencil discretisation:
     </p>
-    $$\frac{\partial u}{\partial t} = \alpha\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right), \quad (x,y)\in[0,L_x]\times[0,L_y]$$
+    $$\frac{\partial u}{\partial t} = \alpha\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right), \quad (x,y)\in[a_1,b_1]\times[a_2,b_2]$$
     $$u_{i,j}^{n+1} = u_{i,j}^n + r_x\!\left(u_{i+1,j}^n - 2u_{i,j}^n + u_{i-1,j}^n\right) + r_y\!\left(u_{i,j+1}^n - 2u_{i,j}^n + u_{i,j-1}^n\right)$$
     <p>where $r_x = \alpha\,\Delta t/\Delta x^2$, $r_y = \alpha\,\Delta t/\Delta y^2$, stability requires $r_x + r_y \le \tfrac{1}{2}$.</p>
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/heat.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">function solve(p::HeatEquation2D)
-    dx = p.Lx / (p.Nx + 1);  dy = p.Ly / (p.Ny + 1)
-    x  = range(dx, p.Lx - dx, length=p.Nx)
-    y  = range(dy, p.Ly - dy, length=p.Ny)
-    dt = p.T / p.Nt                                    # ← user-supplied Nt
-    rx = p.α * dt / dx^2;  ry = p.α * dt / dy^2
-    rx + ry ≤ 0.5 || @warn "Stability: rx + ry = $(rx + ry) > 0.5 — increase Nt."
+      <div class="code-header"><span class="code-lang">julia — src/heat.jl (solver, dimension-free)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve(p::HeatEquation{N, F}) where {N, F}
+    # 1. Build the per-axis interior grids via the shared helper.
+    grids = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i]), N)
+    d           = ntuple(i -> grids[i][1], N)
+    axes_coords = ntuple(i -> grids[i][2], N)
 
-    u = [p.f_init(xi, yi) for xi in x, yi in y]
-    for _ in 1:p.Nt                                    # ← fixed count
-        u[2:end-1, 2:end-1] .+=
-            rx .* (u[3:end, 2:end-1] .- 2u[2:end-1, 2:end-1] .+ u[1:end-2, 2:end-1]) .+
-            ry .* (u[2:end-1, 3:end] .- 2u[2:end-1, 2:end-1] .+ u[2:end-1, 1:end-2])
-        u[[1,end], :] .= 0;  u[:, [1,end]] .= 0   # Dirichlet BCs
+    # 2. Time step + stability check.
+    dt = p.T / p.Nt
+    r  = ntuple(i -> p.α * dt / d[i]^2, N)
+    sum(r) ≤ 0.5 || @warn "Stability: Σrᵢ = $(sum(r)) > 0.5 — increase Nt."
+
+    # 3-4. Sample f_init on the product grid, enforce Dirichlet zero on every face.
+    u = zeros(Float64, p.N_grid)
+    for I in CartesianIndices(u)
+        u[I] = p.f_init(ntuple(dim -> axes_coords[dim][I[dim]], N)...)
     end
-    return PDESolution((collect(x), collect(y)), u, p.T, p)
+    for i in 1:N; selectdim(u, i, 1) .= 0; selectdim(u, i, p.N_grid[i]) .= 0; end
+    u_new = copy(u)
+
+    # 5. Time-stepping loop — same code in 1D, 2D, 3D, …
+    inner = CartesianIndices(ntuple(i -> 2:(p.N_grid[i]-1), N))
+    e     = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
+    for _ in 1:p.Nt
+        for I in inner
+            laplacian = 0.0
+            for i in 1:N
+                @inbounds laplacian += r[i] * (u[I+e[i]] - 2*u[I] + u[I-e[i]])
+            end
+            @inbounds u_new[I] = u[I] + laplacian
+        end
+        u, u_new = u_new, u                # O(1) pointer swap
+    end
+    return PDESolution(axes_coords, u, p.T, p)
 end</code></pre>
     </div>
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <div class="code-header"><span class="code-lang">julia — usage (2D)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using juliaPDEs, Plots
 
-prob = HeatEquation2D(Nx=50, Ny=50, Nt=100, α=0.01, T=0.5)
-sol  = solve(prob)        # returns PDESolution — sol.x, sol.y, sol.u (50×50)
+prob = HeatEquation(
+    N_grid = (50, 50),                                  # ⇒ N = 2
+    Nt     = 100,
+    T      = 0.5,
+    α      = 0.01,
+    f_init = (x, y) -> exp(-50 * ((x - 0.5)^2 + (y - 0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 50×50
 
 heatmap(sol.x, sol.y, sol.u',
         xlabel="x", ylabel="y", title="2D Heat  t=$(sol.t)",
@@ -3646,55 +3675,33 @@ heatmap(sol.x, sol.y, sol.u',
       Keep <code>Nx,Ny,Nz ≤ 30</code> for interactive use; memory scales as $N^3$.
     </p>
 
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/heat.jl (struct)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct HeatEquation3D &lt;: ParabolicProblem
-    Nx::Int    = 20
-    Ny::Int    = 20
-    Nz::Int    = 20
-    Nt::Int    = 50                # number of time steps (Δt = T / Nt)
-    α::Float64  = 0.01
-    Lx::Float64 = 1.0
-    Ly::Float64 = 1.0
-    Lz::Float64 = 1.0
-    T::Float64  = 0.2
-    f_init::Function = (x, y, z) -> exp(-50 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2))
-end</code></pre>
-    </div>
+    <p>
+      Same <code>HeatEquation{N, F}</code> struct, same <code>solve</code> body.
+      Pass a 3-tuple for <code>N_grid</code> and a 3-arg <code>f_init</code> —
+      Julia recompiles the solver specialised for $N = 3$, and the stencil
+      loop now visits seven points per interior node automatically (the
+      dimension-agnostic stencil sum walks the new axis at compile time).
+    </p>
 
     <p>The 7-point stencil discretisation:</p>
     $$\frac{\partial u}{\partial t} = \alpha\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2}\right)$$
     $$u_{i,j,k}^{n+1} = u_{i,j,k}^n + r_x\,\delta_x^2 u + r_y\,\delta_y^2 u + r_z\,\delta_z^2 u$$
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/heat.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">function solve(p::HeatEquation3D)
-    dx = p.Lx/(p.Nx+1);  dy = p.Ly/(p.Ny+1);  dz = p.Lz/(p.Nz+1)
-    dt = p.T / p.Nt                                       # ← user-supplied Nt
-    rx = p.α*dt/dx^2;  ry = p.α*dt/dy^2;  rz = p.α*dt/dz^2
-    rx + ry + rz ≤ 0.5 || @warn "Stability: rx+ry+rz = $(rx+ry+rz) > 0.5 — increase Nt."
-
-    u = [p.f_init(xi,yi,zi) for xi in x, yi in y, zi in z]
-    for _ in 1:p.Nt                                       # ← fixed count
-        u[2:end-1,2:end-1,2:end-1] .+=
-            rx .* (u[3:end,2:end-1,2:end-1] .- 2u[2:end-1,2:end-1,2:end-1] .+ u[1:end-2,2:end-1,2:end-1]) .+
-            ry .* (u[2:end-1,3:end,2:end-1] .- 2u[2:end-1,2:end-1,2:end-1] .+ u[2:end-1,1:end-2,2:end-1]) .+
-            rz .* (u[2:end-1,2:end-1,3:end] .- 2u[2:end-1,2:end-1,2:end-1] .+ u[2:end-1,2:end-1,1:end-2])
-        u[[1,end],:,:] .= 0;  u[:,[1,end],:] .= 0;  u[:,:,[1,end]] .= 0
-    end
-    return PDESolution((x,y,z), u, p.T, p)
-end</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <div class="code-header"><span class="code-lang">julia — usage (3D, no new struct or solver)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using juliaPDEs, Plots
 
-prob = HeatEquation3D(Nx=20, Ny=20, Nz=20, Nt=50, α=0.01, T=0.2)
-sol  = solve(prob)        # returns PDESolution — sol.x, sol.y, sol.z, sol.u (20×20×20)
+prob = HeatEquation(
+    N_grid = (20, 20, 20),                              # ⇒ N = 3
+    Nt     = 50,
+    T      = 0.2,
+    α      = 0.01,
+    f_init = (x, y, z) -> exp(-50 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 20×20×20
 
 # Plot a mid-plane z-slice:
-mid = div(prob.Nz, 2)
+mid = div(prob.N_grid[3], 2)
 heatmap(sol.x, sol.y, sol.u[:, :, mid]',
         title="3D Heat — z=$(round(sol.z[mid], digits=2))",
         xlabel="x", ylabel="y", color=:hot, aspect_ratio=1)</code></pre>
@@ -3989,21 +3996,23 @@ fig_wave_equation()</code></pre>
   <section class="section" id="pde-wave-2d">
     <h3>Wave Equation — 2D</h3>
     <p>
-      On a 2D membrane (think a drum skin) the leap-frog scheme from 1D extends
-      directly — just add the $y$-direction stencil. The struct you provide is:
+      The wave solver, like the heat solver, is dimension-agnostic. There is
+      one parametric struct <code>WaveEquation{N, F}</code> in
+      <code>src/wave.jl</code>; for 2D you pass a 2-tuple for
+      <code>N_grid</code> and Julia specialises the leap-frog loop for
+      $N = 2$. The struct definition:
     </p>
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct WaveEquation2D &lt;: HyperbolicProblem
-    Nx::Int    = 100
-    Ny::Int    = 100
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct, dimension-free)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct WaveEquation{N, F} &lt;: HyperbolicProblem
+    N_grid::NTuple{N, Int}                                       # endpoint-inclusive grid
+    a::NTuple{N, Float64} = ntuple(_ -> 0.0, length(N_grid))     # lower bound per axis
+    b::NTuple{N, Float64} = ntuple(_ -> 1.0, length(N_grid))     # upper bound per axis
     Nt::Int    = 300
-    c::Float64  = 1.0
-    Lx::Float64 = 1.0
-    Ly::Float64 = 1.0
-    T::Float64  = 1.0
-    f_init::Function = (x, y) -> exp(-80 * ((x - 0.5)^2 + (y - 0.5)^2))
+    T::Float64 = 1.0
+    c::Float64 = 1.0
+    f_init::F  = x -> sin(π * x)                                 # default is 1D
 end</code></pre>
     </div>
 
@@ -4013,31 +4022,17 @@ end</code></pre>
     <p>where $\lambda_x = (c\,\Delta t/\Delta x)^2$ and $\lambda_y = (c\,\Delta t/\Delta y)^2$.</p>
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/wave.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">function solve(p::WaveEquation2D)
-    dx = p.Lx/(p.Nx-1);  dy = p.Ly/(p.Ny-1);  dt = p.T/p.Nt
-    λx = (p.c*dt/dx)^2;  λy = (p.c*dt/dy)^2   # CFL: λx+λy ≤ 1
-
-    u_prev = [p.f_init(xi,yi) for xi in x, yi in y]
-    u_curr = copy(u_prev);  u_next = similar(u_curr)
-    for _ in 1:p.Nt
-        u_next[2:end-1,2:end-1] .=
-            2u_curr[2:end-1,2:end-1] .- u_prev[2:end-1,2:end-1] .+
-            λx.*(u_curr[3:end,2:end-1] .- 2u_curr[2:end-1,2:end-1] .+ u_curr[1:end-2,2:end-1]) .+
-            λy.*(u_curr[2:end-1,3:end] .- 2u_curr[2:end-1,2:end-1] .+ u_curr[2:end-1,1:end-2])
-        u_next[[1,end],:] .= 0;  u_next[:,[1,end]] .= 0
-        u_prev = u_curr;  u_curr = u_next;  u_next = similar(u_curr)
-    end
-    return PDESolution((x,y), u_curr, p.T, p)
-end</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <div class="code-header"><span class="code-lang">julia — usage (2D)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using juliaPDEs, Plots
 
-prob = WaveEquation2D(Nx=100, Ny=100, Nt=300, c=1.0, T=1.0)
-sol  = solve(prob)        # returns PDESolution — sol.x, sol.y, sol.u (100×100)
+prob = WaveEquation(
+    N_grid = (100, 100),                                # ⇒ N = 2
+    Nt     = 300,
+    T      = 1.0,
+    c      = 1.0,
+    f_init = (x, y) -> exp(-80 * ((x - 0.5)^2 + (y - 0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 100×100
 
 heatmap(sol.x, sol.y, sol.u',
         xlabel="x", ylabel="y", title="2D Wave  t=$(sol.t)",
@@ -4051,61 +4046,32 @@ heatmap(sol.x, sol.y, sol.u',
   <section class="section" id="pde-wave-3d">
     <h3>Wave Equation — 3D</h3>
     <p>
-      Adding the $z$-direction stencil gives the full 3D acoustic wave equation.
-      The CFL tightens to $\lambda_x+\lambda_y+\lambda_z\le 1$.
-      Keep <code>Nx,Ny,Nz ≤ 50</code> — memory scales as $N^3$.
+      No new struct, no new solver — pass a 3-tuple for <code>N_grid</code>
+      and a 3-arg <code>f_init</code> and Julia compiles the leap-frog loop
+      specialised for $N = 3$. The CFL tightens to
+      $\lambda_x+\lambda_y+\lambda_z\le 1$; keep <code>N_grid ≤ (50,50,50)</code>
+      — memory scales as $N^3$.
     </p>
-
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct WaveEquation3D &lt;: HyperbolicProblem
-    Nx::Int    = 40
-    Ny::Int    = 40
-    Nz::Int    = 40
-    Nt::Int    = 100
-    c::Float64  = 1.0
-    Lx::Float64 = 1.0
-    Ly::Float64 = 1.0
-    Lz::Float64 = 1.0
-    T::Float64  = 0.5
-    f_init::Function = (x, y, z) -> exp(-80 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2))
-end</code></pre>
-    </div>
 
     <p>The 3D wave equation and its 7-point leap-frog stencil:</p>
     $$\frac{\partial^2 u}{\partial t^2} = c^2\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2}\right)$$
     $$u_{i,j,k}^{n+1} = 2u_{i,j,k}^n - u_{i,j,k}^{n-1} + \lambda_x\,\delta_x^2 u^n + \lambda_y\,\delta_y^2 u^n + \lambda_z\,\delta_z^2 u^n$$
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/wave.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">function solve(p::WaveEquation3D)
-    dx=p.Lx/(p.Nx-1); dy=p.Ly/(p.Ny-1); dz=p.Lz/(p.Nz-1); dt=p.T/p.Nt
-    λx=(p.c*dt/dx)^2; λy=(p.c*dt/dy)^2; λz=(p.c*dt/dz)^2  # λx+λy+λz ≤ 1
-
-    u_prev = [p.f_init(xi,yi,zi) for xi in x, yi in y, zi in z]
-    u_curr = copy(u_prev);  u_next = similar(u_curr)
-    for _ in 1:p.Nt
-        u_next[2:end-1,2:end-1,2:end-1] .=
-            2u_curr[2:end-1,2:end-1,2:end-1] .- u_prev[2:end-1,2:end-1,2:end-1] .+
-            λx.*(u_curr[3:end,2:end-1,2:end-1] .- 2u_curr[2:end-1,2:end-1,2:end-1] .+ u_curr[1:end-2,2:end-1,2:end-1]) .+
-            λy.*(u_curr[2:end-1,3:end,2:end-1] .- 2u_curr[2:end-1,2:end-1,2:end-1] .+ u_curr[2:end-1,1:end-2,2:end-1]) .+
-            λz.*(u_curr[2:end-1,2:end-1,3:end] .- 2u_curr[2:end-1,2:end-1,2:end-1] .+ u_curr[2:end-1,2:end-1,1:end-2])
-        u_next[[1,end],:,:].=0; u_next[:,[1,end],:].=0; u_next[:,:,[1,end]].=0
-        u_prev=u_curr; u_curr=u_next; u_next=similar(u_curr)
-    end
-    return PDESolution((x,y,z), u_curr, p.T, p)
-end</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <div class="code-header"><span class="code-lang">julia — usage (3D, same WaveEquation struct)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using juliaPDEs, Plots
 
-prob = WaveEquation3D(Nx=40, Ny=40, Nz=40, Nt=100, c=1.0, T=0.5)
-sol  = solve(prob)        # returns PDESolution — sol.x, sol.y, sol.z, sol.u (40×40×40)
+prob = WaveEquation(
+    N_grid = (40, 40, 40),                              # ⇒ N = 3
+    Nt     = 100,
+    T      = 0.5,
+    c      = 1.0,
+    f_init = (x, y, z) -> exp(-80 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 40×40×40
 
 # Plot a mid-plane z-slice:
-mid = div(prob.Nz, 2)
+mid = div(prob.N_grid[3], 2)
 heatmap(sol.x, sol.y, sol.u[:, :, mid]',
         title="3D Wave — z=$(round(sol.z[mid], digits=2))  t=$(sol.t)",
         xlabel="x", ylabel="y", color=:RdBu, aspect_ratio=1, clims=(-1,1))</code></pre>
@@ -4478,48 +4444,34 @@ convergence_table([16, 32, 64, 128, 256])</code></pre>
       the matrix is $N^3\times N^3$ and sparse direct solvers become expensive above that.
     </p>
 
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (struct)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">Base.@kwdef struct PoissonEquation3D &lt;: EllipticProblem
-    N::Int     = 20
-    L::Float64 = 1.0
-    f::Function       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z)
-    u_exact::Union{Function, Nothing} = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z)
-end</code></pre>
-    </div>
+    <p>
+      Like Heat and Wave, Poisson uses a single parametric struct
+      <code>PoissonEquation{N, F, EF}</code> for every dimension. For 3D you
+      pass a 3-tuple <code>N_grid</code>, a 3-arg <code>f</code>, and (optionally)
+      a 3-arg <code>u_exact</code>. The N-D Kronecker assembly inside
+      <code>solve</code> walks every axis at compile time.
+    </p>
 
     <p>The 7-point stencil and Kronecker-sum matrix:</p>
-    $$-\nabla^2 u = f(x,y,z), \quad (x,y,z)\in[0,L]^3, \quad u=0 \text{ on } \partial\Omega$$
+    $$-\nabla^2 u = f(x,y,z), \quad (x,y,z)\in\prod_{i=1}^{3}[a_i,b_i], \quad u=0 \text{ on } \partial\Omega$$
     $$A = I\otimes I\otimes T_1 \;+\; I\otimes T_1\otimes I \;+\; T_1\otimes I\otimes I, \qquad A\,\mathbf{u} = \mathbf{f}$$
 
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">function solve(p::PoissonEquation3D)
-    N, h = p.N, p.L / (p.N + 1)
-    x = y = z = range(h, p.L - h, length=N)
-
-    T1 = spdiagm(-1 => fill(-1/h^2,N-1), 0 => fill(2/h^2,N), 1 => fill(-1/h^2,N-1))
-    IN = sparse(I, N, N)
-    A  = kron(IN,kron(IN,T1)) + kron(IN,kron(T1,IN)) + kron(T1,kron(IN,IN))
-
-    F = [p.f(x[i],y[j],z[k]) for i in 1:N, j in 1:N, k in 1:N]
-    u = reshape(A \ vec(F), N, N, N)
-    return PDESolution((collect(x),collect(y),collect(z)), u, 0.0, p)
-end</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <div class="code-header"><span class="code-lang">julia — usage (3D, same PoissonEquation struct)</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">using juliaPDEs, Plots
 
-# Default test case: exact solution is sin(πx)sin(πy)sin(πz)
-prob = PoissonEquation3D(N=20)
-sol  = solve(prob)        # returns PDESolution — sol.x, sol.y, sol.z, sol.u (20×20×20)
+# 3D test case: −∇²u = 3π²·sin(πx)sin(πy)sin(πz), exact u = sin(πx)sin(πy)sin(πz)
+prob = PoissonEquation(
+    N_grid  = (20, 20, 20),                                            # ⇒ N = 3
+    f       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z),
+    u_exact = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z),
+)
+sol = solve(prob)                                                       # PDESolution — 20×20×20
 
 println("L2 error = ", l2_error(sol))   # should be ≈ O(h²)
 
 # Mid-plane z-slice:
-mid = div(prob.N, 2)
+mid = div(prob.N_grid[3], 2)
 heatmap(sol.x, sol.y, sol.u[:, :, mid]',
         title="3D Poisson — z=$(round(sol.z[mid], digits=2))",
         xlabel="x", ylabel="y", color=:viridis, aspect_ratio=1)</code></pre>
@@ -5389,9 +5341,176 @@ fig_convergence_study()</code></pre>
     </details>
   </section>
 
-  <!-- ══ 5.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
+  <!-- ══ 7.5  Boundary Conditions in N Dimensions ═══════════ -->
+  <section class="section" id="step5-bc">
+    <h3>7.5 Boundary Conditions — One Tiny Helper, Any Dimension</h3>
+
+    <p>
+      The boundary nodes of a Cartesian-grid PDE are <em>not</em> a
+      separate data structure — they are simply the outermost slices of
+      the same array <code>u</code> that holds the interior. The only
+      thing the solver actually needs is a way to <strong>address one
+      face at a time</strong> without writing a different slice expression
+      for every dimension. Two small functions do the whole job.
+    </p>
+
+    <h4>The naming problem — compass words run out</h4>
+    <p>
+      In 2D, students naturally reach for compass labels: north, south,
+      east, west. In 3D you can still say <em>top</em>, <em>bottom</em>,
+      <em>north</em>, <em>south</em>, <em>east</em>, <em>west</em>, but
+      the convention is already shaky (does "north" mean +y or +z?). In
+      4D you have eight faces; in 5D, ten. English ran out of names at
+      3D — mathematics never did.
+    </p>
+
+    <p>
+      The boundary of a box $\Omega = [0, L_1] \times \cdots \times [0, L_N]$
+      consists of exactly $2N$ flat faces, each characterised by fixing
+      one coordinate $x_i$ at either its minimum or maximum. So we label
+      every face by a pair $(i, \sigma)$ with $i \in \{1, \dots, N\}$ and
+      $\sigma \in \{\mathrm{lo}, \mathrm{hi}\}$ — and the same vocabulary
+      covers every dimension:
+    </p>
+
+    <div style="overflow-x:auto;">
+      <table class="perf-table">
+        <thead>
+          <tr><th>Geometric intuition</th><th>Axis-side label</th><th>Array slice</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1D — left endpoint</td>          <td>(1, :lo)</td><td><code>u[1]</code></td></tr>
+          <tr><td>1D — right endpoint</td>         <td>(1, :hi)</td><td><code>u[end]</code></td></tr>
+          <tr><td>2D — west edge ($x = 0$)</td>    <td>(1, :lo)</td><td><code>u[1, :]</code></td></tr>
+          <tr><td>2D — east edge ($x = L_x$)</td>  <td>(1, :hi)</td><td><code>u[end, :]</code></td></tr>
+          <tr><td>2D — south edge ($y = 0$)</td>   <td>(2, :lo)</td><td><code>u[:, 1]</code></td></tr>
+          <tr><td>2D — north edge ($y = L_y$)</td> <td>(2, :hi)</td><td><code>u[:, end]</code></td></tr>
+          <tr><td>3D — bottom face ($z = 0$)</td>  <td>(3, :lo)</td><td><code>u[:, :, 1]</code></td></tr>
+          <tr><td>3D — top face ($z = L_z$)</td>   <td>(3, :hi)</td><td><code>u[:, :, end]</code></td></tr>
+          <tr><td>5D — fifth axis, low end</td>    <td>(5, :lo)</td><td><code>u[:, :, :, :, 1]</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Two helpers — that is the whole abstraction</h4>
+    <p>
+      Julia ships <code>selectdim(u, axis, idx)</code>, which returns a
+      <em>view</em> (no copy) of array <code>u</code> with the given axis
+      fixed at index <code>idx</code>. Wrap it once with our $(i,\sigma)$
+      labels and you are done:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the entire helper</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># A view of the boundary face on `axis` at `:lo` or `:hi`.
+face(u, axis::Int, side::Symbol) =
+    selectdim(u, axis, side === :lo ? 1 : size(u, axis))
+
+# A view of the FIRST INTERIOR layer right next to that face — needed for
+# Neumann (copy interior outward) and Periodic (wrap around).
+face_interior(u, axis::Int, side::Symbol) =
+    selectdim(u, axis, side === :lo ? 2 : size(u, axis) - 1)</code></pre>
+    </div>
+
+    <p>
+      That is it. No new struct, no abstract type hierarchy, no dispatch
+      table. Every common boundary condition is now a one-liner regardless
+      of the array's dimension — because <code>selectdim</code> already
+      knows how to slice in any direction.
+    </p>
+
+    <h4>Every common BC as a one-liner</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Dirichlet (fixed value)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># u = 0 on the lower x-face
+face(u, 1, :lo) .= 0.0
+
+# u = sin(y) on the upper x-face of a 2D array (varying value)
+face(u, 1, :hi) .= sin.(y)
+
+# u = T_hot on every face of any N-D box
+for axis in 1:ndims(u), side in (:lo, :hi)
+    face(u, axis, side) .= T_hot
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Neumann (zero flux / insulated wall)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># ∂u/∂n = 0  →  copy the first interior layer onto the boundary
+face(u, 2, :lo) .= face_interior(u, 2, :lo)
+face(u, 2, :hi) .= face_interior(u, 2, :hi)
+
+# Non-zero flux ∂u/∂n = g uses the same line plus a ±h·g term:
+face(u, 1, :lo) .= face_interior(u, 1, :lo) .- h * g</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Periodic (wrap-around)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Mirror the opposite side's interior neighbour onto each face
+face(u, 1, :lo) .= face_interior(u, 1, :hi)
+face(u, 1, :hi) .= face_interior(u, 1, :lo)</code></pre>
+    </div>
+
+    <h4>Sealing every face of a 3D box — the noisy version vs the new one</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — before</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">u[1, :, :] .= 0;  u[end, :, :] .= 0
+u[:, 1, :] .= 0;  u[:, end, :] .= 0
+u[:, :, 1] .= 0;  u[:, :, end] .= 0</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — after</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">for axis in 1:3, side in (:lo, :hi)
+    face(u, axis, side) .= 0
+end
+# …or even shorter, and works for any dimension:
+foreach(s -> (face(u, s[1], s[2]) .= 0), Iterators.product(1:ndims(u), (:lo, :hi)))</code></pre>
+    </div>
+
+    <h4>Mixing BC kinds — channel flow in 2D</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — example mixed BCs</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Streamwise (axis 1) periodic; walls (axis 2) no-slip Dirichlet
+function apply_channel_bc!(u)
+    face(u, 1, :lo) .= face_interior(u, 1, :hi)   # periodic
+    face(u, 1, :hi) .= face_interior(u, 1, :lo)
+    face(u, 2, :lo) .= 0.0                         # no-slip bottom
+    face(u, 2, :hi) .= 0.0                         # no-slip top
+end</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>What this design buys you</strong>
+      <ol>
+        <li><em>No new data structure.</em> Boundary values live in the
+          same array as the interior — exactly as you already think about
+          them mathematically.</li>
+        <li><em>Dimension-agnostic.</em> <code>face</code> and
+          <code>face_interior</code> work in 1D, 2D, 3D, or 7D without
+          changing a line.</li>
+        <li><em>Readable physics.</em> Each BC reads close to its math:
+          "the lo-face equals zero" or "the hi-face mirrors its lo
+          interior".</li>
+      </ol>
+    </div>
+
+    <h4>Caveat — Cartesian boxes only</h4>
+    <p>
+      Everything above relies on the domain being a tensor product of
+      intervals: <em>each face is a single coordinate hyperplane</em>.
+      Real engineering geometries — an airfoil cross-section, a brain
+      MRI volume, a porous-rock sample — are not boxes. There each
+      boundary node has to be identified individually from an unstructured
+      mesh, and the outward normal varies from point to point. That is the
+      job of the meshing layer covered next in
+      <a href="#step5-gmsh">7.6 — Mesh → matrix with Gmsh</a>.
+    </p>
+  </section>
+
+  <!-- ══ 7.6  Gmsh — Mesh → Matrix ══════════════════════════ -->
   <section class="section" id="step5-gmsh">
-    <h3>7.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
+    <h3>7.6 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
 
     <h4>Why structured grids are not enough</h4>
     <p>
@@ -6875,12 +6994,11 @@ plot(sol.x, sol)</code></pre>
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — src/heat.jl</span><button class="copy-btn">Copy</button></div>
       <pre><code class="language-julia">function solve(p::HeatEquation)
-    dx = p.L / (p.N + 1)
-    x  = collect(range(dx, p.L - dx, length=p.N))
-    r  = 0.4                               # r = α·dt/dx² ≤ 0.5
-    dt = r * dx^2 / p.α
-    u  = p.f_init.(x)
-    for _ in 1:ceil(Int, p.T / dt)
+    dx, x = interior_grid(p.L, p.N)        # one helper, same in 1D/2D/3D
+    dt    = p.T / p.Nt
+    r     = p.α * dt / dx^2                # r = α·dt/dx² ≤ 0.5
+    u     = p.f_init.(x)
+    for _ in 1:p.Nt
         u[2:end-1] .+= r .* (u[3:end] .- 2u[2:end-1] .+ u[1:end-2])
     end
     return PDESolution((x,), u, p.T, p)   # 1D: grid is a 1-tuple
@@ -6898,6 +7016,164 @@ end</code></pre>
         return PDESolution((x,), u_curr, p.T, p)     # 1D: final snapshot
     end
 end</code></pre>
+    </div>
+
+    <h4>The same trick works for <em>your own</em> helpers — <code>l2_error</code> by dimension</h4>
+    <p>
+      Multiple dispatch is not reserved for <code>solve</code>. Any
+      function you write can carry several methods that differ in their
+      type signature, and Julia routes the call to the most specific one.
+      The package's <code>l2_error</code> is a clean example: the formula
+      for the discrete $L^2$ norm picks up a different power of $h$ in
+      each dimension ($h^{1/2}$ in 1D, $h$ in 2D, $h^{3/2}$ in 3D), so
+      each dimension gets its own method — same name, same call site:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (2D method)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, 2}) where T
+    p = sol.problem
+    isnothing(p.u_exact) && return nothing
+    N = size(sol, 1);  h = p.L / (N + 1)
+    err2 = 0.0
+    for j in 1:N, i in 1:N
+        e = sol[i, j] - p.u_exact(sol.x[i], sol.y[j])
+        err2 += e^2
+    end
+    return h * sqrt(err2)           # 2D L² norm uses h¹
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (3D method, same name)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, 3}) where T
+    p = sol.problem
+    isnothing(p.u_exact) && return nothing
+    N = size(sol, 1);  h = p.L / (N + 1)
+    err2 = 0.0
+    for k in 1:N, j in 1:N, i in 1:N
+        e = sol[i, j, k] - p.u_exact(sol.x[i], sol.y[j], sol.z[k])
+        err2 += e^2
+    end
+    return h^(3/2) * sqrt(err2)     # 3D L² norm uses h^{3/2}
+end</code></pre>
+    </div>
+
+    <p>
+      Both methods share the name <code>l2_error</code>; what differs is
+      the second type parameter of <code>PDESolution</code>:
+      <code>{T, 2}</code> versus <code>{T, 3}</code>. Julia inspects the
+      type of the argument <em>at the call site</em> and picks the
+      matching method with zero runtime cost — the choice is baked into
+      the compiled code:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — one call site, two methods</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol2d = solve(PoissonEquation(N_grid=(40, 40)))      # PDESolution{Float64, 2}
+sol3d = solve(PoissonEquation(N_grid=(20, 20, 20),   # PDESolution{Float64, 3}
+                              f=(x,y,z)->3π^2*sin(π*x)*sin(π*y)*sin(π*z),
+                              u_exact=(x,y,z)->sin(π*x)*sin(π*y)*sin(π*z)))
+
+l2_error(sol2d)        # runs the N=2 method automatically
+l2_error(sol3d)        # runs the N=3 method automatically
+
+# See which method Julia dispatched to:
+@which l2_error(sol2d)   # → l2_error(sol::PDESolution{T, 2}) where T
+@which l2_error(sol3d)   # → l2_error(sol::PDESolution{T, 3}) where T
+
+# List every method that goes by this name:
+methods(l2_error)</code></pre>
+    </div>
+
+    <p>
+      To support a fourth dimension you would write a third method —
+      <code>l2_error(sol::PDESolution{T, 4}) where T</code> — and every
+      existing call site keeps working unchanged. <em>That</em> is the
+      practical payoff of writing dispatch on parametric types
+      (Step 7): you extend the system by <strong>adding</strong> code,
+      never by editing old code.
+    </p>
+
+    <div class="callout tip">
+      <strong>Pattern to remember</strong><br>
+      When a function's mathematical formula depends on the dimension
+      (or any other type-level property), put that property in the type
+      signature and write one focused method per case. The result is
+      shorter, faster, and grows by addition — the opposite of a
+      growing <code>if/elseif</code> ladder.
+    </div>
+
+    <h4>Don't repeat the grid formula — one helper, every solver</h4>
+    <p>
+      Every solver above started with the same two lines:
+      <code>dx = L/(N+1)</code> and <code>x = collect(range(dx, L-dx, length=N))</code>.
+      That formula appears identically in <em>five</em> solver methods
+      (Heat 1D/2D/3D, Poisson 2D/3D) — and a different but equally repeated
+      version (<code>L/(N-1)</code>, endpoints included) shows up in the
+      two wave solvers. Whenever the same calculation lives in five places,
+      one of those copies is going to drift first. Pull it into
+      <code>types.jl</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Dirichlet-interior grid — boundary nodes 0 and L are not stored.
+function interior_grid(L::Real, N::Integer)
+    dx = L / (N + 1)
+    x  = collect(range(dx, L - dx, length=N))
+    return dx, x
+end
+
+# Closed-interval grid — endpoints 0 and L are stored.
+function endpoint_grid(L::Real, N::Integer)
+    dx = L / (N - 1)
+    x  = collect(range(0, L, length=N))
+    return dx, x
+end</code></pre>
+    </div>
+
+    <p>
+      Even better — there is now exactly <em>one</em> <code>solve</code>
+      method per PDE family. It collapses the per-axis calls into a single
+      <code>ntuple</code> that runs over whatever dimension the user asked
+      for, with no per-dimension code at all:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl (N-D solver)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">grids        = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i]), N)
+d            = ntuple(i -> grids[i][1], N)   # spacings, one per axis
+axes_coords  = ntuple(i -> grids[i][2], N)   # coordinate vectors, one per axis</code></pre>
+    </div>
+
+    <p>
+      The helpers are exported (<code>using juliaPDEs</code> brings them
+      into scope), so error analyses like <code>l2_error</code> and
+      <code>convergence_table</code> can reuse them too — that is how the
+      <em>same</em> $h$ value reaches the discretisation, the error norm,
+      and the convergence-rate column without ever being typed twice:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — single source of truth</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, N}) where {T, N}
+    p = sol.problem
+    h = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i])[1], N)
+    # … sum of squared errors over CartesianIndices(sol.u) …
+    return sqrt(prod(h)) * sqrt(err2)      # ← same helper as the solver used
+end</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Why this is more than a style change</strong><br>
+      If you ever decide your convention is wrong — say you want the grid
+      to <em>include</em> the boundary nodes for a different BC scheme —
+      you change <strong>one</strong> line in <code>interior_grid</code>
+      and every solver, every error helper, and every convergence table
+      picks up the new definition automatically. Without the helper, you
+      would be hunting for <code>L/(N+1)</code> in seven files praying you
+      didn't miss one.
     </div>
 
     <h3 id="step6-layout">8.6 Full Package Layout</h3>
