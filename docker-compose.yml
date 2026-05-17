@@ -3,6 +3,8 @@ services:
   # Local dev server for viewing the site and generated document output
   server:
     build: .
+    container_name: julia-docx-server
+    restart: unless-stopped
     volumes:
       - .:/app
     ports:
@@ -19,5 +21,26 @@ services:
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     restart: unless-stopped
+    depends_on:
+      - server
+
+
+  # Daily auto-updater: git pulls main and restarts the server container.
+  # Uses your host SSH key (mounted read-only) to pull from GitHub.
+  # Set CRON_SCHEDULE / TZ to control when "start of day" means for you.
+  updater:
+    image: alpine:3
+    restart: unless-stopped
+    working_dir: /repo
+    volumes:
+      - .:/repo
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.ssh:/root/.ssh:ro
+    environment:
+      - TZ=${TZ:-UTC}
+      - CRON_SCHEDULE=${UPDATER_CRON:-0 6 * * *}
+      - BRANCH=main
+      - SERVER_CONTAINER=julia-docx-server
+    entrypoint: ["/bin/sh", "/repo/scripts/updater-entrypoint.sh"]
     depends_on:
       - server
