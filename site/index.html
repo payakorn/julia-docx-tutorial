@@ -54,17 +54,19 @@
     <a href="#pde-poisson"   class="sub">C. Poisson (any N)</a>
     <a href="#pde-poisson-3d" class="sub2">↳ 3D example</a>
     <a href="#pde-ns"        class="sub">D. Navier-Stokes (2D)</a>
-    <a href="#step5-verify"  class="sub">7.4 Verify &amp; converge</a>
-    <a href="#step5-bc"      class="sub">7.5 Boundary conditions (N-D)</a>
-    <a href="#step5-gmsh"    class="sub">7.6 Mesh → matrix (Gmsh)</a>
+    <a href="#step5-verify"  class="sub">7.3 Verify &amp; converge</a>
+    <a href="#step5-bc"      class="sub">7.4 Boundary conditions (N-D)</a>
+    <a href="#step5-gmsh"    class="sub">7.5 Mesh → matrix (Gmsh)</a>
     <div class="section-label">Polish your code</div>
     <a href="#step6">Step 8 — Package design patterns</a>
-    <a href="#step6-abstract"  class="sub">Abstract type hierarchy</a>
-    <a href="#step6-solution"  class="sub">PDESolution &amp; AbstractArray</a>
-    <a href="#step6-free"      class="sub">What you get for free</a>
-    <a href="#step6-when"      class="sub">When NOT to subtype AbstractArray</a>
-    <a href="#step6-solve"     class="sub">Unified solve() dispatch</a>
-    <a href="#step6-layout"    class="sub">Full package layout</a>
+    <a href="#step6-arch"      class="sub">8.1 Struct design patterns</a>
+    <a href="#step6-abstract"  class="sub">8.2 Abstract type hierarchy</a>
+    <a href="#step6-solution"  class="sub">8.3 PDESolution &amp; AbstractArray</a>
+    <a href="#step6-free"      class="sub">8.4 What you get for free</a>
+    <a href="#step6-when"      class="sub">8.5 When NOT to subtype AbstractArray</a>
+    <a href="#step6-solve"     class="sub">8.6 Unified solve() dispatch</a>
+    <a href="#step6-layout"    class="sub">8.7 Full package layout</a>
+    <a href="#step6-calling"   class="sub">8.8 Calling the package</a>
     <div class="section-label">Practice</div>
     <a href="#homework">Homework</a>
     <a href="#hw1" class="sub">1 — Type hierarchy</a>
@@ -185,7 +187,7 @@
       <code>cd</code>, <code>ls</code>, and <code>pwd</code> do is enough.
       Maths-wise: comfort with calculus (partial derivatives) helps in
       Step 7; a bit of linear algebra (matrix–vector products) helps in
-      Step 7.5. You do not need any prior programming course beyond what
+      Step 7.4. You do not need any prior programming course beyond what
       a typical engineering or science freshman has done.
     </div>
 
@@ -3200,7 +3202,7 @@ fig_pde_pipeline()</code></pre>
         <strong>Figure 2.</strong> The four major PDE families and their
         prototype equations. The classification you pick determines
         which time scheme is allowed (Step 7.2) and which solver to use
-        (Step 7.4).
+        (Step 7.3).
       </figcaption>
     </figure>
 
@@ -5193,7 +5195,7 @@ fig_navier_stokes()</code></pre>
 
   <!-- 5.4 Verify -->
   <section class="section" id="step5-verify">
-    <h3>7.4 Verify — Convergence Study</h3>
+    <h3>7.3 Verify — Convergence Study</h3>
     <p>
       A solver that runs without crashing is not the same as a correct
       solver. The single most powerful sanity check in numerical analysis
@@ -5375,9 +5377,9 @@ fig_convergence_study()</code></pre>
     </details>
   </section>
 
-  <!-- ══ 7.5  Boundary Conditions in N Dimensions ═══════════ -->
+  <!-- ══ 7.4  Boundary Conditions in N Dimensions ═══════════ -->
   <section class="section" id="step5-bc">
-    <h3>7.5 Boundary Conditions — One Tiny Helper, Any Dimension</h3>
+    <h3>7.4 Boundary Conditions — One Tiny Helper, Any Dimension</h3>
 
     <p>
       The boundary nodes of a Cartesian-grid PDE are <em>not</em> a
@@ -5538,13 +5540,13 @@ end</code></pre>
       boundary node has to be identified individually from an unstructured
       mesh, and the outward normal varies from point to point. That is the
       job of the meshing layer covered next in
-      <a href="#step5-gmsh">7.6 — Mesh → matrix with Gmsh</a>.
+      <a href="#step5-gmsh">7.5 — Mesh → matrix with Gmsh</a>.
     </p>
   </section>
 
-  <!-- ══ 7.6  Gmsh — Mesh → Matrix ══════════════════════════ -->
+  <!-- ══ 7.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
   <section class="section" id="step5-gmsh">
-    <h3>7.6 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
+    <h3>7.5 Beyond Structured Grids — Mesh → Matrix with Gmsh</h3>
 
     <h4>Why structured grids are not enough</h4>
     <p>
@@ -7638,7 +7640,7 @@ export solve, wave_exact, animate_wave, animate_navier_stokes
 end</code></pre>
     </div>
 
-    <h3>8.7 Calling the Package</h3>
+    <h3 id="step6-calling">8.8 Calling the Package</h3>
     <p>
       With the hierarchy and <code>AbstractArray</code> interface in place,
       switching physics is a one-word change; the grid, indexing, and plot
