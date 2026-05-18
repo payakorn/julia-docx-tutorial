@@ -62,6 +62,7 @@
     <a href="#step6-abstract"  class="sub">Abstract type hierarchy</a>
     <a href="#step6-solution"  class="sub">PDESolution &amp; AbstractArray</a>
     <a href="#step6-free"      class="sub">What you get for free</a>
+    <a href="#step6-when"      class="sub">When NOT to subtype AbstractArray</a>
     <a href="#step6-solve"     class="sub">Unified solve() dispatch</a>
     <a href="#step6-layout"    class="sub">Full package layout</a>
     <div class="section-label">Practice</div>
@@ -7015,7 +7016,396 @@ plot(sol.x, sol)</code></pre>
       methods.
     </div>
 
-    <h3 id="step6-solve">8.5 Unified solve() Dispatch</h3>
+    <h3 id="step6-when">8.5 When NOT to subtype <code>AbstractArray</code></h3>
+    <p>
+      Section 8.4 makes subtyping <code>AbstractArray</code> look like a free
+      lunch — and for <code>PDESolution</code> it really is. So a fair student
+      question is: <em>why isn't <code>HeatEquation</code> also a subtype of
+      <code>AbstractArray</code>? Wouldn't we get the same goodies?</em>
+      Short answer: <strong>no</strong>, because <code>HeatEquation</code>
+      is not an array of values — it is a parameter bundle. Subtyping
+      <code>AbstractArray</code> only pays off when your struct really does
+      represent a collection of values laid out on a grid.
+    </p>
+
+    <h4>The two questions to ask</h4>
+    <p>Before writing <code>struct Foo &lt;: AbstractArray{T, N}</code>, ask:</p>
+    <ol>
+      <li>
+        <strong>Does my object have a primary collection of values
+        addressable by integer indices?</strong> If <code>foo[1, 2]</code>
+        does not have an obvious meaning, you do not have an array.
+      </li>
+      <li>
+        <strong>Would users expect to broadcast, iterate, or reduce over
+        it?</strong> If the natural verb is <em>read a named field</em>
+        (<code>foo.α</code>), not <em>walk every element</em>, you do not
+        have an array.
+      </li>
+    </ol>
+
+    <table class="perf-table">
+      <thead>
+        <tr><th>Struct</th><th>Has indexable values?</th><th>Right parent</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>PDESolution{T, N}</code></td>
+          <td>Yes — <code>sol[i, j]</code> is the field value at grid cell <em>(i, j)</em></td>
+          <td><code>&lt;: AbstractArray{T, N}</code> ✓</td>
+        </tr>
+        <tr>
+          <td><code>HeatEquation{N, F}</code></td>
+          <td>No — it stores <code>α</code>, <code>T</code>, <code>N_grid</code>, <code>f_init</code></td>
+          <td><code>&lt;: ParabolicProblem</code> ✓ (dispatch only)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      What would <code>heat[1]</code> even mean? The first grid size?
+      <code>α</code>? A sample of <code>f_init</code>? None of those are
+      what a user expects when they index an array. The abstract hierarchy
+      <code>HeatEquation &lt;: ParabolicProblem &lt;: PDEProblem</code> exists
+      for a different purpose: <strong>multiple dispatch</strong>. It lets
+      <code>solve(p::HeatEquation)</code> pick the right method without
+      caring about <em>arrays</em> at all.
+    </p>
+
+    <div class="callout tip">
+      <strong>Rule of thumb.</strong> Use <code>&lt;: AbstractArray</code>
+      when the struct <em>is</em> a table of values with metadata bolted on.
+      Use a plain abstract-type hierarchy when the struct <em>describes</em>
+      a problem, configuration, or recipe.
+    </div>
+
+    <h4>A minimal toy: <code>NamedSeries</code> — feel the payoff in 15 lines</h4>
+    <p>
+      To make the benefit tangible, here is the smallest useful array-like
+      struct you can write. <code>NamedSeries</code> wraps a plain
+      <code>Vector{Float64}</code> together with a descriptive name (think:
+      "Temperature at sensor A, sampled every second"). Subtyping
+      <code>AbstractVector{Float64}</code> means we keep the label
+      <em>and</em> inherit every reduction, slice, broadcast, and plot
+      adapter in Julia:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct NamedSeries &lt;: AbstractVector{Float64}
+    name :: String
+    data :: Vector{Float64}
+end
+
+# Three-method AbstractArray interface — that is the whole contract.
+Base.size(s::NamedSeries)          = size(s.data)
+Base.getindex(s::NamedSeries, i)   = s.data[i]
+Base.setindex!(s::NamedSeries, v, i) = (s.data[i] = v)</code></pre>
+    </div>
+
+    <p>Now try it. None of the methods below were defined for <code>NamedSeries</code>:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Statistics, LinearAlgebra
+
+s = NamedSeries("sensor-A", [20.1, 20.4, 21.0, 21.7, 22.3, 22.0])
+
+s[1]              # 20.1            — getindex
+s[end]            # 22.0            — endpoint dispatch is automatic
+length(s)         # 6               — derived from size
+sum(s)            # 127.5           — reduction
+mean(s)           # 21.25           — Statistics works
+std(s)            # 0.91            — Statistics works
+maximum(s)        # 22.3            — reduction
+findmax(s)        # (22.3, 5)       — search
+norm(s)           # 52.1            — LinearAlgebra works
+s .+ 1.0          # broadcast — note: returns a plain Vector, not a NamedSeries
+collect(s)        # → Vector{Float64}, copies the data
+for v in s; println(v); end          # iteration works
+
+# And `s.name` is still there — the metadata survived.
+println("Series: ", s.name, "  μ=", mean(s))</code></pre>
+    </div>
+
+    <p>
+      Compare that with the "wrong" choice — making <code>NamedSeries</code>
+      a plain struct. Then <code>mean(s)</code> errors, <code>s[3]</code>
+      errors, <code>sum(s)</code> errors, and you have to either expose
+      <code>s.data</code> everywhere or write each method yourself. Three
+      lines of interface earned dozens of free methods.
+    </p>
+
+    <h4>More function calls you get for free — grouped by use case</h4>
+    <p>
+      The same <code>s = NamedSeries(...)</code> object flows through every
+      group below. Read each block as <em>"all of these calls would have
+      required hand-written methods on a plain struct"</em>. Paste them into
+      the REPL one block at a time and watch them all just work.
+    </p>
+
+    <p><strong>Inspection &amp; shape</strong> — once <code>size</code> is
+    defined, every shape query is derived for you:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">size(s)          # (6,)
+length(s)        # 6
+ndims(s)         # 1
+axes(s)          # (Base.OneTo(6),)
+eachindex(s)     # 1:6
+firstindex(s)    # 1
+lastindex(s)     # 6
+isempty(s)       # false
+eltype(s)        # Float64</code></pre>
+    </div>
+
+    <p><strong>Slicing &amp; views</strong> — any indexing pattern that
+    works on <code>Vector</code> works on <code>NamedSeries</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s[2:4]                  # [20.4, 21.0, 21.7] — range slice
+s[end-1:end]            # last two readings
+s[[1, 3, 5]]            # fancy indexing
+view(s, 2:4)            # non-allocating window into s
+s[s .&gt; 21.0]            # boolean mask: only "above 21°C"
+reverse(s)              # → Vector{Float64} in reverse order
+first(s, 3); last(s, 2) # first/last N elements</code></pre>
+    </div>
+
+    <p><strong>Reductions</strong> — anything that walks the elements once:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sum(s)                  # 127.5
+prod(s)                 # product of all readings
+minimum(s); maximum(s)  # 20.1, 22.3
+extrema(s)              # (20.1, 22.3) — one pass
+cumsum(s)               # running total
+cumprod(s)              # running product
+reduce(+, s)            # same as sum(s)
+mapreduce(x -&gt; x^2, +, s)  # sum of squares without a temp array
+any(&gt;(22), s)           # true if any reading > 22
+all(&gt;(20), s)           # true if every reading > 20
+count(&gt;(21), s)         # 4 — how many exceed 21</code></pre>
+    </div>
+
+    <p><strong>Search &amp; filter</strong> — iteration is auto-generated
+    from <code>size</code> + <code>getindex</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">findmax(s)              # (22.3, 5)  — value and index of the peak
+findmin(s)              # (20.1, 1)
+findfirst(&gt;(21.5), s)   # 4 — first reading above 21.5°C
+findlast(&lt;(22), s)      # 4 — last reading still under 22
+findall(&gt;(21), s)       # [3, 4, 5, 6]
+filter(&gt;(21), s)        # [21.0, 21.7, 22.3, 22.0]
+map(x -&gt; x - 20, s)     # offset every reading</code></pre>
+    </div>
+
+    <p><strong>Statistics</strong> (<code>using Statistics</code>) — pure
+    consumer of <code>AbstractArray</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Statistics
+
+mean(s)                 # 21.25
+median(s)               # 21.35
+std(s); var(s)          # spread
+quantile(s, 0.9)        # 90th percentile
+cor(s, reverse(s))      # correlation between two AbstractVectors
+mean(x -&gt; x^2, s)       # RMS² — mean of a function over s</code></pre>
+    </div>
+
+    <p><strong>Broadcasting &amp; pointwise math</strong> — write the
+    formula the way it looks on paper:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s .+ 273.15             # convert °C → K (returns Vector{Float64})
+s .- mean(s)            # center the series
+(s .- mean(s)) ./ std(s)         # z-score normalization
+@. exp(-(s - 21)^2 / 2)          # Gaussian weights, one fused loop
+s .* s                  # elementwise square
+s .&gt;= 21                # BitVector mask
+zero(s)                 # vector of zeros, same shape
+similar(s)              # uninitialised buffer, same shape</code></pre>
+    </div>
+
+    <p><strong>Mutation</strong> — because we defined <code>setindex!</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s[1] = 19.8             # write a single element
+s[2:3] .= 20.0          # broadcast assignment to a slice
+fill!(s, 0.0)           # zero everything (from AbstractArray)
+copyto!(s, [1.0, 2, 3, 4, 5, 6])  # bulk copy from another iterable</code></pre>
+    </div>
+
+    <p><strong>Linear algebra</strong> (<code>using LinearAlgebra</code>) —
+    treats your series as a vector in ℝⁿ:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using LinearAlgebra
+
+norm(s)                 # ‖s‖₂ — Euclidean / L² norm
+norm(s, 1)              # L¹ norm — sum of absolute values
+norm(s, Inf)            # L∞ norm — maximum absolute value
+dot(s, s)               # inner product
+normalize(s)            # unit-norm copy (plain Vector)</code></pre>
+    </div>
+
+    <p><strong>File I/O &amp; interop</strong> — any package that accepts
+    <code>AbstractArray</code> accepts <code>NamedSeries</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using DelimitedFiles
+
+writedlm("sensor.csv", s, ',')   # one row of CSV — no conversion needed
+back = readdlm("sensor.csv", ',') # comes back as Matrix{Float64}
+
+# Conversions
+collect(s)              # Vector{Float64}
+Vector(s)               # Vector{Float64} (explicit)
+Tuple(s)                # (20.1, 20.4, …)</code></pre>
+    </div>
+
+    <p><strong>Plotting</strong> — <code>Plots.jl</code> dispatches on
+    <code>AbstractVector</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Plots
+
+plot(s, lw=2, label=s.name)            # line plot — uses the metadata!
+scatter(s, ms=4)                       # scatter
+histogram(s, bins=5)                   # distribution
+
+# Compare two series on the same axes
+s2 = NamedSeries("sensor-B", [19.0, 19.3, 19.7, 20.2, 20.5, 20.1])
+plot(s,  label=s.name, lw=2)
+plot!(s2, label=s2.name, lw=2, ls=:dash)</code></pre>
+    </div>
+
+    <p><strong>Passing to functions written for <code>AbstractVector</code></strong>
+    — the real payoff: code <em>other people</em> wrote for vectors accepts
+    your custom type without modification:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># A generic function someone else wrote — knows nothing about NamedSeries:
+function moving_average(v::AbstractVector, k::Int)
+    [mean(@view v[max(1, i-k+1):i]) for i in eachindex(v)]
+end
+
+moving_average(s, 3)    # works! returns a Vector{Float64}
+
+# Or a function that only requires `length` + `getindex`:
+function summarise(v::AbstractVector)
+    return (n = length(v),
+            μ = sum(v) / length(v),
+            range = maximum(v) - minimum(v))
+end
+
+summarise(s)            # (n = 6, μ = 21.25, range = 2.2)</code></pre>
+    </div>
+
+    <h4>The same pattern in 2D — <code>NamedMatrix</code></h4>
+    <p>
+      The interface scales to any dimension just by changing the
+      <code>AbstractArray</code> parameter. Here is the 2D analogue —
+      a matrix that knows its <em>row</em> and <em>column</em> labels:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct NamedMatrix &lt;: AbstractMatrix{Float64}
+    rows :: Vector{String}
+    cols :: Vector{String}
+    data :: Matrix{Float64}
+end
+
+Base.size(m::NamedMatrix)           = size(m.data)
+Base.getindex(m::NamedMatrix, i, j) = m.data[i, j]
+Base.setindex!(m::NamedMatrix, v, i, j) = (m.data[i, j] = v)
+
+M = NamedMatrix(
+    ["sensor-A", "sensor-B", "sensor-C"],
+    ["t=0", "t=1", "t=2", "t=3"],
+    [20.1 20.4 21.0 21.7;
+     19.0 19.3 19.7 20.2;
+     22.5 22.7 22.9 23.0],
+)
+
+size(M)              # (3, 4)
+M[1, :]              # row 1 → Vector{Float64}
+M[:, end]            # last column
+sum(M, dims=2)       # row-wise totals — 3×1 Matrix
+mean(M, dims=1)      # column-wise means — 1×4 Matrix
+maximum(M)           # global peak
+M'                   # transpose works
+M * M'               # matrix product! LinearAlgebra dispatches by shape
+
+using Plots
+heatmap(M.cols, M.rows, M)   # heatmap — uses the labels as tick text</code></pre>
+    </div>
+
+    <p>
+      Same three-method recipe, same payoff in every dimension. This is
+      exactly how <code>PDESolution{T, N}</code> works — only with grid
+      coordinates instead of string labels and a parametric <code>N</code>
+      so one struct handles 1D, 2D, and 3D simultaneously.
+    </p>
+
+    <h4>Now the contrast: a <em>plain</em> struct that should stay plain</h4>
+    <p>
+      <code>SensorConfig</code> below is the analogue of
+      <code>HeatEquation</code> — a parameter bundle. There is no natural
+      "value at index <em>i</em>" to return, so we do <strong>not</strong>
+      subtype <code>AbstractArray</code>. Instead we group it under an
+      abstract type (here <code>Configuration</code>) so dispatch can target
+      "any configuration":
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">abstract type Configuration end
+
+struct SensorConfig &lt;: Configuration
+    name         :: String
+    sample_rate  :: Float64    # Hz
+    threshold    :: Float64    # °C
+end
+
+cfg = SensorConfig("sensor-A", 10.0, 25.0)
+
+cfg.name           # "sensor-A"      — named-field access is the point
+cfg.threshold      # 25.0
+
+# These would all be errors — and rightly so:
+# cfg[1]            ❌ no integer indexing
+# sum(cfg)          ❌ what would you even sum?
+# mean(cfg)         ❌ ditto
+
+# Dispatch is still possible — that is what the abstract type is for:
+describe(c::Configuration) = "$(c.name) @ $(c.sample_rate) Hz"
+describe(cfg)              # "sensor-A @ 10.0 Hz"</code></pre>
+    </div>
+
+    <p>
+      <code>HeatEquation</code> follows exactly this pattern: a
+      <code>@kwdef</code> struct holding parameters, parented to
+      <code>ParabolicProblem &lt;: PDEProblem</code> so <code>solve</code> can
+      dispatch on it. No indexing, no broadcasting — and that is the
+      <em>correct</em> design, not a missed opportunity.
+    </p>
+
+    <div class="callout tip">
+      <strong>Mental model.</strong>
+      <code>&lt;: AbstractArray</code> answers <em>"what is this a
+      collection of?"</em>
+      <code>&lt;: AbstractProblem</code> (or any custom abstract type) answers
+      <em>"what category of thing is this, for dispatch?"</em>
+      They are orthogonal — your <code>PDESolution</code> uses the first,
+      your <code>HeatEquation</code> uses the second, and a hypothetical
+      <code>SolutionHistory</code> could use both at once.
+    </div>
+
+    <h3 id="step6-solve">8.6 Unified solve() Dispatch</h3>
     <p>
       Each solver file defines one method of <code>solve</code>. Julia
       picks the correct one from the argument type alone — no
@@ -7209,7 +7599,7 @@ end</code></pre>
       didn't miss one.
     </div>
 
-    <h3 id="step6-layout">8.6 Full Package Layout</h3>
+    <h3 id="step6-layout">8.7 Full Package Layout</h3>
     <p>
       <code>types.jl</code> must be included first because every other
       file uses <code>PDEProblem</code> and <code>PDESolution</code>.
