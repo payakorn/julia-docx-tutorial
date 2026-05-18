@@ -38,7 +38,7 @@ services:
       - ${HOME}/.ssh:/root/.ssh:ro
     environment:
       - TZ=${TZ:-UTC}
-      - CRON_SCHEDULE=${UPDATER_CRON:-0 6 * * *}
+      - CRON_SCHEDULE=${UPDATER_CRON:-*/15 * * * *}
       - BRANCH=main
       - SERVER_SERVICE=server
     entrypoint: ["/bin/sh", "/repo/scripts/updater-entrypoint.sh"]
