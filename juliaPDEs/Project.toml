@@ -1,6 +1,6 @@
 name = "juliaPDEs"
 uuid = "27a59582-a819-4a6e-ae33-0a6f2b5f1538"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["PC-WSL <payakornn@gmail.com>"]
 
 [deps]
