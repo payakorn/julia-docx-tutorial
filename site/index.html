@@ -46,6 +46,7 @@
     <a href="#pkg-revise"    class="sub">Revise — live reload</a>
     <a href="#pkg-workflow"  class="sub">Dev workflow loop</a>
     <a href="#parametric-types" class="sub">↳ How structs make Julia fast</a>
+    <a href="#array-type-hierarchy" class="sub2">↳ Array type hierarchy</a>
     <div class="section-label">Solve PDEs (easy → hard)</div>
     <a href="#step5">Step 7 — The PDE workflow</a>
     <a href="#step5-model"   class="sub">7.1 Classify the PDE</a>
@@ -3004,6 +3005,402 @@ struct HeatEquationSlow ...
       so Julia specializes on the exact problem instance.
       This is why the same solver runs at C speed without any C code.
     </div>
+
+    <!-- ══ ARRAY TYPE HIERARCHY ════════════════════════ -->
+    <h3 id="array-type-hierarchy">Array Types Deep-Dive &#8212; <code>AbstractArray</code>, <code>Array</code>, <code>Matrix</code>, and <code>Vector</code></h3>
+    <p>
+      One of the most common sources of accidental performance loss in Julia is
+      annotating a <strong>struct field</strong> with an abstract array type. The four
+      types below are the ones you will meet every day &#8212; knowing how they relate
+      lets you write the fastest possible code <em>without</em> sacrificing flexibility.
+    </p>
+
+    <!-- Type hierarchy tree as a code block -->
+    <h4>The Type Hierarchy Tree</h4>
+    <p>
+      Julia&#39;s array types form a tree. Every type listed is a
+      <em>subtype</em> of the one above it. You can always pass a
+      more-specific type where a less-specific one is expected, but
+      <strong>never the other way around</strong>.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia &#8212; type hierarchy</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">AbstractArray{T,N}          # abstract root &#8212; any N-d array of element type T
+&#x251C;&#x2500;&#x2500; DenseArray{T,N}         # abstract &#8212; contiguous in memory
+&#x2502;   &#x2514;&#x2500;&#x2500; Array{T,N}          # CONCRETE &#8212; Julia&#39;s built-in heap array
+&#x2502;       &#x251C;&#x2500;&#x2500; Vector{T}       # = Array{T,1}  (1-D alias)
+&#x2502;       &#x2514;&#x2500;&#x2500; Matrix{T}       # = Array{T,2}  (2-D alias)
+&#x251C;&#x2500;&#x2500; SubArray{T,N,&#x2026;}         # view into another array &#8212; no copy
+&#x251C;&#x2500;&#x2500; SparseMatrixCSC{T,I}    # compressed sparse (SparseArrays.jl)
+&#x2514;&#x2500;&#x2500; StaticArray{S,T,N}      # stack-allocated fixed-size (StaticArrays.jl)</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Key aliases &#8212; run in the REPL to verify</strong>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">Vector{Float64} === Array{Float64, 1}   # true
+Matrix{Float64} === Array{Float64, 2}   # true
+
+# Subtype checks  (&lt;: means "is a subtype of")
+Vector{Float64} &lt;: Array                # true
+Array           &lt;: DenseArray           # true
+DenseArray      &lt;: AbstractArray        # true
+Vector{Float64} &lt;: AbstractArray        # true  (transitive)
+
+# NOT the other way:
+AbstractArray   &lt;: Array                # false &#8212; too broad
+Matrix{Float64} &lt;: Vector{Float64}     # false &#8212; different dims</code></pre>
+      </div>
+    </div>
+
+    <!-- Subset table -->
+    <h4>Who Is a Subset of Whom?</h4>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Kind</th>
+            <th>Is a subtype of &#x2026;</th>
+            <th>What it <em>excludes</em></th>
+            <th>Must you define anything?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>AbstractArray{T,N}</code></td>
+            <td>Abstract</td>
+            <td>&#8212;</td>
+            <td>Nothing &#8212; accepts every array-like type</td>
+            <td>Custom types must define <code>size</code> and <code>getindex</code></td>
+          </tr>
+          <tr>
+            <td><code>Array{T,N}</code></td>
+            <td><strong>Concrete</strong></td>
+            <td><code>AbstractArray</code>, <code>DenseArray</code></td>
+            <td>Sparse, static, view types</td>
+            <td>Nothing &#8212; it&#39;s built-in</td>
+          </tr>
+          <tr>
+            <td><code>Vector{T}</code></td>
+            <td><strong>Concrete</strong> (alias)</td>
+            <td><code>Array{T,1}</code>, <code>AbstractArray{T,1}</code></td>
+            <td>2-D and higher arrays</td>
+            <td>Nothing &#8212; alias of <code>Array{T,1}</code></td>
+          </tr>
+          <tr>
+            <td><code>Matrix{T}</code></td>
+            <td><strong>Concrete</strong> (alias)</td>
+            <td><code>Array{T,2}</code>, <code>AbstractArray{T,2}</code></td>
+            <td>1-D and 3-D+ arrays</td>
+            <td>Nothing &#8212; alias of <code>Array{T,2}</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- When to use which &#8212; four deriv-cards -->
+    <h4>When to Use Which &#8212; The Decision Rule</h4>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">&#x2713;</div>
+          <span class="deriv-title">Use <code>Vector{T}</code> / <code>Matrix{T}</code> &#8212; in struct fields</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">When to use</span>
+            <p>Use concrete types in <strong>struct fields</strong> &#8212; Julia knows the exact memory layout at compile time,
+            enabling full loop vectorization and zero-allocation access. Also use them as function return types.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">julia &#8212; struct field</span>
+            <pre>struct FastSolver
+    u :: Vector{Float64}   # &#x2713; concrete
+    A :: Matrix{Float64}   # &#x2713; concrete
+end</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">best of both worlds &#8212; parametric field accepts any concrete subtype</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">&#x2713;</div>
+          <span class="deriv-title">Use <code>struct Foo{A &lt;: AbstractArray}</code> &#8212; flexible AND fast</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">When to use</span>
+            <p>When the caller might pass a <code>Vector</code>, a <code>Matrix</code>, a view (<code>SubArray</code>),
+            or a sparse array. Julia specializes one compiled version per concrete type &#8212; zero boxing,
+            same speed as a fixed annotation.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">julia &#8212; parametric struct field</span>
+            <pre>struct FlexSolver{A &lt;: AbstractArray}
+    u :: A    # &#x2713; specialized per caller
+end
+# FlexSolver(rand(5))     &#x2192; A = Vector{Float64}
+# FlexSolver(rand(5,5))   &#x2192; A = Matrix{Float64}
+# FlexSolver(view(M,1,:)) &#x2192; A = SubArray{&#x2026;}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">use AbstractVector{T} in function args when you want views + dense to both work</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">&#x26A0;</div>
+          <span class="deriv-title">Use <code>AbstractVector{T}</code> &#8212; in function arguments only</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">When to use</span>
+            <p>In <strong>function arguments</strong> when you want the function to accept vectors, views, and sparse
+            arrays all at once. Julia specializes per concrete call-site type regardless of the annotation &#8212;
+            so there is <em>no performance penalty</em>. <em>Never</em> put it in struct fields; that causes boxing.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">julia &#8212; function argument</span>
+            <pre># &#x2713; accepts Vector, Matrix, SubArray, etc.
+function norm2(v::AbstractVector{T}) where T
+    s = zero(T)
+    @inbounds for x in v
+        s += x * x
+    end
+    return sqrt(s)
+end</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">bare AbstractArray in struct fields &#8212; Julia cannot specialize &#8212; causes boxing</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">&#x2717;</div>
+          <span class="deriv-title">Never bare <code>AbstractArray</code> (no T, no N) in struct fields</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Why it is slow &#8212; struct fields only</span>
+            <p>When a <strong>struct field</strong> is typed <code>AbstractArray</code>, Julia cannot know
+            the element type at compile time. Every field access requires a runtime type lookup (boxing).
+            This kills loop vectorization (SIMD) and causes millions of heap allocations.
+            Note: this does <em>not</em> happen in function arguments &#8212; Julia always specializes
+            functions at the call site.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">julia &#8212; &#x2717; slow (struct field only)</span>
+            <pre>struct SlowSolver
+    u :: AbstractArray   # &#x2717; no T, no N &#x2192; boxing
+    A :: AbstractMatrix  # &#x2717; T unknown at compile time
+end</pre>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end deriv-flow -->
+
+    <!-- Performance benchmark -->
+    <h4>Function Annotations &#8212; Julia Always Specializes at the Call Site</h4>
+    <p>
+      An important result: when you run the same loop with all four function annotations,
+      they are <strong>all equally fast</strong> &#8212; zero allocations, same time.
+      Julia looks at the <em>concrete type of the argument you pass</em>, not the
+      annotation, and compiles a specialized version for it. The annotation only controls
+      which types the function will <em>accept</em>.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia &#8212; juliaPDEs/src/testforloop.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using BenchmarkTools
+
+v = rand(Float64, 10_000_000)   # always a Vector{Float64}
+
+function dot_concrete(v::Vector{Float64})
+    s = 0.0; @inbounds for x in v; s += x; end; s
+end
+
+function dot_parametric(v::Vector{T}) where T
+    s = zero(T); @inbounds for x in v; s += x; end; s
+end
+
+function dot_abstract_param(v::AbstractVector{T}) where T
+    s = zero(T); @inbounds for x in v; s += x; end; s
+end
+
+function dot_fully_abstract(v::AbstractArray)
+    s = 0.0; @inbounds for x in v; s += x; end; s
+end
+
+println("1. Vector{Float64}:      ", @btime dot_concrete($v))
+println("2. Vector{T}:            ", @btime dot_parametric($v))
+println("3. AbstractVector{T}:    ", @btime dot_abstract_param($v))
+println("4. AbstractArray (bare): ", @btime dot_fully_abstract($v))</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">actual output &#8212; all four are identical (Julia 1.10, 10 M elements)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-text">  5.771 ms (0 allocations: 0 bytes)
+1. Vector{Float64}:      4.997745176320315e6
+  5.849 ms (0 allocations: 0 bytes)
+2. Vector{T}:            4.997745176320315e6
+  5.916 ms (0 allocations: 0 bytes)
+3. AbstractVector{T}:    4.997745176320315e6
+  5.792 ms (0 allocations: 0 bytes)
+4. AbstractArray (bare): 4.997745176320315e6</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Why are they all the same?</strong>
+      When you call <code>dot_fully_abstract(v)</code> and <code>v</code> is a
+      <code>Vector{Float64}</code>, Julia sees the concrete type at the call site and
+      compiles a specialized method for <code>Vector{Float64}</code> &#8212; even if the
+      annotation says <code>AbstractArray</code>.
+      The annotation only determines what types will be <em>accepted</em>, not how fast
+      the function runs for a given concrete type.
+      The real performance penalty from abstract types happens in
+      <strong>struct fields</strong>, as shown in the parametric-vs-abstract benchmark above.
+    </div>
+
+    <div class="perf-chart-wrap">
+      <canvas id="chartArrayTypes" height="200"></canvas>
+    </div>
+    <p style="font-size:0.82rem;color:#6a8aaa;margin-top:6px;">
+      All four annotation styles produce identical runtime when called with a
+      <code>Vector{Float64}</code> &#8212; Julia specializes per call-site type regardless of annotation.
+      Run <code>julia --project=. juliaPDEs/src/testforloop.jl</code> to reproduce.
+    </p>
+
+    <!-- Quick-reference table -->
+    <h4>Quick-Reference Table</h4>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Annotation</th>
+            <th>Accepts</th>
+            <th>In struct field?</th>
+            <th>In function arg?</th>
+            <th>Speed (function)</th>
+            <th>Speed (struct field)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><code>Vector{Float64}</code></td>
+            <td>1-D <code>Float64</code> only</td>
+            <td>&#x2705; Best choice</td>
+            <td>&#x2705; Fast but narrow</td>
+            <td>&#x1F680; Fastest</td>
+            <td>&#x1F680; Fastest</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><code>Vector{T} where T</code></td>
+            <td>Any 1-D array</td>
+            <td>&#x2705; via struct param</td>
+            <td>&#x2705; Flexible + fast</td>
+            <td>&#x1F680; Fastest</td>
+            <td>&#x1F680; Fastest</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><code>AbstractVector{T} where T</code></td>
+            <td>Vector, view, sparse&#x2026;</td>
+            <td>&#x26A0;&#xFE0F; Use struct param instead</td>
+            <td>&#x2705; Most flexible</td>
+            <td>&#x1F680; Fastest</td>
+            <td>&#x1F40C; ~5x slower</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><code>AbstractArray</code> (bare)</td>
+            <td>Literally anything</td>
+            <td>&#x274C; Never &#8212; causes boxing</td>
+            <td>&#x26A0;&#xFE0F; OK but avoid</td>
+            <td>&#x1F680; Fastest</td>
+            <td>&#x1F40C; ~5x slower</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <strong>The rule: where does the abstract type live?</strong>
+      <ul>
+        <li><strong>Function argument</strong>: any annotation is fine &#8212; Julia always specializes
+          per concrete call-site type. Use <code>AbstractVector{T}</code> freely for flexibility.</li>
+        <li><strong>Struct field</strong>: always use a <em>concrete</em> type or a type parameter.
+          <code>AbstractArray</code> (no <code>T</code>, no <code>N</code>) in a field causes
+          boxing on every access, kills SIMD, and produces millions of allocations per time-step.</li>
+      </ul>
+    </div>
+
+    <script>
+    (function() {
+      new Chart(document.getElementById('chartArrayTypes'), {
+        type: 'bar',
+        data: {
+          labels: [
+            'Vector{Float64}',
+            'Vector{T} where T',
+            'AbstractVector{T} where T',
+            'AbstractArray (bare)'
+          ],
+          datasets: [{
+            label: 'Relative wall-clock time in function calls (all equal)',
+            data: [1.0, 1.01, 1.02, 1.00],
+            backgroundColor: ['#9558B2', '#9558B2', '#2E75B6', '#2E75B6'],
+            borderColor:     ['#6a2a8a', '#6a2a8a', '#1F4E79', '#1F4E79'],
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const v = ctx.parsed.x;
+                  return ` ${v.toFixed(2)}x relative to Vector{Float64} (all identical)`;
+                }
+              }
+            },
+            title: {
+              display: true,
+              text: 'Function call performance &#8212; 10 M elements &#8212; all four annotations compile identically'
+            }
+          },
+          scales: {
+            x: {
+              min: 0, max: 1.5,
+              title: { display: true, text: 'Relative time  (1.0 = fastest &#8212; all are equal)' },
+              ticks: { callback: v => v + 'x' }
+            },
+            y: { grid: { display: false } }
+          }
+        }
+      });
+    })();
+    </script>
 
     <h3 id="refs-types">References</h3>
     <ol class="ref-list">

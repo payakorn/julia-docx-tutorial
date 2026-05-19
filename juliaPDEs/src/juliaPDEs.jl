@@ -2,6 +2,7 @@ module juliaPDEs
 
 using Plots, Revise, Oceananigans
 using SparseArrays, LinearAlgebra
+using BenchmarkTools
 
 include("types.jl")
 include("heat.jl")
