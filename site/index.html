@@ -3215,12 +3215,21 @@ end</pre>
 
     <!-- Performance benchmark -->
     <h4>Function Annotations &#8212; Julia Always Specializes at the Call Site</h4>
+    <div class="callout warn">
+      <strong>&#9888;&#65039; Common misconception: type annotations do NOT speed up function calls.</strong><br>
+      The benchmark below (<code>testforloop.jl</code>) intentionally shows all four
+      annotation styles running at <em>exactly the same speed</em> when called with
+      the same <code>Vector{Float64}</code>. This is correct behavior &#8212; Julia
+      specializes the compiled machine code on the <strong>concrete type you actually
+      pass in</strong>, not on the annotation. The annotation only controls which types
+      the function <em>accepts</em>, not how fast it runs.<br><br>
+      <strong>The real performance difference from abstract types is in struct fields</strong>,
+      not function arguments. See the <code>HeatEquation</code> vs
+      <code>HeatEquationSlow</code> benchmark above for a 5&#x2013;10&#xD7; real-world difference.
+    </div>
     <p>
-      An important result: when you run the same loop with all four function annotations,
-      they are <strong>all equally fast</strong> &#8212; zero allocations, same time.
-      Julia looks at the <em>concrete type of the argument you pass</em>, not the
-      annotation, and compiles a specialized version for it. The annotation only controls
-      which types the function will <em>accept</em>.
+      Run <code>testforloop.jl</code> yourself &#8212; all four functions produce
+      identical timing and zero allocations:
     </p>
 
     <div class="code-block">
@@ -3242,7 +3251,7 @@ function dot_abstract_param(v::AbstractVector{T}) where T
 end
 
 function dot_fully_abstract(v::AbstractArray)
-    s = 0.0; @inbounds for x in v; s += x; end; s
+    s = 0.0; for x in v; s += x; end; s
 end
 
 println("1. Vector{Float64}:      ", @btime dot_concrete($v))
@@ -3322,10 +3331,10 @@ println("4. AbstractArray (bare): ", @btime dot_fully_abstract($v))</code></pre>
             <td>3</td>
             <td><code>AbstractVector{T} where T</code></td>
             <td>Vector, view, sparse&#x2026;</td>
-            <td>&#x26A0;&#xFE0F; Use struct param instead</td>
+            <td>&#x26A0;&#xFE0F; Not valid in fields<sup>*</sup></td>
             <td>&#x2705; Most flexible</td>
-            <td>&#x1F680; Fastest</td>
-            <td>&#x1F40C; ~5x slower</td>
+            <td>&#x1F680; Fastest (call-site specialization)</td>
+            <td>&#x274C; N/A &#8212; not valid Julia syntax</td>
           </tr>
           <tr>
             <td>4</td>
@@ -3333,21 +3342,35 @@ println("4. AbstractArray (bare): ", @btime dot_fully_abstract($v))</code></pre>
             <td>Literally anything</td>
             <td>&#x274C; Never &#8212; causes boxing</td>
             <td>&#x26A0;&#xFE0F; OK but avoid</td>
-            <td>&#x1F680; Fastest</td>
-            <td>&#x1F40C; ~5x slower</td>
+            <td>&#x1F680; Fastest (call-site specialization)</td>
+            <td>&#x1F40C; Slowest &#8212; no T, no N</td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <p style="font-size:0.82rem;color:#6a8aaa;margin-top:4px;">
+      <sup>*</sup> <code>struct Foo; u::AbstractVector{T} where T; end</code> is not valid Julia.
+      The correct pattern for a flexible field is a struct-level type parameter:
+      <code>struct Foo{A &lt;: AbstractVector}; u::A; end</code>.
+      This binds <code>A</code> to the concrete type at construction time and runs at
+      exactly the same speed as <code>Vector{Float64}</code>.
+    </p>
+
     <div class="callout warn">
-      <strong>The rule: where does the abstract type live?</strong>
+      <strong>The golden rule &#8212; where does the abstract type live?</strong>
       <ul>
-        <li><strong>Function argument</strong>: any annotation is fine &#8212; Julia always specializes
-          per concrete call-site type. Use <code>AbstractVector{T}</code> freely for flexibility.</li>
-        <li><strong>Struct field</strong>: always use a <em>concrete</em> type or a type parameter.
-          <code>AbstractArray</code> (no <code>T</code>, no <code>N</code>) in a field causes
-          boxing on every access, kills SIMD, and produces millions of allocations per time-step.</li>
+        <li><strong>Function argument annotation:</strong> performance is <em>always identical</em>
+          regardless of annotation. Julia compiles a specialized version for each concrete
+          call-site type. Feel free to use <code>AbstractVector{T}</code> in function
+          signatures for maximum flexibility &#8212; it costs <em>nothing</em>.</li>
+        <li><strong>Struct field type:</strong> always use a <em>concrete</em> type
+          (<code>Vector{Float64}</code>) or a struct-level type parameter
+          (<code>struct Foo{A}; u::A; end</code>).
+          Abstract types in fields &#8212; <code>AbstractArray</code>,
+          <code>AbstractVector</code>, bare <code>Function</code>, bare <code>Tuple</code>
+          &#8212; cause boxing on every field access, kill SIMD vectorization,
+          and produce millions of heap allocations in tight solver loops.</li>
       </ul>
     </div>
 
