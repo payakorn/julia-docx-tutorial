@@ -1,3 +1,36 @@
+// ── Mobile sidebar toggle ─────────────────────────────────────────────────
+(function () {
+  const toggle  = document.getElementById('menu-toggle');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (!toggle || !sidebar) return;
+
+  function openMenu() {
+    sidebar.classList.add('open');
+    toggle.setAttribute('aria-expanded', 'true');
+    if (overlay) overlay.style.display = 'block';
+  }
+
+  function closeMenu() {
+    sidebar.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+    if (overlay) overlay.style.display = '';
+  }
+
+  toggle.addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeMenu() : openMenu();
+  });
+
+  if (overlay) overlay.addEventListener('click', closeMenu);
+
+  // Close when a nav link is tapped on mobile
+  sidebar.querySelectorAll('nav a').forEach(a => {
+    a.addEventListener('click', () => {
+      if (window.innerWidth <= 820) closeMenu();
+    });
+  });
+})();
+
 // Copy-to-clipboard — works for both .code-block and .deriv-code-panel
 document.querySelectorAll('.copy-btn').forEach(btn => {
   btn.addEventListener('click', () => {

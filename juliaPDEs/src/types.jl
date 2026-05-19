@@ -23,10 +23,23 @@ abstract type IncompressibleNSProblem <: PDEProblem end
 #   problem — the original problem struct (preserves parameters for plotting)
 #
 struct PDESolution{T,N} <: AbstractArray{T,N}
-    grid::NTuple{N,Vector{Float64}}
-    u::Array{T,N}
-    t::Float64
-    problem::PDEProblem
+  grid::NTuple{N,Vector{Float64}}
+  u::Array{T,N}
+  t::Float64
+  problem::PDEProblem
+end
+
+
+Base.@kwdef struct Grid{N}
+  a::NTuple{N,Float64}
+  b::NTuple{N,Float64}
+  stepsize::NTuple{N,Float64}
+
+  # 1. Use broadcasting with Tuple to ensure the type matches NTuple{N, Int}
+  numgrid::NTuple{N,Int} = Int.(ceil.((b .- a) ./ stepsize))
+
+  # 2. Use ntuple() for clean, type-stable generation of the spaces
+  space::NTuple{N,Vector{Float64}} = ntuple(i -> collect(range(a[i], b[i], length=numgrid[i])), length(a))
 end
 
 # ── AbstractArray interface ───────────────────────────────────────────────────
@@ -37,38 +50,38 @@ Base.IndexStyle(::Type{<:PDESolution}) = IndexCartesian()
 
 # ── Convenience properties: sol.x, sol.y, sol.z ──────────────────────────────
 function Base.getproperty(s::PDESolution, sym::Symbol)
-    g = getfield(s, :grid)
-    sym === :x && return g[1]
-    if sym === :y
-        length(g) >= 2 || error("$(typeof(s)) has no y dimension")
-        return g[2]
-    end
-    if sym === :z
-        length(g) >= 3 || error("$(typeof(s)) has no z dimension")
-        return g[3]
-    end
-    return getfield(s, sym)
+  g = getfield(s, :grid)
+  sym === :x && return g[1]
+  if sym === :y
+    length(g) >= 2 || error("$(typeof(s)) has no y dimension")
+    return g[2]
+  end
+  if sym === :z
+    length(g) >= 3 || error("$(typeof(s)) has no z dimension")
+    return g[3]
+  end
+  return getfield(s, sym)
 end
 
 function Base.propertynames(s::PDESolution{T,N}, private::Bool=false) where {T,N}
-    names = (:grid, :u, :t, :problem, :x)
-    N >= 2 && (names = (names..., :y))
-    N >= 3 && (names = (names..., :z))
-    return names
+  names = (:grid, :u, :t, :problem, :x)
+  N >= 2 && (names = (names..., :y))
+  N >= 3 && (names = (names..., :z))
+  return names
 end
 
 # ── Pretty printing — suppress the default "print every element" dump ─────────
 function Base.show(io::IO, ::MIME"text/plain", s::PDESolution{T,N}) where {T,N}
-    dims = join(["$(length(g)) pts" for g in s.grid], " × ")
-    println(io, "PDESolution{$(N)D, $(T)}")
-    println(io, "  problem : $(typeof(s.problem))")
-    println(io, "  size    : $(size(s.u))")
-    println(io, "  t       : $(s.t)")
-    print(io, "  grid    : $(dims)")
+  dims = join(["$(length(g)) pts" for g in s.grid], " × ")
+  println(io, "PDESolution{$(N)D, $(T)}")
+  println(io, "  problem : $(typeof(s.problem))")
+  println(io, "  size    : $(size(s.u))")
+  println(io, "  t       : $(s.t)")
+  print(io, "  grid    : $(dims)")
 end
 
 Base.show(io::IO, s::PDESolution{T,N}) where {T,N} =
-    print(io, "PDESolution{$(N)D}($(join(size(s.u), "×")), t=$(s.t))")
+  print(io, "PDESolution{$(N)D}($(join(size(s.u), "×")), t=$(s.t))")
 
 
 # ── Grid builders ─────────────────────────────────────────────────────────────
@@ -96,9 +109,9 @@ Uniform grid of `N` interior points on the open interval `(a, b)`.
     interior_grid(L, N) = interior_grid(0, L, N)
 """
 function interior_grid(a::Real, b::Real, N::Integer)
-    dx = (b - a) / (N + 1)
-    x  = collect(range(a + dx, b - dx, length=N))
-    return dx, x
+  dx = (b - a) / (N + 1)
+  x = collect(range(a + dx, b - dx, length=N))
+  return dx, x
 end
 interior_grid(L::Real, N::Integer) = interior_grid(zero(L), L, N)
 
@@ -111,8 +124,8 @@ included. `dx = (b - a) / (N - 1)` and `x = [a, a+dx, …, b]`.
     endpoint_grid(L, N) = endpoint_grid(0, L, N)
 """
 function endpoint_grid(a::Real, b::Real, N::Integer)
-    dx = (b - a) / (N - 1)
-    x  = collect(range(a, b, length=N))
-    return dx, x
+  dx = (b - a) / (N - 1)
+  x = collect(range(a, b, length=N))
+  return dx, x
 end
 endpoint_grid(L::Real, N::Integer) = endpoint_grid(zero(L), L, N)
