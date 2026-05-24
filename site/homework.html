@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Homework &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Polish &amp; ship</div>
+    <div class="ch-label">Chapter 13</div>
+    <h1>Homework</h1>
+    <p>Eight exercises that walk you from copying a struct to writing your own solver.</p>
+  </header>
+  <section class="section" id="homework">
+    <h2>Homework</h2>
+    <p>
+      These exercises reinforce the design patterns from Step 8. Work
+      through them in the Julia REPL or VS Code with Revise running so
+      you get instant feedback. Each exercise builds on the previous one.
+    </p>
+
+    <div class="callout tip">
+      <strong>Before you start:</strong> activate the package environment so
+      your changes reload automatically.
+      <pre style="margin:0.5rem 0 0;"><code class="language-julia">using Pkg; Pkg.activate("path/to/juliaPDEs")
+using Revise, juliaPDEs</code></pre>
+    </div>
+
+    <!-- ── HW 1 ── -->
+    <h3 id="hw1">Exercise 1 — Explore the type hierarchy</h3>
+    <p>
+      Run these checks in the REPL and make sure you understand each result
+      before moving on. Write down in one sentence <em>why</em> each answer
+      is <code>true</code> or <code>false</code>.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">h = HeatEquation()
+w = WaveEquation()
+
+# Fill in what you expect, then run to check:
+h isa PDEProblem           # ?
+h isa ParabolicProblem     # ?
+h isa HyperbolicProblem    # ?
+w isa PDEProblem           # ?
+w isa ParabolicProblem     # ?
+supertype(HeatEquation)    # ?
+supertype(ParabolicProblem)# ?</code></pre>
+    </div>
+    <p><strong>Bonus:</strong> Use <code>subtypes(PDEProblem)</code> to list
+    every direct child of the abstract type. What does
+    <code>subtypes(HeatEquation)</code> return and why?</p>
+
+    <!-- ── HW 2 ── -->
+    <h3 id="hw2">Exercise 2 — Verify AbstractArray operations</h3>
+    <p>
+      Solve the heat equation and confirm that standard Julia array
+      operations all work without any extra code in the package.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol = solve(HeatEquation(N=100, T=0.5))
+
+# Each line should work — no errors allowed!
+sol[1]           # first value
+sol[end]         # last value
+sol[10:20]       # slice — what type is this?
+length(sol)      # how many grid points?
+size(sol)        # what is the shape tuple?
+ndims(sol)       # how many dimensions?
+maximum(sol)     # peak value in the field
+sum(sol)         # sum of all grid values
+sol .* 2         # broadcast — what does this return?
+sol .> 0.5       # boolean mask — how many are true?
+
+# For the wave history (2D solution):
+wsol = solve(WaveEquation(), return_history=true)
+size(wsol)       # (nx, nt+1)
+wsol[:, 1]       # initial condition
+wsol[:, end]     # final state
+wsol[150, :]     # time trace at mid-point — plot this!</code></pre>
+    </div>
+
+    <!-- ── HW 3 ── -->
+    <h3 id="hw3">Exercise 3 — Use the PoissonEquation solver</h3>
+    <p>
+      The Poisson equation $-\nabla^2 u = f$ on the unit square is an
+      <em>elliptic</em> PDE — no time loop, just one sparse linear system
+      to solve. <code>PoissonEquation &lt;: EllipticProblem</code> is already
+      implemented in <code>src/poisson.jl</code>. Your job is to call it,
+      inspect the result with <code>AbstractArray</code> operations, and
+      verify accuracy against the known exact solution.
+    </p>
+    <p>
+      The default forcing $f(x,y) = 2\pi^2 \sin(\pi x)\sin(\pi y)$ has
+      the exact solution $u(x,y) = \sin(\pi x)\sin(\pi y)$, so you can
+      measure the real numerical error.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+psol = solve(PoissonEquation(N=50))
+
+# --- AbstractArray operations (all free, no extra code needed) ---
+size(psol)             # (50, 50) — 2D solution
+ndims(psol)            # 2
+psol[25, 25]           # value at centre ≈ sin(π·0.5)·sin(π·0.5) = 1.0
+psol[:, 25]            # mid-column — vertical slice at x≈0.5
+psol[25, :]            # mid-row    — horizontal slice at y≈0.5
+maximum(psol)          # peak ≈ 1.0
+sum(psol)              # discrete sum of all values
+
+# --- Accuracy check against the known exact solution ---
+p   = psol.problem
+err = [psol[i,j] - p.u_exact(psol.x[i], psol.y[j])
+       for i in 1:50, j in 1:50]
+println("Max error: ", maximum(abs.(err)))   # expect ≈ 4e-4 for N=50
+
+# --- 2D plots ---
+heatmap(psol.x, psol.y, psol.u',
+        title="Poisson: numerical", color=:viridis, aspect_ratio=1)
+
+exact = [p.u_exact(xi, yj) for xi in psol.x, yj in psol.y]
+heatmap(psol.x, psol.y, exact',
+        title="Poisson: exact", color=:viridis, aspect_ratio=1)</code></pre>
+    </div>
+    <p>
+      Now look inside <code>src/poisson.jl</code> to understand how the
+      2-D Laplacian is built. The 5-point stencil becomes a sparse matrix
+      via the <strong>Kronecker sum</strong> $A = I_N \otimes T_1 + T_1 \otimes I_N$,
+      where $T_1$ is the same tridiagonal matrix used in the 1-D heat solver:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (key lines)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">T1 = spdiagm(
+    -1 => fill(-1.0 / h^2, N-1),
+     0 => fill( 2.0 / h^2, N),
+     1 => fill(-1.0 / h^2, N-1)
+)
+IN = sparse(I, N, N)
+A  = kron(IN, T1) + kron(T1, IN)   # N² × N² sparse system
+rhs = vec([p.f(x[i], y[j]) for i in 1:N, j in 1:N])
+u_vec = A \ rhs                     # direct sparse solve (UMFPACK)</code></pre>
+    </div>
+
+    <!-- ── HW 4 ── -->
+    <h3 id="hw4">Exercise 4 — Write a generic describe() function</h3>
+    <p>
+      The abstract hierarchy lets you write functions that dispatch on
+      the <em>class</em> of a PDE, not just a specific equation type.
+      Implement <code>describe(p)</code> using multiple dispatch so it
+      prints the right summary for each branch of the hierarchy:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Implement these four methods:
+describe(p::PDEProblem)              # fallback
+describe(p::ParabolicProblem)        # mention diffusivity α and stability condition
+describe(p::HyperbolicProblem)       # mention wave speed c and CFL
+describe(p::EllipticProblem)         # mention it is steady-state (no time loop)
+
+# Expected output:
+describe(HeatEquation())
+# → "Parabolic PDE — diffusivity α=0.01, stable CFL dt ≤ 0.5·dx²/α"
+
+describe(WaveEquation())
+# → "Hyperbolic PDE — wave speed c=1.0, CFL condition dt ≤ dx/c"
+
+describe(PoissonEquation())
+# → "Elliptic PDE — steady state, solved by direct matrix inversion"</code></pre>
+    </div>
+
+    <!-- ── HW 5 ── -->
+    <h3 id="hw5">Exercise 5 — Change the boundary condition</h3>
+    <p>
+      The <code>WaveEquation</code> struct supports four boundary conditions
+      via the <code>bc</code> field.
+      Run the wave solver with each and plot the final state.
+      Observe how the wave behaves differently at the boundary in each case.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Plots
+
+bcs = [:Dirichlet, :Neumann, :Periodic, :Absorbing]
+
+plt = plot(layout=(2,2), size=(900, 600))
+for (i, bc) in enumerate(bcs)
+    sol = solve(WaveEquation(bc=bc, T=1.2))
+    plot!(plt[i], sol.x, sol.u, title=string(bc), lw=2, legend=false,
+          xlabel="x", ylabel="u")
+end
+display(plt)</code></pre>
+    </div>
+    <p>
+      <strong>Questions to answer:</strong> (a) Which BC preserves wave
+      amplitude longest? (b) Which BC looks like an infinitely long domain?
+      (c) Why does <code>:Neumann</code> produce a different peak height
+      than <code>:Dirichlet</code>?
+    </p>
+
+    <!-- ── HW 6 ── -->
+    <h3 id="hw6">Exercise 6 — Convergence study for the Poisson solver</h3>
+    <p>
+      A correct finite-difference Poisson solver converges at rate
+      $O(h^2)$: doubling $N$ halves $h$ and the error drops by a factor
+      of 4. The package provides <code>convergence_table()</code> to
+      measure this automatically.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs
+
+# Built-in table: runs N = 10, 20, 40, 80, 160
+convergence_table()
+
+#    N  |   h       |  L2 error    | order
+# ------+-----------+--------------+------
+#   10  | 0.090909  | 8.25e-03     |   —
+#   20  | 0.047619  | 2.07e-03     | 2.00
+#   40  | 0.024390  | 5.17e-04     | 2.00
+#   80  | 0.012346  | 1.29e-04     | 2.00
+#  160  | 0.006211  | 3.23e-05     | 2.00</code></pre>
+    </div>
+    <p>
+      The "order" column is $\log_2(e_{N/2} / e_N)$ — it should be close
+      to 2.0 for the 5-point stencil. Now do the study yourself using only
+      the tools you already know:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Ns   = [10, 20, 40, 80, 160]
+errs = Float64[]
+
+for N in Ns
+    sol = solve(PoissonEquation(N=N))
+    push!(errs, l2_error(sol))
+end
+
+# Plot log-log convergence curve
+using Plots
+plot(Ns, errs, xscale=:log10, yscale=:log10,
+     marker=:circle, lw=2, label="L2 error",
+     xlabel="N", ylabel="error")
+
+# Add an O(h²) reference line — slope −2 on log-log
+hs = @. 1.0 / (Ns .+ 1)
+plot!(Ns, hs.^2 .* errs[1] / hs[1]^2,
+      ls=:dash, label="O(h²) reference")</code></pre>
+    </div>
+    <p>
+      <strong>Extension:</strong> try changing the RHS forcing to
+      $f(x,y) = \sin(2\pi x)\sin(2\pi y)$ and adjust
+      <code>u_exact</code> accordingly. Does the convergence order change?
+    </p>
+
+    <!-- ── HW 7 ── -->
+    <h3 id="hw7">Exercise 7 — Immutable vs mutable structs</h3>
+    <p>
+      This exercise builds intuition about when to use each form. Try each
+      snippet, predict the output, then run it.
+    </p>
+    <p><strong>Part A — Immutability</strong></p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">p = HeatEquation(N=100)
+
+# Which of these work and which throw an error?
+p.N              # (a)
+p.N = 200        # (b) — predict before running
+new_p = HeatEquation(N=200, α=p.α, L=p.L, T=p.T)  # (c) — what is this?</code></pre>
+    </div>
+    <p>
+      <strong>Q:</strong> Line (b) fails. Line (c) works. What is the
+      difference conceptually? Why is immutability useful for problem
+      parameters?
+    </p>
+    <p><strong>Part B — Write a mutable SimState</strong></p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">mutable struct SimState
+    t   ::Float64
+    step::Int
+    u   ::Vector{Float64}
+end
+
+# Implement this function so it advances the state by one heat time step:
+function step!(s::SimState, p::HeatEquation, dt::Float64)
+    # your code here — update s.u in-place, increment s.t and s.step
+end
+
+# Verify: run 100 steps and check that s.step == 100
+p  = HeatEquation(N=100)
+dx = p.L / (p.N + 1)
+x  = collect(range(dx, p.L - dx, length=p.N))
+s  = SimState(0.0, 0, p.f_init.(x))
+dt = 0.4 * dx^2 / p.α
+
+for _ in 1:100
+    step!(s, p, dt)
+end
+println(s.step)   # 100
+println(s.t)      # ≈ 100 * dt</code></pre>
+    </div>
+    <p>
+      <strong>Key insight:</strong> the problem struct <code>p</code> is
+      immutable (the physics never changes), while the state struct
+      <code>s</code> is mutable (it evolves every step). Keeping them
+      separate makes the code easier to reason about and test.
+    </p>
+
+    <!-- ── HW 8 ── -->
+    <h3 id="hw8">Exercise 8 — Parameterized struct: a solution ensemble</h3>
+    <p>
+      A parameterized struct generates one optimized type per concrete
+      type argument. Build an <code>Ensemble</code> struct that stores
+      multiple <code>PDESolution</code>s (e.g. results at different
+      diffusivities) and supports indexing and iteration:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — task</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Step 1 — define a parameterized container
+struct Ensemble{S}          # S will be PDESolution{...}
+    members::Vector{S}
+    label  ::String
+end
+
+# Step 2 — make it indexable and iterable (just forward to the vector)
+Base.getindex(e::Ensemble, i)  = e.members[i]
+Base.length(e::Ensemble)       = length(e.members)
+Base.iterate(e::Ensemble, s=1) = s > length(e) ? nothing : (e[s], s+1)
+
+# Step 3 — build an ensemble over a range of diffusivities
+αs = [0.001, 0.005, 0.01, 0.05, 0.1]
+solutions = [solve(HeatEquation(α=α, T=0.3)) for α in αs]
+ens = Ensemble(solutions, "Heat α sweep")
+
+# Step 4 — use it
+length(ens)            # 5
+ens[1]                 # first solution (α = 0.001)
+ens[1].problem.α       # 0.001 — access original parameters
+
+# Step 5 — plot all members
+using Plots
+plt = plot(title=ens.label, xlabel="x", ylabel="u(x,T=0.3)")
+for sol in ens          # iteration works because we defined iterate
+    plot!(plt, sol.x, sol.u, label="α=$(sol.problem.α)", lw=2)
+end
+display(plt)</code></pre>
+    </div>
+    <p>
+      <strong>Extension:</strong> add a method
+      <code>maximum_over_ensemble(e::Ensemble)</code> that returns the
+      overall peak value across all members. Then add
+      <code>argmax_member(e::Ensemble)</code> that returns the member with
+      the highest peak.
+    </p>
+  </section>
+
+  <!-- ══ STEP 8 ══════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="polish.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">12 &middot; Package design</span>
+    </a>
+    <a class="next" href="hpc.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">14 &middot; Run on the cluster</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 13 &middot; Homework
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

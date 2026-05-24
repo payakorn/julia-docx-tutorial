@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Build your own package &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Learn Julia</div>
+    <div class="ch-label">Chapter 04</div>
+    <h1>Build your own package</h1>
+    <p>Module layout, Revise for live reload, and the parametric structs that make your Julia fast.</p>
+  </header>
+  <section class="section" id="type-notation">
+    <h2>Reading Julia's Type Notation — A Math Student's Guide</h2>
+    <p>
+      When you first see a line like
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem</code></pre>
+    </div>
+    <p>
+      it can look like a wall of unfamiliar punctuation. Good news: <strong>every
+      piece of that syntax corresponds to something you already know from
+      mathematics.</strong> Once you have the dictionary below, the line above
+      reads as naturally as $L^p(\Omega) \subset L^q(\Omega)$.
+    </p>
+
+    <h3>1. The Big Dictionary — Julia ↔ Math</h3>
+    <div style="overflow-x:auto;">
+      <table class="perf-table">
+        <thead>
+          <tr>
+            <th>Mathematical idea</th>
+            <th>Math notation</th>
+            <th>Julia notation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>"x is a real number"</td>
+            <td>$x \in \mathbb{R}$</td>
+            <td><code>x::Float64</code></td>
+          </tr>
+          <tr>
+            <td>"n is a natural number"</td>
+            <td>$n \in \mathbb{N}$</td>
+            <td><code>n::Int</code></td>
+          </tr>
+          <tr>
+            <td>"v is an n-tuple of reals"</td>
+            <td>$v \in \mathbb{R}^n$</td>
+            <td><code>v::NTuple{N,Float64}</code></td>
+          </tr>
+          <tr>
+            <td>A family of spaces indexed by $n$</td>
+            <td>$\{\mathbb{R}^n\}_{n\in\mathbb{N}}$</td>
+            <td><code>NTuple{N,Float64}</code> for any <code>N</code></td>
+          </tr>
+          <tr>
+            <td>"A is a subset of B"</td>
+            <td>$A \subseteq B$</td>
+            <td><code>A &lt;: B</code></td>
+          </tr>
+          <tr>
+            <td>"Integers ⊂ Reals ⊂ Numbers"</td>
+            <td>$\mathbb{Z} \subset \mathbb{R} \subset \mathbb{C}$</td>
+            <td><code>Int &lt;: Real &lt;: Number</code></td>
+          </tr>
+          <tr>
+            <td>"Let $f$ be <em>some</em> function"</td>
+            <td>$f \in \mathcal{F}(\mathbb{R},\mathbb{R})$</td>
+            <td><code>f::Function</code> &nbsp;<strong>(abstract — slow)</strong></td>
+          </tr>
+          <tr>
+            <td>"Let $f := \sin$"</td>
+            <td>$f \equiv \sin$</td>
+            <td><code>f::typeof(sin)</code> &nbsp;<strong>(concrete — fast)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2. The Operator <code>&lt;:</code> Means "Is a Subset of"</h3>
+    <p>
+      In math, $\subseteq$ is the subset relation. In Julia, the symbol
+      <code>&lt;:</code> means exactly the same thing — but for <em>types</em>
+      instead of sets.
+    </p>
+    <p>You already use subset chains all the time in analysis:</p>
+    $$\mathbb{N} \subset \mathbb{Z} \subset \mathbb{Q} \subset \mathbb{R} \subset \mathbb{C}$$
+    <p>Julia builds the same kind of hierarchy on its number types:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Julia's numeric tower</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Int     &lt;: Signed     &lt;: Integer  &lt;: Real  &lt;: Number
+Float64 &lt;: AbstractFloat              &lt;: Real  &lt;: Number
+Complex{Float64}                               &lt;: Number</code></pre>
+    </div>
+    <p>
+      The <code>juliaPDEs</code> package builds an analogous hierarchy for PDE
+      problems. Read $\subseteq$ wherever you see <code>&lt;:</code>:
+    </p>
+    $$\text{HeatEquation} \;\subseteq\; \text{ParabolicProblem} \;\subseteq\; \text{PDEProblem}$$
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — what types.jl actually says</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">abstract type PDEProblem           end                # "the universe of all PDE problems"
+abstract type ParabolicProblem  &lt;: PDEProblem end     # parabolic PDEs ⊂ all PDEs
+abstract type HyperbolicProblem &lt;: PDEProblem end     # hyperbolic    ⊂ all PDEs
+abstract type EllipticProblem   &lt;: PDEProblem end     # elliptic      ⊂ all PDEs
+
+struct HeatEquation{N,F}      &lt;: ParabolicProblem   # heat equation ⊂ parabolic ⊂ PDE
+    # …fields…
+end</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Why have this hierarchy at all?</strong>
+      Exactly the same reason analysts work with abstract function spaces:
+      a theorem proved for $L^p$ in general applies to every specific
+      $L^2, L^3, L^\infty$. A Julia function written for
+      <code>::PDEProblem</code> works for <em>every</em> concrete PDE type
+      — heat, wave, Poisson — without rewriting.
+    </div>
+
+    <h3>3. The Curly Braces <code>{N, F}</code> — Parameterised Families</h3>
+    <p>
+      In math you constantly define <strong>families of objects parameterised
+      by one or more symbols</strong>:
+    </p>
+    <ul>
+      <li>$\mathbb{R}^n$ — the vector spaces, one for each $n \in \mathbb{N}$.</li>
+      <li>$L^p(\Omega)$ — the Lebesgue spaces, one for each $p \in [1,\infty]$ and domain $\Omega$.</li>
+      <li>$H^k(\Omega)$ — the Sobolev spaces, one for each $k \in \mathbb{N}_0$.</li>
+      <li>$\mathrm{GL}(n,\mathbb{R})$ — the general linear groups, one for each $n$.</li>
+    </ul>
+    <p>
+      In each case, the symbol on the left is not a single object — it is a
+      <em>recipe</em> that, when given concrete values for its parameters,
+      produces a specific object. Plug in $n=3$ and you get $\mathbb{R}^3$.
+      Plug in $p=2$ and you get $L^2(\Omega)$.
+    </p>
+    <p>
+      Julia's <code>{...}</code> notation is the exact same idea applied to types:
+    </p>
+    $$
+      \underbrace{\text{NTuple}\{N,\;T\}}_{\text{recipe / family}}
+      \quad\xrightarrow{\;N=3,\;T=\text{Float64}\;}\quad
+      \underbrace{\text{NTuple}\{3,\text{Float64}\}}_{\text{specific type}}
+    $$
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the family idea, made concrete</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">NTuple{N, T}            # the FAMILY — one type for each pair (N, T)
+NTuple{3, Float64}      # one specific member — corresponds to ℝ³
+NTuple{2, Int}          # another specific member — corresponds to ℤ²
+
+# Same idea for arrays:
+Array{T, N}             # family of N-dim arrays of element type T
+Array{Float64, 2}       # = Matrix{Float64}     — corresponds to ℝᵐˣⁿ
+Array{Float64, 3}       # 3D array              — corresponds to ℝᵐˣⁿˣᵏ</code></pre>
+    </div>
+    <p>
+      So when you write
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct HeatEquation{N, F} &lt;: ParabolicProblem
+    # …
+end</code></pre>
+    </div>
+    <p>you are saying, in mathematical language:</p>
+    <div class="callout tip" style="font-style:italic;">
+      "Define a <strong>family</strong> of PDE problems
+      $\{\,\mathrm{HeatEquation}_{N,F}\,\}_{N\in\mathbb{N},\,F\in\mathcal{F}}$,
+      each of which is a parabolic problem
+      (i.e. a member of $\mathrm{ParabolicProblem}\subseteq\mathrm{PDEProblem}$).
+      The first parameter $N$ is the spatial dimension; the second parameter $F$
+      is the type of initial-condition function."
+    </div>
+
+    <h3>4. Abstract vs Concrete — The Key Distinction</h3>
+    <p>
+      Here is where math intuition pays off the most. Compare these two
+      statements you might write at the start of a proof:
+    </p>
+    <ul>
+      <li>
+        <strong>Abstract:</strong> "Let $f \in \mathcal{C}^1(\mathbb{R})$ be an
+        arbitrary differentiable function."
+        <br>
+        <span style="color:#5a7a9a">You cannot compute $f'(x)$ or $\int f \,dx$ —
+          the specific $f$ is unknown.</span>
+      </li>
+      <li>
+        <strong>Concrete:</strong> "Let $f(x) := \sin(x)$."
+        <br>
+        <span style="color:#5a7a9a">Now $f'(x) = \cos(x)$, $\int f \,dx = -\cos(x)+C$.
+          Everything simplifies.</span>
+      </li>
+    </ul>
+    <p>
+      Julia faces the exact same choice at compile time. With an abstract field
+      type the compiler is in the first situation — it must defer decisions to
+      runtime, paying a cost on every access. With a concrete or parametric type
+      it is in the second situation — it can simplify, inline, vectorise.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Abstract: compiler stays in "let f be a function" mode</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct HeatSlow
+    N_grid::Tuple        # 🟧 abstract — "some tuple of unknown length"
+    f_init::Function     # 🟧 abstract — "some function"
+end
+# Compiler analog: ∀ tuples N_grid, ∀ functions f_init, ...</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Parametric: compiler is told the exact ingredients</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct HeatFast{N, F}
+    N_grid::NTuple{N, Int}   # ✅ concrete — exactly N integers
+    f_init::F                # ✅ concrete — exactly this F
+end
+# Compiler analog: fix N := 3, fix F := typeof(my_gaussian), now simplify.</code></pre>
+    </div>
+
+    <p>
+      A parametric struct is a <strong>template</strong> — once Julia sees the
+      first call <code>HeatFast(N_grid=(50,50,50), f_init=my_gauss)</code>, it
+      <em>specializes</em> the template by substituting $N=3$ and $F=\text{typeof(my\_gauss)}$,
+      then compiles one dedicated machine-code function for that exact pair.
+      The next call with different parameters compiles a different version.
+      This is the precise mechanism explained in the next section.
+    </p>
+
+    <h3>5. Reading the Heat Equation Struct Line by Line</h3>
+    <p>Here is the full declaration from <code>juliaPDEs/src/types.jl</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem
+    N_grid::NTuple{N,Int}
+    Nt::Int    = 1000                                # number of time steps (Δt = T / Nt)
+    α::Float64 = 0.01
+    L::NTuple{N,Float64} = ntuple(_ -> 1.0, length(N_grid))
+    T::Float64 = 1.0
+    f_init::F
+end</code></pre>
+    </div>
+    <p>Translated into mathematician's language, this declaration says:</p>
+    <ol>
+      <li>
+        <strong><code>Base.@kwdef</code></strong> — "Auto-generate a constructor
+        that accepts keyword arguments with default values." (Pure syntax sugar
+        — it saves you from writing the inner constructor by hand.)
+      </li>
+      <li>
+        <strong><code>struct HeatEquation{N,F}</code></strong> — Define a
+        family of objects $\{\mathrm{HeatEquation}_{N,F}\}$ indexed by
+        $(N, F)$.
+      </li>
+      <li>
+        <strong><code>&lt;: ParabolicProblem</code></strong> — Each member of
+        this family is, by definition, a parabolic problem:
+        $\mathrm{HeatEquation}_{N,F} \subseteq \mathrm{ParabolicProblem}$.
+      </li>
+      <li>
+        <strong><code>N_grid::NTuple{N,Int}</code></strong> — A field
+        $N_{\text{grid}} \in \mathbb{Z}^N$. (Grid resolution per dimension.)
+      </li>
+      <li>
+        <strong><code>Nt::Int = 1000</code></strong> — A field
+        $N_t \in \mathbb{N}$ with default $N_t = 1000$. (Number of time steps;
+        the solver uses $\Delta t = T / N_t$ rather than picking $\Delta t$
+        automatically.)
+      </li>
+      <li>
+        <strong><code>α::Float64 = 0.01</code></strong> — A field
+        $\alpha \in \mathbb{R}$ with default $\alpha = 0.01$. (Thermal diffusivity.)
+      </li>
+      <li>
+        <strong><code>L::NTuple{N,Float64} = …</code></strong> — A field
+        $L \in \mathbb{R}^N$ with default $L = (1,1,\dots,1)$. (Domain lengths.)
+      </li>
+      <li>
+        <strong><code>T::Float64 = 1.0</code></strong> — A field $T \in \mathbb{R}$,
+        default $T = 1$. (Final simulation time.)
+      </li>
+      <li>
+        <strong><code>f_init::F</code></strong> — A field $f_{\text{init}}$ whose
+        type is the parameter $F$. Since $F$ is fixed at the call site, Julia
+        knows the exact function and can inline calls to it.
+      </li>
+    </ol>
+
+    <p>Calling the struct then looks like:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">prob = HeatEquation(
+    N_grid = (50, 50, 50),                                              # ⇒ N inferred as 3
+    Nt     = 2000,                                                      # number of time steps
+    f_init = (x, y, z) -> exp(-((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)),    # ⇒ F inferred as typeof of this λ
+)
+
+typeof(prob)
+# HeatEquation{3, var"#7#8"}
+#                ↑   ↑
+#                N   F   — both parameters are now concrete</code></pre>
+    </div>
+    <p>
+      Mentally, <code>HeatEquation{3, var"#7#8"}</code> is the analog of
+      writing $L^2(\mathbb{R}^3)$ instead of "some $L^p$ space" — every
+      parameter is pinned down, and every theorem (read: machine instruction)
+      that depends on those parameters can be applied immediately.
+    </p>
+
+    <h3>6. A Quick Cheat-Sheet to Keep at the Side</h3>
+    <div style="overflow-x:auto;">
+      <table class="perf-table">
+        <thead>
+          <tr><th>You see…</th><th>Read it as…</th><th>Math analog</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>x::T</code></td>
+            <td>"x is an element of T"</td>
+            <td>$x \in T$</td>
+          </tr>
+          <tr>
+            <td><code>A &lt;: B</code></td>
+            <td>"A is a subset of B"</td>
+            <td>$A \subseteq B$</td>
+          </tr>
+          <tr>
+            <td><code>Foo{T}</code></td>
+            <td>"the family Foo, parameter T"</td>
+            <td>$\{\mathrm{Foo}_T\}_T$, like $\{\mathbb{R}^n\}_n$</td>
+          </tr>
+          <tr>
+            <td><code>Foo{Float64}</code></td>
+            <td>"the specific Foo with T = Float64"</td>
+            <td>One specific member, like $\mathbb{R}^3$</td>
+          </tr>
+          <tr>
+            <td><code>struct Foo{T} &lt;: Bar end</code></td>
+            <td>"define family Foo, each in Bar"</td>
+            <td>$\forall T:\;\mathrm{Foo}_T \subseteq \mathrm{Bar}$</td>
+          </tr>
+          <tr>
+            <td><code>f(x::T) where {T}</code></td>
+            <td>"for any type T, f is defined on x∈T"</td>
+            <td>$\forall T,\; \forall x \in T : f(x)$</td>
+          </tr>
+          <tr>
+            <td><code>::Function</code> in a field</td>
+            <td>"some unknown function" (slow)</td>
+            <td>$f \in \mathcal{F}$ — kept abstract</td>
+          </tr>
+          <tr>
+            <td><code>::F</code> with type parameter</td>
+            <td>"this specific function" (fast)</td>
+            <td>$f := \sin$ — fully specified</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>One sentence to remember</strong><br>
+      A Julia struct definition <code>struct Foo{T} &lt;: Bar</code> is the
+      programming equivalent of writing
+      $\bigl\{\mathrm{Foo}_T : T \in \mathrm{TypeUniverse}\bigr\} \subseteq \mathrm{Bar}$
+      — a parameterised family that lives inside a larger class.
+      The next section shows <em>why</em> this distinction has dramatic
+      consequences for runtime speed.
+    </div>
+  </section>
+
+  <!-- ══ CREATE A PACKAGE + REVISE ════════════════════════════ -->
+  <section class="section" id="pkg-create">
+    <h2><span class="step-badge">Step 6</span>Create Your First Julia Package — <code>juliaPDEs</code></h2>
+    <p>
+      Up to now we have been adding packages from the registry — using
+      other people's code. Now we make our <em>own</em> package. A
+      <strong>package</strong> in Julia is just a folder with a special
+      structure that the language treats as importable: a name, a
+      <code>Project.toml</code>, and a <code>src/</code> folder containing
+      a module file.
+    </p>
+
+    <h3>Why package your code instead of writing one big script?</h3>
+    <p>
+      A 50-line one-shot script is fine. As soon as you reach a few
+      hundred lines, or you want to share the code, or you want to test
+      pieces of it independently, the script approach starts to hurt.
+      Switching to a package gives you, in order of how much they help:
+    </p>
+    <ol>
+      <li><strong>Stable imports.</strong> Anywhere on your machine you
+        can write <code>using juliaPDEs</code> and your three solvers are
+        available — REPL, Jupyter notebook, test file, Slurm job script.
+        No more juggling <code>include("../../src/solver.jl")</code>
+        with relative paths.</li>
+      <li><strong>Reproducible dependencies.</strong> The package's own
+        <code>Project.toml</code>/<code>Manifest.toml</code> pin
+        every library to an exact version. Five years from now, on a new
+        cluster, your code still gets bit-identical packages.</li>
+      <li><strong>A test suite.</strong> Drop a
+        <code>test/runtests.jl</code> into the folder and Julia runs it
+        with one command (<code>] test</code>), reporting pass/fail.</li>
+      <li><strong>Live reload via Revise.</strong> Edit a source file,
+        save, and the running REPL session picks up the change without
+        a restart. Iteration becomes fast — the difference between a
+        ten-second feedback loop and a one-minute one.</li>
+      <li><strong>Easy publishing later.</strong> When the code is
+        useful enough to share, registering it on Julia's General
+        Registry is mostly paperwork because the layout is already
+        right.</li>
+    </ol>
+
+    <h3>What we will build in this section</h3>
+    <p>
+      In the rest of Step 6 we generate a fresh package called
+      <code>juliaPDEs</code> and add three solvers — heat, wave, and
+      Navier–Stokes — each in its own file under <code>src/</code>. By
+      the end you will have the same layout that ships in the
+      <code>juliaPDEs/</code> folder of this repo, plus the
+      Revise + tests workflow that makes Step 7 painless.
+    </p>
+
+    <div class="callout tip">
+      <strong>Do this before writing any PDE solver</strong>
+      Packages are not just for publishing to the registry.
+      Using one locally means your code is importable anywhere,
+      testable with a single command, and reloadable without restarting Julia.
+    </div>
+  </section>
+
+  <!-- package structure -->
+  <section class="section" id="pkg-structure">
+    <h3>Package structure — building <code>juliaPDEs</code> step by step</h3>
+    <p>
+      Follow the steps in order. By the end you will have the same package layout
+      that lives in the <code>juliaPDEs/</code> folder of this repo, with three
+      solvers wired up and ready to use from the REPL.
+    </p>
+
+    <h4>Step A — Generate the skeleton</h4>
+    <p>
+      One command creates the folder and the boilerplate <code>Project.toml</code> +
+      module file:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg
+Pkg.generate("juliaPDEs")   # creates the folder juliaPDEs/</code></pre>
+    </div>
+
+    <p>The generated layout:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">file tree</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">juliaPDEs/
+├── Project.toml          # package name, UUID, dependencies
+└── src/
+    └── juliaPDEs.jl      # the module — entry point</code></pre>
+    </div>
+
+    <p>Add a <code>test/</code> folder yourself (Julia uses it automatically):</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir juliaPDEs/test
+touch juliaPDEs/test/runtests.jl</code></pre>
+    </div>
+
+    <h4>Step B — Add the dependencies</h4>
+    <p>
+      Activate the package's own environment and install everything the three
+      solvers need. <code>Plots</code> is for visualization,
+      <code>Revise</code> for live reload during development, and
+      <code>Oceananigans</code> is the CFD engine called by the
+      Navier–Stokes solver. The remaining packages match the
+      <code>Project.toml</code> that ships with the repo:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">cd juliaPDEs
+julia --project=.</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@juliaPDEs) pkg> add Plots Revise Oceananigans LinearAlgebra SparseArrays Gmsh Makie CUDA</code></pre>
+    </div>
+
+    <p>
+      Julia writes the dependencies into <code>Project.toml</code> and pins exact
+      versions in <code>Manifest.toml</code> — commit both to git so the cluster
+      gets the same versions you developed against.
+    </p>
+
+    <h4>Step C — Write the module entry point — src/juliaPDEs.jl</h4>
+    <p>
+      Everything inside <code>module … end</code> is private by default.
+      <code>using</code> brings in third-party packages once, at the module level,
+      so every included file can call them. <code>include()</code> pastes a
+      file into the module so each sub-file sees the module's scope.
+      <code>export</code> declares the names that become visible after
+      <code>using juliaPDEs</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/juliaPDEs.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">module juliaPDEs
+
+using Plots, Revise, Oceananigans
+
+include("types.jl")             # abstract type hierarchy + PDESolution
+include("heat.jl")
+include("wave.jl")
+include("Navier_Stokes.jl")
+
+# Problem types — each is a self-contained struct of parameters
+export HeatEquation, WaveEquation, NavierStokes
+
+# One unified solver name — multiple dispatch picks the right method
+export solve
+
+# Helpers
+export animate_wave, animate_navier_stokes
+
+end # module juliaPDEs</code></pre>
+    </div>
+
+    <h4>Step D — The heat solver — src/heat.jl</h4>
+    <p>
+      The heat equation is the simplest time-dependent PDE — diffusion smooths an initial
+      pulse over time. We bundle every parameter into a <code>HeatEquation</code>
+      struct and then write <em>one</em> generic <code>solve</code> method that
+      dispatches on it. The same method works in 1-D, 2-D, or 3-D because
+      <code>N</code> is a type parameter — Julia specializes the loop body for
+      each dimension at compile time.
+    </p>
+    <p>
+      Dirichlet BCs (the boundary stays 0), Gaussian initial pulse, forward-Euler
+      time stepping. The stability check warns if <code>Σ rᵢ &gt; 0.5</code>.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/heat.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># 1. The problem struct — every parameter has a default
+Base.@kwdef struct HeatEquation{N, F} &lt;: ParabolicProblem
+    N_grid::NTuple{N, Int} = (200,)                              # interior points per axis
+    a::NTuple{N, Float64}  = ntuple(_ -&gt; 0.0, length(N_grid))    # lower bound per axis
+    b::NTuple{N, Float64}  = ntuple(_ -&gt; 1.0, length(N_grid))    # upper bound per axis
+    Nt::Int     = 1000                                           # number of time steps (Δt = T / Nt)
+    T::Float64  = 1.0                                            # final simulation time
+    α::Float64  = 0.01                                           # diffusivity
+    f_init::F   = x -&gt; exp(-100 * (x - 0.5)^2)                   # initial pulse
+end
+
+# 2. The solver — dispatched on HeatEquation, works for any N
+function solve(p::HeatEquation{N, F}) where {N, F}
+    # Step 1 — interior grid for every axis
+    dx = ntuple(i -&gt; (p.b[i] - p.a[i]) / (p.N_grid[i] + 1), N)
+    x  = ntuple(i -&gt; range(p.a[i] + dx[i], p.b[i] - dx[i], length=p.N_grid[i]), N)
+
+    # Step 5 — stable Δt:  Σ rᵢ ≤ 0.5
+    dt = p.T / p.Nt
+    r  = ntuple(i -&gt; p.α * dt / dx[i]^2, N)
+    sum(r) ≤ 0.5 || @warn "Stability: Σrᵢ = $(sum(r)) &gt; 0.5 — increase Nt."
+
+    # Step 1 — sample f_init on the grid; Dirichlet zero on the boundary
+    u = [p.f_init(ntuple(d -&gt; x[d][I[d]], N)...) for I in CartesianIndices(p.N_grid)]
+    for i in 1:N; selectdim(u, i, 1) .= 0; selectdim(u, i, p.N_grid[i]) .= 0; end
+    u_new = copy(u)
+
+    # Steps 3+4 — N-D stencil Laplacian inside the Euler time step
+    inner = CartesianIndices(ntuple(i -&gt; 2:(p.N_grid[i]-1), N))
+    e     = ntuple(i -&gt; CartesianIndex(ntuple(j -&gt; j == i ? 1 : 0, N)), N)
+    for _ in 1:p.Nt
+        for I in inner
+            laplacian = 0.0
+            for i in 1:N
+                @inbounds laplacian += r[i] * (u[I+e[i]] - 2*u[I] + u[I-e[i]])
+            end
+            @inbounds u_new[I] = u[I] + laplacian
+        end
+        u, u_new = u_new, u                # O(1) pointer swap
+    end
+    return PDESolution(x, u, p.T, p)
+end</code></pre>
+    </div>
+
+    <div class="callout info" style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+      <h4 style="margin-top: 0; color: #1F4E79;">Beginner Concept Check: Structs, Instances, and Functions</h4>
+      <p>
+        The Heat solver above bundles every parameter inside a <code>HeatEquation</code>
+        struct and then defines <code>solve(p::HeatEquation)</code> — one verb that
+        works for every PDE through Julia's <em>multiple dispatch</em>. Before moving
+        to the Wave solver, let's break down exactly what a struct is and why this
+        pattern matters:
+      </p>
+      
+      <p><strong>1. What is a Struct and why do we use it?</strong></p>
+      <p>
+        A <strong>struct</strong> is a custom composite data type that bundles multiple pieces of related data (called <em>fields</em>) together under a single name. Instead of passing separate variables into every function, we pack them into one structured container blueprint.
+      </p>
+
+      <p><strong>2. How to create a Struct?</strong></p>
+      <p>
+        We write the <code>struct</code> keyword followed by the container name, list its internal fields with their types, and end with <code>end</code>. Using the <code>Base.@kwdef</code> macro above it automatically writes a keyword constructor with convenient default values:
+      </p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">Base.@kwdef struct SimpleHeatConfig
+    L::Float64 = 1.0       # Domain length
+    α::Float64 = 0.01      # Thermal diffusivity
+    N::Int     = 100       # Grid resolution
+end</code></pre>
+      </div>
+
+      <p><strong>3. What is the variable that is the Struct (an Instance)?</strong></p>
+      <p>
+        The code above is just a blueprint. To use it, we call the struct's name like a function to create a concrete object in computer memory, called an <strong>instance</strong>, and assign it to a variable. We can then read its internal fields using <strong>dot notation</strong>:
+      </p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia"># Create an instance; omitted fields automatically use their defaults
+my_config = SimpleHeatConfig(α=0.05, N=200)
+
+# my_config is now a variable holding our composite struct object.
+# Access individual bundled fields using a dot (.):
+println("Configured diffusivity: ", my_config.α)
+println("Configured grid points: ", my_config.N)</code></pre>
+      </div>
+
+      <p><strong>4. How to create a Function to receive the Struct?</strong></p>
+      <p>
+        To write a function that operates on our configuration, we define a function that accepts a single argument annotated with our custom struct type (<code>::SimpleHeatConfig</code>). Inside the function body, we use dot notation to unpack the exact fields we need:
+      </p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia"># The function receives a single composite argument named 'config'
+function print_stability_limit(config::SimpleHeatConfig)
+    # Unpack internal fields directly from the received struct variable
+    dx = config.L / (config.N + 1)
+    max_dt = 0.5 * dx^2 / config.α
+    println("Maximum stable time step dt: ", max_dt)
+end
+
+# Pass our struct variable into the function
+print_stability_limit(my_config)</code></pre>
+      </div>
+
+      <p><strong>5. Structs vs. Functions: Nouns vs. Verbs</strong></p>
+      <p>
+        A <strong>struct</strong> holds passive <em>state and data</em> (e.g., domain dimensions, arrays, physical constants). A <strong>function</strong> defines active <em>behavior and logic</em> (e.g., loops, time-stepping, mathematical updates). Structs are the materials; functions are the machines that transform them.
+      </p>
+
+      <p><strong>6. Global Scope vs. Local Scope (Crucial for Performance)</strong></p>
+      <p>
+        Variables defined directly in the main script body or REPL live in the <strong>global scope</strong>. Because global variables can change their data type at any time, the Julia compiler cannot optimize them, making loops in global scope very slow. Variables defined inside a function body live in a <strong>local scope</strong>. The compiler knows their exact types, compiling local operations to extremely fast machine code. <em>Best Practice: Always wrap your solver loops and computations inside functions!</em>
+      </p>
+
+      <p><strong>7. Where do you run these scripts?</strong></p>
+      <p>
+        Once you write your code in a file (e.g., <code>solver.jl</code>), you can run it in three ways:
+      </p>
+      <ul>
+        <li><strong>Terminal execution:</strong> Run <code>julia solver.jl</code> directly from your Linux/WSL command line.</li>
+        <li><strong>REPL inclusion:</strong> Open the Julia REPL and type <code>include("solver.jl")</code> to load and execute the file contents into your active session.</li>
+        <li><strong>VS Code execution:</strong> Open the file in VS Code and press <strong>Shift+Enter</strong> to run specific blocks or functions interactively.</li>
+      </ul>
+    </div>
+
+    <h4>Step E — The wave solver — src/wave.jl</h4>
+    <p>
+      The wave solver groups its parameters in a <code>WaveEquation</code> struct
+      so callers can mix-and-match grid size, boundary condition
+      (<code>:Dirichlet</code>, <code>:Neumann</code>, <code>:Periodic</code>,
+      <code>:Absorbing</code>), and initial shape independently.
+      <code>Base.@kwdef</code> auto-generates a keyword constructor with defaults
+      so you can write <code>WaveEquation(nx=400, T=2.0)</code> and let everything
+      else stay default:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Same {N, F} parametrization as HeatEquation — one struct serves every dimension
+Base.@kwdef struct WaveEquation{N, F} &lt;: HyperbolicProblem
+    N_grid::NTuple{N, Int} = (300,)                              # grid points per axis (defaults to 1D)
+    a::NTuple{N, Float64}  = ntuple(_ -&gt; 0.0, length(N_grid))    # lower bound per axis
+    b::NTuple{N, Float64}  = ntuple(_ -&gt; 1.0, length(N_grid))    # upper bound per axis
+    Nt::Int     = 300                                            # number of time steps
+    T::Float64  = 1.0                                            # final time
+    c::Float64  = 1.0                                            # wave speed
+    f_init::F   = x -&gt; sin(π * x)                                # initial shape
+end</code></pre>
+    </div>
+
+    <p>
+      The leap-frog update uses the same 3-point Laplacian stencil as the heat
+      equation, but stepped in time with two history slots (<code>u_prev</code>,
+      <code>u_curr</code>). CFL: <code>λ = c·dt/dx ≤ 1</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (solver, abridged)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve(p::WaveEquation{N, F}) where {N, F}
+    # Grid and time step
+    dx = ntuple(i -&gt; (p.b[i] - p.a[i]) / (p.N_grid[i] - 1), N)
+    x  = ntuple(i -&gt; range(p.a[i], p.b[i], length=p.N_grid[i]), N)
+    dt = p.T / p.Nt
+    λ  = ntuple(i -&gt; (p.c * dt / dx[i])^2, N)
+    sum(λ) ≤ 1 || @warn "CFL: Σλᵢ = $(sum(λ)) &gt; 1 — increase Nt."
+
+    # Initial condition; ∂u/∂t = 0 ⇒ u_prev = u_curr
+    u_curr = [p.f_init(ntuple(d -&gt; x[d][I[d]], N)...) for I in CartesianIndices(p.N_grid)]
+    for i in 1:N; selectdim(u_curr, i, 1) .= 0; selectdim(u_curr, i, p.N_grid[i]) .= 0; end
+    u_prev = copy(u_curr)
+    u_next = similar(u_curr)
+
+    inner = CartesianIndices(ntuple(i -&gt; 2:(p.N_grid[i]-1), N))
+    e     = ntuple(i -&gt; CartesianIndex(ntuple(j -&gt; j == i ? 1 : 0, N)), N)
+
+    for _ in 1:p.Nt
+        # Leap-frog:  u^{n+1} = 2u^n - u^{n-1} + Σ λᵢ · (stencil along axis i)
+        for I in inner
+            laplacian = 0.0
+            for i in 1:N
+                @inbounds laplacian += λ[i] * (u_curr[I+e[i]] - 2*u_curr[I] + u_curr[I-e[i]])
+            end
+            @inbounds u_next[I] = 2*u_curr[I] - u_prev[I] + laplacian
+        end
+        u_prev, u_curr, u_next = u_curr, u_next, u_prev   # O(1) rotation
+    end
+    return PDESolution(x, u_curr, p.T, p)
+end</code></pre>
+    </div>
+
+    <p style="font-size:0.9rem; color:#4a6a8a;">
+      The full file in the repo also defines <code>animate_wave</code> (saves a GIF)
+      and an analytic <code>wave_exact</code> reference solution — see
+      <code>juliaPDEs/src/wave.jl</code> for the complete code.
+    </p>
+
+    <h4>Step F — The Navier–Stokes solver — src/Navier_Stokes.jl</h4>
+    <p>
+      The incompressible Navier–Stokes equations are two coupled PDEs in the
+      velocity field $\mathbf{u}(x,y,t) = (u, v)$ and pressure $p(x,y,t)$:
+    </p>
+    <p style="text-align:center;">
+      $$\frac{\partial \mathbf{u}}{\partial t}
+        + (\mathbf{u}\!\cdot\!\nabla)\mathbf{u}
+        = -\nabla p + \nu\,\nabla^2 \mathbf{u},
+        \qquad \nabla\!\cdot\!\mathbf{u} = 0.$$
+    </p>
+    <p>
+      Each term has a physical meaning: $(\mathbf{u}\!\cdot\!\nabla)\mathbf{u}$
+      is <em>advection</em> (fluid carrying its own momentum, the nonlinear
+      part), $-\nabla p$ is the <em>pressure gradient</em> that enforces
+      incompressibility, $\nu\,\nabla^2 \mathbf{u}$ is <em>viscous
+      diffusion</em>, and $\nabla\!\cdot\!\mathbf{u}=0$ keeps the flow
+      divergence-free at every step.
+    </p>
+    <p>
+      We solve the classic <strong>lid-driven cavity</strong> benchmark on
+      $\Omega = [0,1]\times[0,1]$:
+    </p>
+    <ul>
+      <li><strong>Top lid (north):</strong> $u = 1,\ v = 0$ — drives the flow.</li>
+      <li><strong>Other walls:</strong> $u = v = 0$ (no-slip) — the default.</li>
+      <li><strong>Initial condition:</strong> $\mathbf{u}(x,y,0) = \mathbf{0}$.</li>
+      <li><strong>Reynolds number:</strong>
+        $\mathrm{Re} = \dfrac{U\,L}{\nu} = \dfrac{1 \cdot 1}{10^{-2}} = 100$,
+        set by choosing $\nu = 10^{-2}$ in <code>ScalarDiffusivity</code>.</li>
+    </ul>
+    <p>
+      Rather than discretising and writing a projection method by hand, we
+      delegate to <code>Oceananigans.jl</code>. Oceananigans handles the
+      staggered finite-volume grid, a 5th-order upwind-biased advection
+      scheme, the divergence-free pressure projection, and a 3rd-order
+      Runge–Kutta time integrator — all on CPU or GPU. The simulation runs
+      for $t \in [0, 10]$ with $\Delta t = 10^{-3}$ and pushes a snapshot of
+      the speed field $\sqrt{u^2 + v^2}$ into <code>speed_hist</code> every
+      100 iterations so we can animate it later with
+      <code>animate_navier_stokes</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/Navier_Stokes.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Bundle every knob in a struct — same pattern as Heat and Wave
+Base.@kwdef struct NavierStokes &lt;: IncompressibleNSProblem
+    nx::Int            = 64
+    ny::Int            = 64
+    Nt::Int            = 10000        # number of time steps (Δt = T / Nt)
+    T::Float64         = 10.0
+    Re::Float64        = 100.0        # Reynolds number
+    lid_speed::Float64 = 1.0
+end
+
+function solve(p::NavierStokes)
+    Δt = p.T / p.Nt
+    ν  = 1.0 / p.Re
+
+    grid = Oceananigans.RectilinearGrid(size=(p.nx, p.ny), x=(0, 1), y=(0, 1),
+        topology=(Bounded, Bounded, Flat))
+
+    # Top lid drives the flow at p.lid_speed
+    u_bcs = Oceananigans.FieldBoundaryConditions(
+        north = Oceananigans.ValueBoundaryCondition(p.lid_speed))
+
+    model = Oceananigans.NonhydrostaticModel(grid;
+        advection   = Oceananigans.UpwindBiased(order=5),
+        timestepper = :RungeKutta3,
+        boundary_conditions = (u=u_bcs,),
+        closure     = Oceananigans.ScalarDiffusivity(ν=ν))
+
+    Oceananigans.set!(model, u=0, v=0)
+    simulation = Oceananigans.Simulation(model, Δt=Δt, stop_time=p.T)
+
+    speed_field = Oceananigans.Field(
+        sqrt(model.velocities.u^2 + model.velocities.v^2))
+    Oceananigans.run!(simulation)
+    Oceananigans.compute!(speed_field)
+
+    _, x = endpoint_grid(1.0, p.nx)
+    _, y = endpoint_grid(1.0, p.ny)
+    u    = copy(Oceananigans.interior(speed_field, :, :, 1))
+    return PDESolution((x, y), u, p.T, p)
+end</code></pre>
+    </div>
+
+    <h4>Step G — Load the package in development mode</h4>
+    <p>
+      <code>Pkg.develop</code> links the package into your environment by path —
+      no install, no version pin. Edits you make to source files take effect
+      immediately (with Revise, see below):
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># From the directory that CONTAINS the juliaPDEs/ folder:
+using Pkg
+Pkg.develop(path="./juliaPDEs")
+
+# Now import it like any installed package:
+using juliaPDEs
+
+# One verb for every PDE — multiple dispatch picks the right method:
+sol_h  = solve(HeatEquation())                         # heat       → PDESolution
+sol_w  = solve(WaveEquation())                         # wave       → PDESolution
+sol_ns = solve(NavierStokes())                         # Navier–Stokes → PDESolution
+
+animate_navier_stokes(NavierStokes())                  # → navier_stokes_animation.gif</code></pre>
+    </div>
+
+    <h4>Step H — Write and run tests</h4>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — test/runtests.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Test
+
+@testset "Heat equation" begin
+    sol = solve(HeatEquation(N_grid=(50,), T=0.1))
+    @test size(sol.u) == (50,)               # correct grid size
+    @test maximum(sol.u) &lt; 1.0               # diffusion shrinks the peak
+    @test sol.u[1]   ≈ 0.0 atol=1e-10        # Dirichlet BC at left
+    @test sol.u[end] ≈ 0.0 atol=1e-10        # Dirichlet BC at right
+end
+
+@testset "Wave equation" begin
+    sol = solve(WaveEquation(N_grid=(100,), Nt=200, T=0.5))
+    @test size(sol.u) == (100,)
+    @test all(isfinite, sol.u)               # no NaNs from CFL violation
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@juliaPDEs) pkg> test   # runs test/runtests.jl and prints pass/fail</code></pre>
+    </div>
+  </section>
+
+  <!-- Revise -->
+  <section class="section" id="pkg-revise">
+    <h3>Revise.jl — live code reload</h3>
+    <p>
+      Here is the problem Revise solves. You start Julia, load
+      <code>juliaPDEs</code>, run a function, plot the result. Then you
+      open <code>src/heat.jl</code>, fix a bug, and want to re-run. Without
+      Revise, the running Julia session has the <em>old</em> definition
+      of <code>solve</code> compiled into memory. To pick up your
+      change you would have to:
+    </p>
+    <ol>
+      <li>Quit Julia (<code>exit()</code>),</li>
+      <li>Restart it,</li>
+      <li><code>using juliaPDEs</code> again (cue: 5–30 seconds of
+        precompilation),</li>
+      <li>Re-run any setup code, re-load your test data, re-make your
+        plot.</li>
+    </ol>
+    <p>
+      That is brutal when you are in a tight develop-test cycle.
+      <strong>Revise.jl</strong> watches all the source files in your
+      package and, the moment you save one, it patches the running Julia
+      session — replacing the old function definitions with the new ones,
+      <em>without</em> losing any other state. Your variables, plots, and
+      loaded data all survive.
+    </p>
+
+    <h4>Install Revise</h4>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Install into your global environment (available in all projects)
+(@v1.10) pkg> add Revise</code></pre>
+    </div>
+
+    <h4>Make Revise load automatically on every Julia start</h4>
+    <p>
+      Create (or edit) <code>~/.julia/config/startup.jl</code> — Julia runs this
+      file every time it starts:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — ~/.julia/config/startup.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">try
+    using Revise
+catch e
+    @warn "Could not load Revise" exception = e
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash — create the file</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir -p ~/.julia/config
+# Then open ~/.julia/config/startup.jl in your editor and paste the code above</code></pre>
+    </div>
+
+    <h4>How Revise works with your package</h4>
+    <p>
+      Load Revise <em>before</em> your package. After that, any edit you save to a
+      source file inside <code>src/</code> is live in the REPL instantly:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL session</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Revise       # must come first
+using juliaPDEs
+
+sol = solve(HeatEquation())   # works normally
+
+# --- now open src/heat.jl and change α default from 0.01 to 0.05, save ---
+
+sol = solve(HeatEquation())   # Revise picked up the change — no restart needed
+# The new default α = 0.05 is already active</code></pre>
+    </div>
+
+    <div class="callout warn">
+      <strong>Revise does not reload everything</strong>
+      Changes to struct definitions, global constants, and <code>using</code>
+      statements at the top level require a restart. Revise handles function
+      bodies and module-level code — which covers 95% of day-to-day edits.
+    </div>
+  </section>
+
+  <!-- Dev workflow loop -->
+  <section class="section" id="pkg-workflow">
+    <h3>The development workflow loop</h3>
+    <p>
+      Once your package is set up and Revise is running, your day-to-day
+      workflow is a tight loop. The whole point of getting Steps 1–4.5
+      right is to make this loop as short as possible — typing a fix
+      and seeing the new behavior in seconds, not minutes:
+    </p>
+    <p>
+      <em>Start Julia once</em> → <em>edit code in your editor</em> →
+      <em>save</em> → <em>re-run a function in the REPL</em> →
+      <em>occasionally run the test suite</em>. The four cards below
+      walk through each step:
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Start Julia once with your project loaded</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Open a terminal in your project directory and start Julia.
+            Revise loads from <code>startup.jl</code> automatically.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              You only do this once per working session.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Terminal</span>
+            <pre>cd ~/projects/julia-docx-tutorial/juliaPDEs
+julia --project=.
+# Revise auto-loaded from startup.jl
+# then:
+using juliaPDEs</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">write or edit code in your editor</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Edit a source file and save</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Open <code>src/heat.jl</code> in VS Code (or any editor),
+            change a function, and press Save.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Revise watches all files in <code>src/</code> and
+              patches the running Julia session automatically.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">src/heat.jl — change the default α</span>
+            <pre>Base.@kwdef struct HeatEquation{N, F} &lt;: ParabolicProblem
+    ...
+    α::Float64 = 0.05    # ← changed from 0.01
+    ...
+end</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Revise detects the save — no restart needed</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Call the function in the REPL — the new version is already active</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What happens</span>
+            <p>Revise re-defines the function in the running session.
+            All your previously defined variables (grids, results, plots)
+            are still there — nothing is lost.</p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">REPL</span>
+            <pre>julia> sol = solve(HeatEquation())
+# Uses the new α = 0.05 immediately
+
+julia> plot(sol.x, sol.u)   # still works — no re-import needed</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">run the tests at any time to make sure nothing broke</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Run the test suite to confirm correctness</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">What you do</span>
+            <p>Switch to pkg mode and run <code>test</code>. Julia runs
+            <code>test/runtests.jl</code> and prints a pass/fail summary.</p>
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Run this before committing to git to catch regressions early.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia (pkg mode — press ])</span>
+            <pre>(@juliaPDEs) pkg> test
+Test Summary:    | Pass  Fail  Total
+Heat equation    |    4     0      4
+Wave equation    |    2     0      2
+All tests passed.</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout info">
+      <strong>Recommended project layout for Step 7 onward</strong>
+      Keep using the <code>juliaPDEs</code> package you just built — add each
+      new solver from Step 7 as a separate <code>src/</code> file, include it
+      from <code>src/juliaPDEs.jl</code>, and export the entry point.
+      This way you can call <code>solve(prob)</code> from the REPL,
+      from tests, and from Slurm job scripts — all with the same import.
+    </div>
+  </section>
+
+  <!-- ══ HOW STRUCTS MAKE JULIA FAST ══════════════════════════ -->
+  <section class="section" id="parametric-types">
+    <h2>How Structs Make Julia Fast — Parametric Types &amp; Type Stability</h2>
+    <p>
+      Julia's speed comes from one core idea: when you call a function, Julia
+      <strong>specializes the machine code for the exact types you pass in</strong>.
+      A loop over <code>Vector{Float64}</code> compiles to different assembly than
+      the same loop over <code>Vector{Int}</code>. If Julia <em>cannot</em> figure
+      out the concrete types ahead of time, it falls back to dynamic dispatch:
+      every access goes through a type check + indirection, and you lose most
+      of the speed advantage <a href="#refs-types" class="cite">[1, 2]</a>.
+    </p>
+    <p>
+      <strong>Your struct definition is the single biggest lever for type
+      stability.</strong> If a field has an abstract type (<code>Function</code>,
+      <code>Tuple</code>, <code>AbstractArray</code>), every access to that field
+      is a dynamic dispatch. If the field has a concrete or <em>parametric</em>
+      type, Julia knows the layout at compile time and inlines everything.
+    </p>
+
+    <h3>Side-by-Side — The Same Struct, Two Ways</h3>
+    <p>
+      The package ships a benchmark in <code>juliaPDEs/benchmark_parametric_types.jl</code>
+      that compares a parametric N-dimensional heat-equation struct against an
+      identical version written with abstract field types. The bodies of the two
+      <code>solve</code> functions are byte-for-byte the same — only the struct
+      differs.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Slow version: abstract field types</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquationSlow
+    N_grid::Tuple              # ❌ Abstract — Julia doesn't know the length
+    Nt::Int    = 1000          # number of time steps (Δt = T/Nt)
+    α::Float64 = 0.01
+    L::Tuple = ntuple(_ -> 1.0, length(N_grid))   # ❌ Abstract Tuple
+    T::Float64 = 1.0
+    f_init::Function           # ❌ Abstract — Julia doesn't know which function
+    N::Int64 = length(N_grid)
+end
+
+function solve_slow(p::HeatEquationSlow)
+    # ... same body as the fast version ...
+    for I in inner_range
+        laplacian = 0.0
+        for i in 1:N
+            laplacian += r[i] * (u[I+e[i]] - 2.0 * u[I] + u[I-e[i]])
+        end
+        u_new[I] = u[I] + laplacian   # 🚨 Each iteration pays dispatch tax
+    end
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Fast version: parametric types {N, F}</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation{N,F} &lt;: ParabolicProblem
+    N_grid::NTuple{N,Int}                      # ✓ Concrete: N known at compile time
+    Nt::Int    = 1000                          # ← number of time steps (Δt = T/Nt)
+    α::Float64 = 0.01
+    L::NTuple{N,Float64} = ntuple(_ -> 1.0, N) # ✓ Concrete
+    T::Float64 = 1.0
+    f_init::F                                  # ✓ Each F gets its own specialized solver
+end
+
+function solve(p::HeatEquation{N,F}) where {N,F}
+    # ... same body — but every type is now concrete inside the loop ...
+    for I in inner_range
+        laplacian = 0.0
+        for i in 1:N
+            @inbounds laplacian += r[i] * (u[I+e[i]] - 2.0 * u[I] + u[I-e[i]])
+        end
+        @inbounds u_new[I] = u[I] + laplacian
+    end
+end</code></pre>
+    </div>
+
+    <h3>Why It Matters — Three Compile-Time Wins</h3>
+    <ol>
+      <li>
+        <strong>Loop unrolling for fixed N.</strong> Because <code>N</code> is a
+        type parameter, the inner stencil loop <code>for i in 1:N</code> is
+        unrolled at compile time when <code>N = 2</code> or <code>N = 3</code> —
+        the compiler generates straight-line code for each dimension instead of
+        a runtime loop.
+      </li>
+      <li>
+        <strong>Function inlining.</strong> Parameterising <code>f_init::F</code>
+        means each unique closure passed in gets its own specialized
+        <code>solve</code> method. The call <code>p.f_init(coords...)</code>
+        inlines down to direct arithmetic — no virtual dispatch
+        <a href="#refs-types" class="cite">[2]</a>.
+      </li>
+      <li>
+        <strong>Stack allocation of small tuples.</strong>
+        <code>NTuple{N,Int}</code> with a concrete <code>N</code> sits on the
+        stack as a fixed-size record. <code>Tuple</code> (abstract) becomes a
+        heap-allocated boxed object — extra indirection plus GC pressure.
+      </li>
+    </ol>
+
+    <h3>Benchmark — 3D Heat Equation, N = 70³ grid</h3>
+    <p>
+      The benchmark file uses <code>BenchmarkTools.@btime</code> to compare both
+      structs on the same 3D problem (70 × 70 × 70 grid, T = 0.5).
+      The parametric version is several times faster, with dramatically fewer
+      allocations <a href="#refs-types" class="cite">[2]</a>.
+    </p>
+
+    <div class="perf-chart-wrap">
+      <canvas id="chartStruct" height="200"></canvas>
+    </div>
+    <p style="font-size:0.82rem;color:#6a8aaa;margin-top:6px;">
+      Representative results on a modern x86 laptop running Julia 1.10.
+      Run <code>julia --project=. juliaPDEs/benchmark_parametric_types.jl</code> in this repo
+      to reproduce the numbers on your own hardware.
+    </p>
+
+    <h3>Run the Benchmark Yourself</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">cd juliaPDEs
+julia --project=. benchmark_parametric_types.jl</code></pre>
+    </div>
+    <p>The script prints something like:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">expected output</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-text">=== Benchmarking Fast (Parametric) Struct ===
+struct HeatEquation{N, F} ...
+  2.140 s (    312 allocations: 81.5 MiB)
+
+=== Benchmarking Slow (Abstract) Struct ===
+struct HeatEquationSlow ...
+ 11.870 s (45_678_991 allocations: 1.85 GiB)
+
+🚀 RESULTS: The abstractly typed version is ~5.5× SLOWER!</code></pre>
+    </div>
+
+    <h3>Checklist — Making Your Own Structs Fast</h3>
+    <ul>
+      <li>Replace <code>Tuple</code> with <code>NTuple{N, T}</code> when the
+        length and element type are known.</li>
+      <li>Replace <code>Function</code>, <code>Any</code>, or <code>AbstractArray</code>
+        in fields with a type parameter
+        (<code>struct Foo{F}; f::F; end</code>).</li>
+      <li>Avoid <code>Vector{Real}</code> or <code>Array{Number}</code> — prefer
+        <code>Vector{Float64}</code> or parametrize (<code>Vector{T}</code>).</li>
+      <li>Use <code>@code_warntype solve(prob)</code> to check for red type warnings.</li>
+      <li>Profile allocations with
+        <code>@btime</code> from <code>BenchmarkTools.jl</code> — chasing zero
+        allocations in the hot loop is the surest path to C-level performance
+        <a href="#refs-types" class="cite">[4]</a>.</li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>The pattern in this package</strong><br>
+      Every PDE struct in <code>juliaPDEs</code> follows the parametric pattern:
+      <code>HeatEquation{N,F}</code>, <code>WaveEquation</code>,
+      <code>PoissonEquation</code>. Each field has a concrete or
+      parametric type, every solver method declares <code>where {N, F, …}</code>
+      so Julia specializes on the exact problem instance.
+      This is why the same solver runs at C speed without any C code.
+    </div>
+
+    <h3 id="refs-types">References</h3>
+    <ol class="ref-list">
+      <li>
+        Bezanson, J., Edelman, A., Karpinski, S., &amp; Shah, V. B. (2017).
+        <em>Julia: A Fresh Approach to Numerical Computing.</em>
+        SIAM Review, 59(1), 65–98. — see §3 on type inference and
+        specialization.
+        <a href="https://doi.org/10.1137/141000671" target="_blank" rel="noopener">doi:10.1137/141000671</a>
+      </li>
+      <li>
+        Julia Documentation. <em>Performance Tips — Avoid containers with
+        abstract type parameters &amp; Avoid fields with abstract type.</em>
+        <a href="https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-containers-with-abstract-type-parameters" target="_blank" rel="noopener">docs.julialang.org/en/v1/manual/performance-tips</a>
+      </li>
+      <li>
+        Bezanson, J., Chen, J., Chung, B., Karpinski, S., Shah, V. B., Vitek, J.,
+        &amp; Zoubritzky, L. (2018).
+        <em>Julia: dynamism and performance reconciled by design.</em>
+        Proceedings of the ACM on Programming Languages, 2(OOPSLA), 1–23.
+        <a href="https://doi.org/10.1145/3276490" target="_blank" rel="noopener">doi:10.1145/3276490</a>
+      </li>
+      <li>
+        Chen, J. &amp; Revels, J. (2016). <em>BenchmarkTools.jl: A Benchmarking
+        Framework for the Julia Language.</em> arXiv:1608.04295.
+        <a href="https://arxiv.org/abs/1608.04295" target="_blank" rel="noopener">arxiv.org/abs/1608.04295</a>
+      </li>
+    </ol>
+
+    <script>
+    (function() {
+      new Chart(document.getElementById('chartStruct'), {
+        type: 'bar',
+        data: {
+          labels: ['Execution time', 'Memory allocations', 'Heap memory'],
+          datasets: [
+            {
+              label: 'HeatEquation{N,F}  (parametric — fast)',
+              data: [1.0, 1.0, 1.0],
+              backgroundColor: '#9558B2',
+              borderColor: '#6a2a8a',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'HeatEquationSlow  (abstract types)',
+              data: [5.5, 146000, 23.3],
+              backgroundColor: '#e06c00',
+              borderColor: '#a04a00',
+              borderWidth: 1,
+              borderRadius: 4,
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const v = ctx.parsed.x;
+                  const txt = v >= 1000 ? v.toLocaleString() + '×' : v + '×';
+                  return ` ${ctx.dataset.label}: ${txt} relative to parametric`;
+                }
+              }
+            },
+            title: {
+              display: true,
+              text: 'Parametric vs abstract struct — 3D heat equation, 70³ grid'
+            }
+          },
+          scales: {
+            x: {
+              type: 'logarithmic',
+              min: 0.5,
+              title: { display: true, text: 'Relative cost  (parametric = 1.0, log scale)' },
+              ticks: { callback: v => v.toLocaleString() + '×' }
+            },
+            y: { grid: { display: false } }
+          }
+        }
+      });
+    })();
+    </script>
+  </section>
+
+  <!-- ══ STEP 5 ══════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="packages.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">3 &middot; Existing packages</span>
+    </a>
+    <a class="next" href="pde-workflow.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">5 &middot; PDE workflow</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 04 &middot; Build your own package
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

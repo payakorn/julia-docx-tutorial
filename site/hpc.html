@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Run on the cluster &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Polish &amp; ship</div>
+    <div class="ch-label">Chapter 14</div>
+    <h1>Run on the cluster</h1>
+    <p>SSH into the university HPC, request resources via Slurm, and inspect your jobs.</p>
+  </header>
+  <section class="section" id="step8">
+    <h2><span class="step-badge">Step 9</span>Connect to the HPC Cluster</h2>
+
+    <h3>What is SSH and why do we need keys?</h3>
+    <p>
+      <strong>SSH</strong> ("secure shell") is the standard protocol for
+      logging into remote Unix machines over the network. You run a
+      client on your laptop, the cluster runs an SSH server, and the
+      session is encrypted end-to-end. Almost every HPC interaction —
+      submitting jobs, copying data, opening interactive shells — uses
+      SSH underneath.
+    </p>
+    <p>
+      Authenticating with a password every time gets old fast and is
+      less secure than the alternative. The pro way is
+      <strong>public-key authentication</strong>:
+    </p>
+    <ol>
+      <li>You generate a <em>key pair</em> — two files: a
+        <strong>private key</strong> that stays on your laptop and a
+        <strong>public key</strong> that you give to the server.</li>
+      <li>The server adds your public key to its
+        <code>~/.ssh/authorized_keys</code> file.</li>
+      <li>From then on, when you SSH in, the two keys cryptographically
+        prove who you are — no password typing.</li>
+    </ol>
+    <p>
+      Treat the private key like a password: never share it, never email
+      it, never commit it to git. The public key is safe to hand out.
+    </p>
+
+    <h3>9.1 Generate a key pair and install it on the cluster</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">ssh-keygen -t ed25519 -C "your_email@example.com"
+ssh-copy-id user@cluster.example.edu
+ssh user@cluster.example.edu
+module load julia/1.10 && julia --version</code></pre>
+    </div>
+    <p>What each line does:</p>
+    <ul>
+      <li><code>ssh-keygen -t ed25519 -C "..."</code> creates a modern
+        Ed25519 key pair (faster and stronger than the older RSA
+        default). The <code>-C</code> comment is just a label so you can
+        identify which laptop the key came from. Press Enter to accept
+        the default file location (<code>~/.ssh/id_ed25519</code>); you
+        may set a passphrase or leave it empty.</li>
+      <li><code>ssh-copy-id user@cluster.example.edu</code> appends your
+        public key to the cluster's <code>authorized_keys</code>. This
+        is the only step that needs your password.</li>
+      <li><code>ssh user@cluster.example.edu</code> logs in. From now on,
+        no password prompt — the keys do the talking.</li>
+      <li><code>module load julia/1.10</code> — most clusters use the
+        <em>environment modules</em> system to swap in the right
+        compiler/runtime versions. <code>module avail julia</code> lists
+        what is installed; <code>module load julia/1.10</code> activates
+        the 1.10 LTS.</li>
+    </ul>
+
+    <h3>9.2 Sync your project to the cluster</h3>
+    <p>
+      <strong>rsync</strong> is the workhorse for moving files between
+      machines. Unlike <code>scp</code>, it transfers only the changed
+      bytes — fast for repeated pushes during development:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">rsync -avz ~/julia-pde/ user@cluster:~/julia-pde/
+ssh user@cluster "cd ~/julia-pde && julia --project=. -e 'using Pkg; Pkg.instantiate()'"</code></pre>
+    </div>
+    <p>The flags:</p>
+    <ul>
+      <li><code>-a</code> archive mode — preserves permissions, timestamps, symlinks.</li>
+      <li><code>-v</code> verbose — show files as they transfer.</li>
+      <li><code>-z</code> compress in flight — faster on slow links.</li>
+    </ul>
+    <p>
+      The trailing <code>/</code> on <code>~/julia-pde/</code> matters:
+      with the slash you copy <em>the contents</em>; without it you
+      create a sub-folder. The second line runs
+      <code>Pkg.instantiate()</code> on the cluster, which reads the
+      shipped <code>Manifest.toml</code> and downloads the same exact
+      package versions you developed against. Reproducibility, secured.
+    </p>
+
+    <div class="callout tip">
+      <strong>Use a <code>~/.ssh/config</code> alias</strong>
+      Add this to your local <code>~/.ssh/config</code>:
+      <code>Host hpc</code> / <code>HostName cluster.example.edu</code> /
+      <code>User you</code>. Now <code>ssh hpc</code> is enough — the
+      same alias works in <code>rsync</code>, <code>scp</code>, and the
+      VS Code Remote-SSH extension.
+    </div>
+  </section>
+
+  <!-- ══ STEP 9 ══════════════════════════════════════════════ -->
+  <section class="section" id="step9">
+    <h2><span class="step-badge">Step 10</span>Submitting Julia Jobs with Slurm</h2>
+
+    <h3>What is Slurm and why do we use it?</h3>
+    <p>
+      An HPC cluster is a shared resource: hundreds of users want a piece
+      of it at the same time. Letting everyone log in and run programs
+      directly would be chaos. Instead, you describe what you want to run
+      in a small text file (a <em>job script</em>) and hand it to the
+      <strong>workload manager</strong>. The manager queues the job, waits
+      until the requested resources are free, then runs your script on
+      the assigned nodes for at most the requested time. When the job
+      finishes (or is killed for going over budget), the resources are
+      released to the next user.
+    </p>
+    <p>
+      <strong>Slurm</strong> (the Simple Linux Utility for Resource
+      Management) is the workload manager used by most academic clusters.
+      You will use only a handful of commands to interact with it day to
+      day:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>sbatch job.sh</code></td><td>Submit a job. Returns a numeric job ID.</td></tr>
+          <tr><td><code>squeue -u $USER</code></td><td>Show <em>your</em> queued and running jobs.</td></tr>
+          <tr><td><code>scancel JOBID</code></td><td>Cancel a queued or running job.</td></tr>
+          <tr><td><code>sinfo</code></td><td>Show which nodes are idle, busy, or down.</td></tr>
+          <tr><td><code>sacct -j JOBID</code></td><td>Job history: CPU time used, memory peak, exit code.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>10.1 Anatomy of a Slurm job script</h3>
+    <p>
+      A job script is just a normal bash script with extra
+      <code>#SBATCH</code> comment lines at the top. Slurm parses those
+      comments to figure out what resources to allocate; the rest of the
+      file runs as a plain shell session on the allocated node:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash (job.sh)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --job-name=heat_eq
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=4G
+#SBATCH --time=00:30:00
+#SBATCH --output=heat_%j.out
+
+module load julia/1.10
+julia --threads=4 --project=. heat_equation.jl</code></pre>
+    </div>
+    <p>What each <code>#SBATCH</code> directive means:</p>
+    <ul>
+      <li><code>--job-name=heat_eq</code> — a label that shows up in
+        <code>squeue</code>. Make it descriptive — your future self will
+        thank you when scrolling through 30 queued jobs.</li>
+      <li><code>--cpus-per-task=4</code> — give this job 4 CPU cores.
+        Ask for what you need; over-asking means longer queue times.</li>
+      <li><code>--mem=4G</code> — 4 GB of RAM. If your job goes over,
+        Slurm kills it ("OOM"). Estimate from how big your arrays are
+        (Float64 = 8 bytes × array length).</li>
+      <li><code>--time=00:30:00</code> — wall-clock limit
+        (HH:MM:SS). Slurm kills the job at the limit. Pick a generous
+        limit on first runs; tighten it once you know the runtime —
+        shorter requests start sooner.</li>
+      <li><code>--output=heat_%j.out</code> — redirect stdout to a file;
+        <code>%j</code> expands to the job ID so files do not overwrite
+        each other.</li>
+    </ul>
+    <p>The two non-<code>#SBATCH</code> lines run on the allocated node:</p>
+    <ul>
+      <li><code>module load julia/1.10</code> — make the cluster's Julia
+        installation available (Step 9 covered the module system).</li>
+      <li><code>julia --threads=4 --project=. heat_equation.jl</code> —
+        start Julia with 4 threads, in your project's environment, and
+        run the script. We will see how to use those threads next.</li>
+    </ul>
+
+    <h3>10.2 Threading inside Julia</h3>
+    <p>
+      <code>--threads=N</code> tells Julia how many threads to make
+      available; <code>--cpus-per-task=N</code> tells Slurm how many
+      cores to allocate. <em>Both numbers should match</em> — fewer
+      threads than cores wastes the allocation, more threads than cores
+      causes oversubscription and slowdowns. Inside your Julia code,
+      parallelise loops with one macro:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Threads.@threads for i in 1:N
+    do_independent_work(i)
+end</code></pre>
+    </div>
+    <p>
+      Each thread handles a slice of the iteration range concurrently.
+      The work in each iteration must be independent — no thread should
+      write to memory that another thread reads. Inside the heat-equation
+      time loop the body is simple enough that the compiler often
+      vectorises a single thread well; threading pays off for larger
+      grids and for parameter sweeps where each <code>i</code> is its
+      own simulation.
+    </p>
+
+    <div class="callout info">
+      <strong>Threading vs MPI vs GPU</strong>
+      <code>Threads</code> = shared memory on a single node (4–128 cores
+      typical). <code>MPI.jl</code> = distributed memory across many
+      nodes (your code runs as $N$ copies that send messages to each
+      other). <code>CUDA.jl</code> = run array operations on a GPU
+      (massive parallelism if your kernel is array-friendly). Start with
+      threading; reach for MPI/CUDA when single-node memory or compute
+      is no longer enough.
+    </div>
+
+    <div class="callout tip">
+      <strong>Workflow on the cluster</strong>
+      <code>sbatch job.sh</code> → note the JOB_ID it prints →
+      <code>squeue -u $USER</code> until status is "R" (running) or
+      gone → check <code>heat_JOBID.out</code> for output →
+      <code>sacct -j JOBID --format=JobID,Elapsed,MaxRSS,State</code>
+      to inspect memory and time used after the fact.
+    </div>
+  </section>
+  <!-- ══ STEP — SHARE YOUR CODE WITH GIT & GITHUB ════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="homework.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">13 &middot; Homework</span>
+    </a>
+    <a class="next" href="git.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">15 &middot; Git &amp; GitHub</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 14 &middot; Run on the cluster
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

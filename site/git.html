@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Git &amp; GitHub &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Polish &amp; ship</div>
+    <div class="ch-label">Chapter 15</div>
+    <h1>Git &amp; GitHub</h1>
+    <p>The minimum Git you need to share your code and collaborate on a project.</p>
+  </header>
+  <section class="section" id="step-git">
+    <h2>Share your code with Git &amp; GitHub</h2>
+    <p>
+      You now have a working Julia project with PDE solvers and an HPC job
+      script. The last step is to put your code under <strong>version
+      control</strong> with <strong>Git</strong>, and push a copy to
+      <strong>GitHub</strong> so you can access it from anywhere (including the
+      cluster) and share it with classmates or your advisor.
+    </p>
+
+    <div class="callout info">
+      <strong>What is Git, in one sentence?</strong>
+      Git records snapshots of your project over time so you can see what
+      changed, undo mistakes, and collaborate without emailing zip files.
+      <strong>GitHub</strong> is a website that hosts those snapshots online.
+    </div>
+
+    <h3>1. Install Git (inside WSL)</h3>
+    <p>Open your Ubuntu terminal and run:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">sudo apt update
+sudo apt install -y git
+git --version</code></pre>
+    </div>
+    <p>
+      The last command should print something like <code>git version 2.43.0</code>.
+      That confirms Git is installed.
+    </p>
+
+    <h3>2. Tell Git who you are (one-time setup)</h3>
+    <p>
+      Every snapshot is stamped with your name and email. Set them once and
+      Git remembers them for every project on this computer:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git config --global user.name  "Your Name"
+git config --global user.email "you@example.com"</code></pre>
+    </div>
+    <p>
+      Use the same email as your GitHub account when you create one in step 6.
+    </p>
+
+    <h3>3. Initialize the repo in your project folder</h3>
+    <p>
+      Go to the folder that holds your Julia project (the one with
+      <code>Project.toml</code>) and turn it into a Git repository:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">cd ~/projects/julia-docx-tutorial   # adjust to your folder
+git init
+git status</code></pre>
+    </div>
+    <p>
+      <code>git init</code> creates a hidden <code>.git/</code> folder where Git
+      stores all its history. <code>git status</code> shows every file Git can
+      see; right now they will all be listed as <em>untracked</em>.
+    </p>
+
+    <h3>4. Tell Git which files to ignore</h3>
+    <p>
+      You do <strong>not</strong> want to commit generated PNG figures, the
+      large <code>.docx</code>, Julia&rsquo;s package cache, or editor temp
+      files. Create a <code>.gitignore</code> file at the top of the project
+      with this content:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash"># Julia
+Manifest.toml
+*.jl.cov
+*.jl.mem
+.julia/
+
+# Generated artifacts
+output/
+site/output/figures/
+*.docx
+*.png
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp</code></pre>
+    </div>
+    <p>
+      Each line is a pattern. Anything matching is hidden from Git. You can
+      always remove a line later if you decide you do want to track that file.
+    </p>
+
+    <h3>5. Make your first commit</h3>
+    <p>
+      A <strong>commit</strong> is a labelled snapshot of every file currently
+      staged. Stage all files, then commit with a short message:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git add .
+git status                          # confirm what is staged
+git commit -m "Initial project: Julia PDE solvers and setup guide"</code></pre>
+    </div>
+    <p>
+      Git replies with something like
+      <code>[main (root-commit) 9e4c42c] Initial project ...</code>. That hash
+      is the snapshot&rsquo;s unique ID; you can always come back to it later.
+    </p>
+
+    <div class="callout tip">
+      <strong>Good commit messages</strong>
+      Write what you did and <em>why</em>, in the present tense:
+      &ldquo;Add heat-equation solver and convergence test&rdquo; is better
+      than &ldquo;changes&rdquo; or &ldquo;wip&rdquo;.
+    </div>
+
+    <h3>6. Create a GitHub account and an empty repository</h3>
+    <ol>
+      <li>Go to <a href="https://github.com" target="_blank" rel="noopener">github.com</a> and sign up (free).</li>
+      <li>Click <strong>+ → New repository</strong> in the top-right.</li>
+      <li>
+        Name it (e.g. <code>julia-pde-tutorial</code>), keep it
+        <strong>public</strong> or <strong>private</strong> as you prefer, and
+        <strong>do not</strong> tick &ldquo;Add a README&rdquo; or
+        &ldquo;Add .gitignore&rdquo; — your local folder already has those.
+      </li>
+      <li>Click <strong>Create repository</strong>. GitHub shows a page with the URL of your new (empty) repo.</li>
+    </ol>
+
+    <h3>7. Connect your local repo to GitHub and push</h3>
+    <p>
+      On the GitHub repo page, copy the HTTPS URL (looks like
+      <code>https://github.com/&lt;you&gt;/julia-pde-tutorial.git</code>).
+      Then in your terminal:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git branch -M main
+git remote add origin https://github.com/&lt;your-username&gt;/julia-pde-tutorial.git
+git push -u origin main</code></pre>
+    </div>
+    <p>
+      The first time you push, GitHub will ask for your username and a
+      <strong>personal access token</strong> (PAT) instead of a password. Create
+      one at
+      <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a>
+      → <em>Generate new token (classic)</em>, give it the
+      <code>repo</code> scope, and paste it where Git asks for the password.
+      Git will cache it so you don&rsquo;t have to enter it again.
+    </p>
+
+    <h3>8. Day-to-day loop</h3>
+    <p>From now on, every time you change something you want to keep:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">git status                          # what changed?
+git add path/to/file.jl             # stage specific files (or use "git add ." for all)
+git commit -m "Fix CFL bug in wave solver"
+git push                            # send the new commits to GitHub</code></pre>
+    </div>
+
+    <div class="callout success">
+      <strong>You’re done.</strong>
+      Refresh your GitHub repo page in the browser — you should see every
+      file from your project, your commit message at the top, and a clickable
+      history. From here you can <code>git clone</code> the same repo on the
+      HPC cluster and run the exact same code there.
+    </div>
+  </section>
+
+  <nav class="page-nav">
+    <a class="prev" href="hpc.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">14 &middot; Run on the cluster</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 15 &middot; Git &amp; GitHub
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

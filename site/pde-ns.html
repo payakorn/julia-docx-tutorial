@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navier&ndash;Stokes (2D) &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs</div>
+    <div class="ch-label">Chapter 09</div>
+    <h1>Navier&ndash;Stokes (2D)</h1>
+    <p>Lid-driven cavity via the projection method and pressure-Poisson loop.</p>
+  </header>
+  <section class="section" id="pde-ns">
+    <h3>Example D — Navier-Stokes (Nonlinear, Coupled)</h3>
+    <p>
+      The Navier–Stokes equations are the governing equations of fluid
+      flow — every weather forecast, every aircraft simulation, every
+      blood-flow study uses them. They are deceptively short to write
+      down, but they combine essentially every difficulty we have met
+      so far, and they introduce one new one (nonlinearity).
+    </p>
+    <p>
+      What makes Navier–Stokes hard:
+    </p>
+    <ul>
+      <li>It is a <em>system</em> of two coupled PDEs — momentum
+        and continuity — for the velocity $\mathbf{u}$ <em>and</em>
+        pressure $p$.</li>
+      <li>The convection term $(\mathbf{u}\cdot\nabla)\mathbf{u}$ is
+        <em>nonlinear</em> — the velocity advects itself. Linear
+        algebra alone is not enough; you typically iterate.</li>
+      <li>The continuity constraint $\nabla\cdot\mathbf{u}=0$
+        (incompressibility) is not a time-evolution rule but a
+        <em>constraint</em> — it must hold at every instant. Enforcing
+        it requires solving a Poisson equation for pressure
+        <em>every</em> timestep.</li>
+      <li>At high Reynolds number $\mathrm{Re} = UL/\nu$ the flow
+        becomes turbulent — a chaotic, multi-scale mess that needs
+        either very fine grids or sub-grid models.</li>
+    </ul>
+    <p>
+      Algorithmically, every step of Navier–Stokes touches every tool
+      from Examples A–C: a forward-Euler-style time step (Example A's
+      time loop), a $\nabla^2 u$ viscous diffusion term (also Example
+      A's stencil), and a pressure Poisson solve (Example C's sparse
+      $A\mathbf{u}=\mathbf{b}$). Plus convection. The card sequence
+      below walks the standard projection-method recipe; in our actual
+      <code>juliaPDEs</code> package we hand the heavy lifting to
+      <code>Oceananigans.jl</code> rather than rewriting it ourselves
+      (see Step 6.6).
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the two coupled equations from the paper</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper — incompressible NS</span>
+            $$\frac{\partial \mathbf{u}}{\partial t} + \underbrace{(\mathbf{u}\cdot\nabla)\mathbf{u}}_{\text{convection — nonlinear}} = -\frac{\nabla p}{\rho} + \nu\,\nabla^2 \mathbf{u}$$
+            $$\nabla \cdot \mathbf{u} = 0$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              $\mathbf{u}=(u,v)$ velocity, $p$ pressure, $\nu$ kinematic viscosity<br>
+              Reynolds number: $\mathrm{Re} = UL/\nu$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What each term needs in code</span>
+            <pre># ∂u/∂t + diffusion → Euler step (Example A pattern)
+# (u·∇)u            → computed each step (new, nonlinear)
+# −∇p/ρ             → requires solving for p first
+# ∇·u = 0           → means: solve a Poisson eq. for p
+#                      (same as Example C, every timestep)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">identify each term's difficulty — and which example it mirrors</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Map each NS term to what you already know from Examples A–C</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Term-by-term breakdown</span>
+            <div style="font-size:0.88rem; line-height:2.1;">
+              $\partial\mathbf{u}/\partial t$ → Rule 2 Euler step (Example A) ✓<br>
+              $\nu\nabla^2\mathbf{u}$ → Rule 1 stencil × ν (Example A) ✓<br>
+              $(\mathbf{u}\cdot\nabla)\mathbf{u}$ → <strong>new</strong> — nonlinear, must recompute every step<br>
+              $-\nabla p/\rho$ → <strong>new</strong> — pressure is unknown until we solve for it<br>
+              $\nabla\cdot\mathbf{u}=0$ → <strong>new</strong> — forces a Poisson solve (Example C) every step
+            </div>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What changes each timestep</span>
+            <pre># convection: -(u·∇)u
+#   = -(u·∂u/∂x + v·∂u/∂y)  for x-component
+#   Must re-evaluate at every step because u changes
+
+# Example C's Poisson solve now runs every step:
+#   ∇²p = (ρ/dt) ∇·u*
+# This is the expensive part of NS</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">use the projection (fractional-step) method — split each timestep into three stages</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Stage 1 — Advance velocity ignoring pressure (intermediate u*)</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Math</span>
+            $$\mathbf{u}^* = \mathbf{u}^n + \Delta t\!\left[-(\mathbf{u}^n\cdot\nabla)\mathbf{u}^n + \nu\,\nabla^2\mathbf{u}^n\right]$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              This is an Euler step — identical to Example A — but the right-hand side
+              includes the convection term. $\mathbf{u}^*$ is not divergence-free yet.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Rule 1 stencil for diffusion (same as Example A):
+diff_x = ν .* laplacian(u, h)   # ν∇²u
+diff_y = ν .* laplacian(v, h)
+
+# Convection (new — nonlinear product):
+conv_x = -(u .* dudx .+ v .* dudy)
+conv_y = -(u .* dvdx .+ v .* dvdy)
+
+# Rule 2 Euler step (same as Example A):
+u_star = u .+ dt .* (conv_x .+ diff_x)
+v_star = v .+ dt .* (conv_y .+ diff_y)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Stage 2 — find the pressure that makes u divergence-free (this is Example C inside NS)</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Stage 2 — Solve a Poisson equation for pressure — same as Example C</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Pressure Poisson equation</span>
+            $$\nabla^2 p^{n+1} = \frac{\rho}{\Delta t}\,\nabla\cdot\mathbf{u}^*$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              This is the Poisson equation from Example C — with the right-hand side
+              replaced by the divergence of $\mathbf{u}^*$. It must be solved
+              <strong>every single timestep</strong>, which is why NS is expensive.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Divergence of u*:  ∇·u*
+div_ustar = dudx_star .+ dvdy_star
+
+# Right-hand side (same structure as Example C)
+b = (ρ / dt) .* div_ustar
+
+# Solve ∇²p = b  →  same A matrix as Example C
+p = reshape(A_pressure \ vec(b), N, N)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">Stage 3 — subtract the pressure gradient to enforce ∇·u = 0</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Stage 3 — Correct velocity with the pressure gradient</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Correction step</span>
+            $$\mathbf{u}^{n+1} = \mathbf{u}^* - \frac{\Delta t}{\rho}\,\nabla p^{n+1}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Subtracting $\nabla p$ removes the divergent part of $\mathbf{u}^*$,
+              leaving a velocity field that satisfies $\nabla\cdot\mathbf{u}=0$.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia concept</span>
+            <pre># Pressure gradient (Rule 1 in x and y):
+dpdx = (p[3:end,:] .- p[1:end-2,:]) ./ (2h)
+dpdy = (p[:,3:end] .- p[:,1:end-2]) ./ (2h)
+
+# Correction:
+u = u_star .- (dt/ρ) .* dpdx
+v = v_star .- (dt/ρ) .* dpdy
+# Now ∇·u ≈ 0  ✓</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">for real simulations, use Oceananigans.jl — it implements all three stages internally</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">6</div>
+          <span class="deriv-title">Production code — Oceananigans.jl handles the full projection for you</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg; Pkg.add("Oceananigans")
+using Oceananigans
+
+# Lid-driven cavity at Re = 100
+# Oceananigans handles stages 1–3 internally on every timestep
+grid = RectilinearGrid(size=(64, 64), x=(0,1), y=(0,1),
+                       topology=(Bounded, Bounded, Flat))
+
+model = NonhydrostaticModel(;
+    grid,
+    advection   = UpwindBiasedFifthOrder(),
+    timestepper = :RungeKutta3,
+    closure     = ScalarDiffusivity(ν=1e-2))   # ν = 1/Re = 0.01
+
+set!(model, u=0, v=0)
+
+simulation = Simulation(model, Δt=1e-3, stop_time=10)
+run!(simulation)</code></pre>
+    </div>
+
+    <figure class="figure">
+      <img src="output/figures/navier_stokes.png"
+           alt="Navier-Stokes lid-driven cavity: schematic on the left and streamlines on the right."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 6.</strong> Lid-driven cavity, the canonical
+        Navier–Stokes test problem. <em>Left:</em> schematic — the top
+        lid moves with speed $U$, all other walls are no-slip.
+        <em>Right:</em> the <strong>actual numerical solution</strong>
+        of the incompressible NS equations at $\mathrm{Re}=100$ on a
+        $48 \times 48$ grid, computed with the streamfunction–vorticity
+        solver below. The color map shows the speed
+        $|\mathbf{u}| = \sqrt{u^2 + v^2}$ (note the bright moving lid
+        and the high-speed boundary layers); the white contour is one
+        level set of the streamfunction $\Psi$ — the eye of the primary
+        vortex sits at roughly $(0.62,\,0.74)$, in agreement with the
+        Ghia <em>et&nbsp;al.</em> (1982) benchmark.
+      </figcaption>
+    </figure>
+
+    <h4 style="margin-top:1.6em;">From the discretisation scheme to a sparse matrix system</h4>
+    <p>
+      The figure above is the output of <em>two</em> linear solves repeated
+      at every timestep — one for the implicit diffusion of $\omega$ and
+      one for the streamfunction Poisson $\psi$. Both end up as sparse
+      matrix systems $A\mathbf{x} = \mathbf{b}$. We will now build the
+      first one from scratch in four stages: (1) write the continuous
+      equation, (2) discretize every term, (3) assemble the discrete
+      equations into a matrix, (4) look at what that matrix actually
+      contains.
+    </p>
+
+    <!-- ───────── STAGE 1 ───────── -->
+    <h5 style="margin-top:1.2em;">Stage 1 — Write the continuous equation in full</h5>
+    <p>
+      Starting point: the 2-D incompressible vorticity transport equation,
+    </p>
+    <p style="text-align:center;">
+      $$\frac{\partial \omega}{\partial t}
+          \;+\; \underbrace{u\,\frac{\partial \omega}{\partial x} + v\,\frac{\partial \omega}{\partial y}}_{\text{convection}}
+          \;=\; \nu\,\nabla^2 \omega.$$
+    </p>
+    <p>
+      With the streamfunction relations $u = \partial \psi / \partial y$
+      and $v = -\partial \psi / \partial x$, the convection term rewrites
+      as $(\partial \psi/\partial y)(\partial \omega/\partial x) -
+      (\partial \psi/\partial x)(\partial \omega/\partial y)$, so the
+      working form is
+    </p>
+    <p style="text-align:center;">
+      $$\frac{\partial \omega}{\partial t}
+        \;=\; -\Bigl(\frac{\partial \psi}{\partial y}\,\frac{\partial \omega}{\partial x}
+                   - \frac{\partial \psi}{\partial x}\,\frac{\partial \omega}{\partial y}\Bigr)
+              + \nu\,\nabla^2 \omega.$$
+    </p>
+    <p>
+      We use <strong>semi-implicit time stepping</strong>: the diffusion
+      term is taken at the new time level $n+1$ (implicit, lifts the
+      $\Delta t$ constraint) while the convection term is taken at the
+      old level $n$ (explicit, uses values we already know). Plugging
+      that choice into a forward Euler step gives the equation we have
+      to solve every step:
+    </p>
+    <p style="text-align:center;">
+      $$\boxed{\;\omega^{n+1} \;-\; \nu\,\Delta t\,\nabla^2 \omega^{n+1}
+        \;=\; \omega^n \;-\; \Delta t \cdot \text{adv}^n\;}$$
+    </p>
+    <p>
+      where $\text{adv}^n =
+      (\partial \psi/\partial y)(\partial \omega/\partial x) -
+      (\partial \psi/\partial x)(\partial \omega/\partial y)$ at time $n$.
+      The boxed equation is what we now turn into matrix form.
+    </p>
+
+    <!-- ───────── STAGE 2 ───────── -->
+    <h5 style="margin-top:1.2em;">Stage 2 — Discretize every term, one at a time</h5>
+    <p>
+      Lay an $N \times N$ uniform grid over $[0,1]^2$ with spacing
+      $h = 1/(N-1)$. Wall nodes are $i = 1, N$ and $j = 1, N$;
+      everything else is interior. Now pick up every term of the boxed
+      equation and replace it with arithmetic on grid values.
+    </p>
+
+    <p style="margin-top:0.8em;"><strong>(a)&nbsp; The time derivative</strong></p>
+    <p>
+      $\dfrac{\partial \omega}{\partial t}\bigg|_{(i,j)}^n \;\approx\;
+       \dfrac{\omega^{n+1}_{i,j} - \omega^n_{i,j}}{\Delta t}.$
+      <br>
+      A first-order forward difference in time. This is what introduces
+      the unknown future value $\omega^{n+1}_{i,j}$.
+    </p>
+
+    <p style="margin-top:0.6em;"><strong>(b)&nbsp; The Laplacian (5-point stencil)</strong></p>
+    <p>
+      Each second derivative is a 3-point central difference; in 2-D
+      they add up to a 5-point stencil:
+    </p>
+    <p style="text-align:center;">
+      $$\nabla^2 \omega\Big|_{i,j}
+        \;\approx\; \frac{1}{h^2}\bigl(\omega_{i+1,j} + \omega_{i-1,j}
+                                       + \omega_{i,j+1} + \omega_{i,j-1}
+                                       - 4\,\omega_{i,j}\bigr).$$
+    </p>
+    <p>
+      The five weights are $\{+1, +1, +1, +1, -4\}/h^2$. Pictorially:
+    </p>
+    <p style="text-align:center; font-family:'Courier New', monospace; line-height:1.45;">
+      &nbsp; · &nbsp; +1 &nbsp; · &nbsp;<br>
+      +1 &nbsp; -4 &nbsp; +1<br>
+      &nbsp; · &nbsp; +1 &nbsp; · &nbsp;
+    </p>
+
+    <p style="margin-top:0.6em;"><strong>(c)&nbsp; The first derivatives in convection</strong></p>
+    <p>
+      Convection involves four first-order derivatives — two on $\psi$
+      and two on $\omega$ — each a 2-point central difference:
+    </p>
+    <p style="text-align:center;">
+      $$\frac{\partial \psi}{\partial x}\Big|_{i,j} \approx \frac{\psi_{i+1,j} - \psi_{i-1,j}}{2h},
+        \quad
+        \frac{\partial \psi}{\partial y}\Big|_{i,j} \approx \frac{\psi_{i,j+1} - \psi_{i,j-1}}{2h},$$
+      $$\frac{\partial \omega}{\partial x}\Big|_{i,j} \approx \frac{\omega_{i+1,j} - \omega_{i-1,j}}{2h},
+        \quad
+        \frac{\partial \omega}{\partial y}\Big|_{i,j} \approx \frac{\omega_{i,j+1} - \omega_{i,j-1}}{2h}.$$
+    </p>
+    <p>
+      All four use values at time level $n$ (explicit), so when we
+      assemble the matrix this term is just a known number — it goes
+      straight into the right-hand side as $\Delta t\cdot\text{adv}^n_{i,j}$.
+    </p>
+
+    <p style="margin-top:0.6em;"><strong>(d)&nbsp; Substitute and rearrange</strong></p>
+    <p>
+      Plug (a) and (b) into the boxed equation, multiply through by
+      $\Delta t$, and collect all $\omega^{n+1}$ on the left, everything
+      else on the right. With $r \equiv \nu\Delta t / h^2$:
+    </p>
+    <p style="text-align:center;">
+      $$\bigl(1 + 4r\bigr)\,\omega^{n+1}_{i,j}
+        \;-\; r\bigl(\omega^{n+1}_{i+1,j} + \omega^{n+1}_{i-1,j}
+                   + \omega^{n+1}_{i,j+1} + \omega^{n+1}_{i,j-1}\bigr)
+        \;=\; \omega^n_{i,j} \;-\; \Delta t\,\text{adv}^n_{i,j}.$$
+    </p>
+    <p>
+      One scalar equation per interior grid node — that is all the
+      discretisation we need. The next stage stacks them into a matrix.
+    </p>
+
+    <!-- ───────── STAGE 3 ───────── -->
+    <h5 style="margin-top:1.2em;">Stage 3 — Assemble the equations into a matrix system</h5>
+    <p>
+      <strong>Choose the unknowns and number them.</strong> The unknowns
+      are the $\omega^{n+1}$ values at every <em>interior</em> node — wall
+      values are already given by Thom's formula, so they are not
+      unknowns. With $N$ points per side we have
+      $n_\text{int} = N - 2$ interior nodes per direction and a total of
+      $n_\text{int}^2$ unknowns. Flatten the 2-D interior into a 1-D
+      vector $\mathbf{x}$ using column-major numbering:
+    </p>
+    <p style="text-align:center;">
+      $$k(i, j) = (j - 1)\,n_\text{int} + i,
+        \qquad i, j = 1, \ldots, n_\text{int}.$$
+    </p>
+    <p>
+      <strong>Read each Stage-2(d) equation as one row of $A\mathbf{x}=\mathbf{b}$.</strong>
+      Equation centred on interior node $(i, j)$ is row $k(i, j)$ of
+      $A$, with these entries (writing column-by-column):
+    </p>
+    <ul>
+      <li>Column $k(i, j)$ — the unknown at the centre — coefficient
+        $\boxed{1 + 4r}$ (diagonal entry).</li>
+      <li>Columns $k(i \pm 1, j)$ and $k(i, j \pm 1)$ — the four
+        neighbor unknowns — coefficient $\boxed{-r}$ each (off-diagonals).</li>
+      <li>Right-hand side: $b_{k} = \omega^n_{i,j} - \Delta t\,\text{adv}^n_{i,j}$.</li>
+    </ul>
+    <p>
+      <strong>Wall neighbors go to the right-hand side</strong>, not to
+      the matrix. When the stencil at, say, $(i, j) = (1, j)$ in interior
+      coordinates wants to reference $\omega_{0, j}$ — that is, the left
+      <em>wall</em> at full-grid index $i = 1$ — the wall value is
+      <em>known</em> (Thom's formula gave it from $\psi^n$), so we add
+      $r \cdot \omega^{\text{wall}}_{i=1, j+1}$ to $b_k$ rather than
+      putting it in column $0$ of $A$ (which does not exist).
+    </p>
+    <p>
+      <strong>The full system matrix.</strong> If we let $L$ be the
+      discrete Laplacian on the interior with zero-Dirichlet handling
+      (entries $-4$ on the diagonal, $+1$ on neighbors that are
+      themselves interior, all divided by $h^2$), then in compact form:
+    </p>
+    <p style="text-align:center;">
+      $$\boxed{\;A \;=\; I \;-\; \nu\,\Delta t\;L\;}, \qquad
+        \boxed{\;\mathbf{b} \;=\; \omega^n_\text{int} \;-\; \Delta t\,\text{adv}^n_\text{int} \;+\; r\cdot \omega_\text{walls}\;}$$
+    </p>
+    <p>
+      That is it — three sparse matrices ($I$, $L$, the combination $A$)
+      and a vector $\mathbf{b}$. In Julia this is built in three short
+      blocks: assemble $L$ from the COO triplets, form
+      $A = I - \nu\,\Delta t\,L$, fold the wall corrections into the RHS:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — assemble L, A, and the RHS</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># 1. Discrete Laplacian L on the (n_int × n_int) interior, COO style
+II = Int[];  JJ = Int[];  VV = Float64[]
+for jj in 1:n_int, ii in 1:n_int
+    k = (jj - 1) * n_int + ii                          # row of this equation
+    push!(II, k); push!(JJ, k); push!(VV, -4.0)        # diagonal
+    if ii &gt; 1     ; push!(II, k); push!(JJ, k - 1);     push!(VV, 1.0); end  # left
+    if ii &lt; n_int ; push!(II, k); push!(JJ, k + 1);     push!(VV, 1.0); end  # right
+    if jj &gt; 1     ; push!(II, k); push!(JJ, k - n_int); push!(VV, 1.0); end  # below
+    if jj &lt; n_int ; push!(II, k); push!(JJ, k + n_int); push!(VV, 1.0); end  # above
+end
+L = sparse(II, JJ, VV, n_int^2, n_int^2) ./ h^2
+
+# 2. The implicit-diffusion matrix  A = I − νΔt·L
+A_diff = lu(sparse(I, n_int^2, n_int^2) - dt * ν * L)  # factor once, reuse
+
+# 3. Build b: bulk RHS plus wall corrections (Thom's ω lives at i=1, i=N, j=1, j=N)
+r   = ν * dt / h^2
+rhs = ω[2:N-1, 2:N-1] .- dt .* adv
+rhs[1,   :] .+= r .* ω[1,   2:N-1]                     # left  wall
+rhs[end, :] .+= r .* ω[N,   2:N-1]                     # right wall
+rhs[:,   1] .+= r .* ω[2:N-1, 1]                       # bottom
+rhs[:, end] .+= r .* ω[2:N-1, N]                       # top lid (moving)
+
+# 4. Solve  A · x = b  →  x is the new interior vorticity vector
+ω[2:N-1, 2:N-1] .= reshape(A_diff \ vec(rhs), n_int, n_int)</code></pre>
+    </div>
+
+    <!-- ───────── STAGE 4 ───────── -->
+    <h5 style="margin-top:1.2em;">Stage 4 — What does the matrix actually look like?</h5>
+    <p>
+      Take the smallest interesting case: $N = 4$, so the interior is
+      $2 \times 2 = 4$ nodes and $A$ is a $4 \times 4$ matrix. Number
+      the interior nodes column-major,
+      $k(1,1)=1,\ k(2,1)=2,\ k(1,2)=3,\ k(2,2)=4$. The discrete
+      Laplacian $L$ (after the $1/h^2$ scaling is divided out) is
+    </p>
+    <p style="text-align:center;">
+      $$h^2 L \;=\;
+        \begin{bmatrix}
+          -4 &amp; 1 &amp; 1 &amp; 0 \\
+           1 &amp; -4 &amp; 0 &amp; 1 \\
+           1 &amp; 0 &amp; -4 &amp; 1 \\
+           0 &amp; 1 &amp; 1 &amp; -4
+        \end{bmatrix}.$$
+    </p>
+    <p>
+      Read off any row to see the stencil come back: row 1 (interior
+      node $(1,1)$) has $-4$ on the diagonal and $+1$ at the columns
+      for its right neighbor ($k=2$) and its above neighbor ($k=3$).
+      Its left and below neighbors are walls, which contribute zero
+      to $L$ but live in the RHS via Thom's formula.
+    </p>
+    <p>
+      The implicit-diffusion matrix $A = I - \nu\Delta t\,L$ then is
+    </p>
+    <p style="text-align:center;">
+      $$A \;=\;
+        \begin{bmatrix}
+          1 + 4r &amp; -r &amp; -r &amp; 0 \\
+          -r &amp; 1 + 4r &amp; 0 &amp; -r \\
+          -r &amp; 0 &amp; 1 + 4r &amp; -r \\
+          0 &amp; -r &amp; -r &amp; 1 + 4r
+        \end{bmatrix}, \qquad r = \frac{\nu\,\Delta t}{h^2}.$$
+    </p>
+    <p>
+      Notice the structure even at this tiny scale: <strong>banded</strong>
+      with non-zeros at offsets $\{-n_\text{int}, -1, 0, +1, +n_\text{int}\}$
+      from the diagonal (here $n_\text{int} = 2$, so offsets
+      $\{-2, -1, 0, +1, +2\}$). For our actual figure
+      ($N = 48$, $n_\text{int} = 46$, $\dim A = 2116 \times 2116$) the
+      same five bands are still the only non-zeros, but they are
+      separated by 46 columns instead of 2 — and the matrix has at most
+      $5 \times 2116 = 10\,580$ non-zeros, just $0.24\%$ of the
+      $2116^2 \approx 4.5$ million entries a dense version would have.
+    </p>
+
+    <p>
+      <strong>The streamfunction Poisson uses the same $L$.</strong>
+      Once $\omega^{n+1}$ is known, we solve
+      $\nabla^2 \psi = -\omega$ with $\psi = 0$ on every wall.
+      Discretising with the same 5-point stencil gives
+      $L\,\boldsymbol{\psi} = -\boldsymbol{\omega}_\text{int}$ — the
+      same matrix as above (no $I$ shift this time, no
+      $\nu\Delta t$ factor), and because $\psi = 0$ on every wall the
+      Stage-3 boundary corrections are <em>all zero</em>:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — same L, no wall correction</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Lap_lu = lu(L)                                          # factor once
+ψ_int_new = Lap_lu \ -vec(ω[2:N-1, 2:N-1])              # solve every step
+ψ[2:N-1, 2:N-1] .= reshape(ψ_int_new, n_int, n_int)</code></pre>
+    </div>
+
+    <h5 style="margin-top:1.2em;">The pattern, in one sentence</h5>
+    <p>
+      <strong>Discretize the PDE at every unknown grid point ⇒ each
+      equation becomes one row of a sparse matrix; values that are
+      already known (boundary data, old-time-level terms, source
+      terms) move to the right-hand side.</strong> That is the entire
+      story of going from a finite-difference scheme to
+      $A\mathbf{x} = \mathbf{b}$. We have now seen it three times: in
+      the Poisson example (Example C), in the Gmsh element-assembly
+      walk (§5.5), and here for the time-stepped vorticity equation —
+      and the structure was identical every time. New PDEs change the
+      stencil and the boundary-data formula; the assembly recipe never
+      changes.
+    </p>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia) — full ψ-ω solver
+      </summary>
+      <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
+        The right panel is the output of a real solver: streamfunction–
+        vorticity formulation, semi-implicit time stepping (implicit
+        diffusion + explicit convection). The implicit diffusion lifts
+        the stability constraint to the convective CFL only, so we can
+        take far larger time steps than a fully explicit scheme. The
+        package's <code>solve(::NavierStokes)</code> in Step 6.6 uses
+        Oceananigans for the same problem; this version is included
+        here so the figure script is self-contained.
+      </p>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — solver + figure</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, LinearAlgebra, SparseArrays, Printf, Colors
+
+# ---------------------------------------------------------------
+# ψ-ω lid-driven cavity solver (semi-implicit)
+# ---------------------------------------------------------------
+# arr[i, j] is the value at grid point (x_i, y_j). Walls are at i=1,
+# i=N (left/right) and j=1, j=N (bottom/top). The top wall moves with
+# speed U_lid; all other walls are no-slip.
+function solve_lid_cavity_psi_omega(; N=48, Re=100.0, T=10.0, U_lid=1.0)
+    L  = 1.0
+    h  = L / (N - 1)
+    ν  = U_lid * L / Re
+    dt = 0.30 * h / U_lid                  # convective CFL
+    nsteps = ceil(Int, T / dt)
+
+    ψ = zeros(N, N);  ω = zeros(N, N)
+
+    # 2-D Laplacian on the (N-2)x(N-2) interior, column-major flatten
+    n_int = N - 2;  nn = n_int^2
+    II = Int[];  JJ = Int[];  VV = Float64[]
+    for jj in 1:n_int, ii in 1:n_int
+        k = (jj - 1) * n_int + ii
+        push!(II, k); push!(JJ, k); push!(VV, -4.0)
+        if ii &gt; 1     ; push!(II, k); push!(JJ, k - 1);     push!(VV, 1.0); end
+        if ii &lt; n_int ; push!(II, k); push!(JJ, k + 1);     push!(VV, 1.0); end
+        if jj &gt; 1     ; push!(II, k); push!(JJ, k - n_int); push!(VV, 1.0); end
+        if jj &lt; n_int ; push!(II, k); push!(JJ, k + n_int); push!(VV, 1.0); end
+    end
+    Lap     = sparse(II, JJ, VV, nn, nn) ./ h^2
+    A_diff  = lu(sparse(I, nn, nn) - dt * ν * Lap)   # implicit diffusion
+    Lap_lu  = lu(Lap)                                # streamfunction Poisson
+    coeff   = ν * dt / h^2
+
+    for _ in 1:nsteps
+        # 1. Wall vorticity from ψ via Thom's formula
+        ω[2:N-1, N] .= -2 .* ψ[2:N-1, N-1] ./ h^2 .- 2 * U_lid / h   # top
+        ω[2:N-1, 1] .= -2 .* ψ[2:N-1, 2]   ./ h^2                     # bottom
+        ω[1, 2:N-1] .= -2 .* ψ[2,   2:N-1] ./ h^2                     # left
+        ω[N, 2:N-1] .= -2 .* ψ[N-1, 2:N-1] ./ h^2                     # right
+
+        # 2. Explicit advection at every interior node
+        ψy = (ψ[2:N-1, 3:N]   .- ψ[2:N-1, 1:N-2]) ./ (2h)
+        ψx = (ψ[3:N,   2:N-1] .- ψ[1:N-2, 2:N-1]) ./ (2h)
+        ωx = (ω[3:N,   2:N-1] .- ω[1:N-2, 2:N-1]) ./ (2h)
+        ωy = (ω[2:N-1, 3:N]   .- ω[2:N-1, 1:N-2]) ./ (2h)
+        adv = ψy .* ωx .- ψx .* ωy
+
+        # 3. RHS for the implicit diffusion solve, with wall ω contributions
+        rhs = ω[2:N-1, 2:N-1] .- dt .* adv
+        rhs[1,   :] .+= coeff .* ω[1,   2:N-1]
+        rhs[end, :] .+= coeff .* ω[N,   2:N-1]
+        rhs[:,   1] .+= coeff .* ω[2:N-1, 1]
+        rhs[:, end] .+= coeff .* ω[2:N-1, N]
+
+        # 4. (I − νΔt L) ω_int^{n+1} = rhs
+        ω[2:N-1, 2:N-1] .= reshape(A_diff \ vec(rhs), n_int, n_int)
+
+        # 5. Streamfunction Poisson: L ψ = −ω at interior, ψ = 0 on walls
+        ψ[2:N-1, 2:N-1] .= reshape(Lap_lu \ -vec(ω[2:N-1, 2:N-1]), n_int, n_int)
+    end
+
+    # Velocity field by central differences of ψ
+    u = zeros(N, N);  v = zeros(N, N)
+    u[:, 2:N-1] .=  (ψ[:, 3:N] .- ψ[:, 1:N-2]) ./ (2h)
+    v[2:N-1, :] .= -(ψ[3:N, :] .- ψ[1:N-2, :]) ./ (2h)
+    u[:, N] .= U_lid                                       # lid BC
+
+    speed = sqrt.(u.^2 .+ v.^2)
+    return ψ, ω, u, v, speed, h
+end
+
+# ---------------------------------------------------------------
+# Figure: schematic + numerical solution side-by-side
+# ---------------------------------------------------------------
+function fig_navier_stokes()
+    # Left panel: cavity schematic
+    p1 = plot(legend=false, framestyle=:none, aspect_ratio=:equal,
+              xlim=(-0.2, 1.2), ylim=(-0.2, 1.4),
+              title="Lid-Driven Cavity (NS benchmark)")
+    plot!(p1, [0,1,1,0,0], [0,0,1,1,0], color=:black, lw=2.5)
+    plot!(p1, [0.15, 0.85], [1.05, 1.05], arrow=true, color=:firebrick, lw=2.5)
+    annotate!(p1, 0.5, 1.18,
+              text("moving lid  U = 1.0", :firebrick, :center, 11, :bold))
+    annotate!(p1, -0.07, 0.5, text("u=v=0", :steelblue, :right,  10))
+    annotate!(p1,  1.07, 0.5, text("u=v=0", :steelblue, :left,   10))
+    annotate!(p1,  0.5, -0.10, text("u=v=0", :steelblue, :center, 10))
+    θ = range(0, 2π, length=100)
+    for r in (0.15, 0.25, 0.35)
+        plot!(p1, 0.5 .+ r .* cos.(θ), 0.55 .+ r .* sin.(θ),
+              color=:seagreen, lw=1, alpha=0.6)
+    end
+    annotate!(p1, 0.5, 0.55, text("vortex", :seagreen, :center, 11, :bold))
+
+    # Right panel: REAL numerical solution (ψ-ω solver above)
+    N_grid = 48
+    ψ, ω, u, v, speed, h = solve_lid_cavity_psi_omega(
+        N=N_grid, Re=100.0, T=10.0, U_lid=1.0)
+    xg = range(0, 1, length=N_grid)
+    yg = range(0, 1, length=N_grid)
+
+    # Plots' heatmap expects M[y, x] indexing → transpose our M[x, y].
+    p2 = heatmap(xg, yg, speed', c=:plasma, aspect_ratio=:equal,
+                 xlims=(0, 1), ylims=(0, 1),
+                 xlabel="x", ylabel="y",
+                 title=@sprintf("Numerical |u|  at  t=10  (Re=100, %d×%d grid)",
+                                N_grid, N_grid),
+                 colorbar_title="|u|")
+    contour!(p2, xg, yg, ψ', levels=18, color=:white, lw=0.7, alpha=0.85)
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 550), dpi=150,
+               plot_title="Navier-Stokes:  ∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u",
+               plot_titlefontsize=13)
+    savefig(plt, "navier_stokes.png")
+end
+
+fig_navier_stokes()</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- 5.4 Verify -->
+  <nav class="page-nav">
+    <a class="prev" href="pde-poisson.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">8 &middot; Poisson equation</span>
+    </a>
+    <a class="next" href="pde-bc-verify.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">10 &middot; BCs &amp; verification</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 09 &middot; Navier&ndash;Stokes
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

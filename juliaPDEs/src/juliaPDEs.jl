@@ -10,9 +10,9 @@ include("Navier_Stokes.jl")
 include("poisson.jl")
 
 export PDEProblem, ParabolicProblem, HyperbolicProblem, EllipticProblem, IncompressibleNSProblem
-export PDESolution
+export PDESolution, Grid, TestGrid
 export HeatEquation, WaveEquation, PoissonEquation, NavierStokes
-export solve
+export solve, solve_implicit
 export animate_navier_stokes
 export l2_error, convergence_table
 export interior_grid, endpoint_grid

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Install &amp; configure &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Set up</div>
+    <div class="ch-label">Chapter 01</div>
+    <h1>Install &amp; configure your machine</h1>
+    <p>WSL2, juliaup, and VS Code &mdash; the toolchain you'll use for the rest of the course.</p>
+  </header>
+  <section class="section" id="step1">
+    <h2><span class="step-badge">Step 1</span>Install WSL2</h2>
+
+    <h3>What is WSL2 and why do we need it?</h3>
+    <p>
+      <strong>WSL</strong> stands for <em>Windows Subsystem for Linux</em>.
+      It lets you run a real, full Linux operating system <em>inside</em>
+      Windows — the same Linux that powers most of the world's servers,
+      including essentially every HPC cluster you will ever use.
+      <strong>WSL2</strong> is the second-generation version: it boots a
+      lightweight virtual machine with an actual Linux kernel, so commands
+      and tools behave exactly the way they would on a native Linux box.
+    </p>
+    <p>
+      Why bother? Three reasons:
+    </p>
+    <ol>
+      <li><strong>The cluster runs Linux.</strong> Whatever you develop on
+        your laptop should match the target. Developing on Linux locally
+        means the same shell commands, same package versions, same file
+        paths.</li>
+      <li><strong>Most scientific libraries are Linux-first.</strong>
+        CUDA, MPI, Gmsh, Oceananigans — all are tested mainly on Linux,
+        and Julia binaries on Linux tend to be the most polished.</li>
+      <li><strong>Better tools.</strong> The Linux command line gives you
+        <code>grep</code>, <code>awk</code>, <code>ssh</code>, real package
+        managers, and so on, without third-party installs.</li>
+    </ol>
+
+    <div class="callout info">
+      <strong>What is a "kernel"?</strong>
+      The kernel is the low-level core of an operating system — it talks to
+      the CPU and memory, schedules processes, and manages files and
+      networking. WSL2 ships an actual Linux kernel (the same one you would
+      get on Ubuntu) running side-by-side with the Windows kernel, instead
+      of merely emulating Linux commands like the original WSL did.
+    </div>
+
+    <h3>1.1 Enable WSL2</h3>
+    <p>
+      Open the <strong>PowerShell</strong> app as <em>Administrator</em>
+      (search for "PowerShell" in the Start menu, right-click,
+      <em>Run as administrator</em>). The <code>wsl --install</code>
+      command turns on the required Windows features and downloads Ubuntu
+      (the default Linux distribution) in one go:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">PowerShell</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">wsl --install
+# Restart your computer when prompted</code></pre>
+    </div>
+    <p>
+      After the restart, an Ubuntu terminal window opens automatically.
+      It will ask you to create a Linux <em>username</em> and
+      <em>password</em>. The password does not need to match your Windows
+      one — pick anything memorable. You will type this password whenever
+      you run a command with <code>sudo</code> (see below).
+    </p>
+
+    <h3>1.2 First-time Ubuntu setup</h3>
+    <p>
+      Linux distributions ship with a <em>package manager</em> — a tool that
+      installs, updates, and removes software in a controlled way. On Ubuntu
+      that tool is <code>apt</code>. The first thing you do on a fresh
+      install is bring the package list up to date and apply security
+      patches:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl wget git build-essential</code></pre>
+    </div>
+
+    <p>What each piece of those lines does:</p>
+    <ul>
+      <li><code>sudo</code> — run the next command as the administrator
+        ("super-user do"). It will prompt for the password you just set.</li>
+      <li><code>apt update</code> — refresh the local index of available
+        package versions. Does <em>not</em> install anything.</li>
+      <li><code>apt upgrade -y</code> — install any newer versions of
+        packages you already have. The <code>-y</code> answers "yes" to
+        every prompt automatically.</li>
+      <li><code>apt install -y curl wget git build-essential</code> —
+        install four extra bits we need:
+        <ul>
+          <li><code>curl</code> and <code>wget</code> download files from
+            URLs (we will use <code>curl</code> to fetch the juliaup
+            installer).</li>
+          <li><code>git</code> is the version-control system you will
+            use for source code.</li>
+          <li><code>build-essential</code> is a meta-package that pulls
+            in the GNU compiler (<code>gcc</code>), <code>make</code>, and
+            other tools that some Julia packages need to build native
+            extensions.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>Where do my files live?</strong>
+      Inside WSL your home directory is <code>~</code> (e.g.
+      <code>/home/yourname</code>). From Windows you can reach it through
+      <code>\\wsl$\Ubuntu\home\yourname</code> in File Explorer. Keep your
+      Julia code <em>inside</em> WSL (e.g. <code>~/projects/...</code>) for
+      best performance — accessing Windows-side files
+      (<code>/mnt/c/Users/...</code>) from Linux is much slower.
+    </div>
+
+    <div class="callout warn">
+      <strong>If <code>wsl --install</code> fails</strong>
+      On older Windows 10 builds you may need to enable two features
+      manually first: open <em>Turn Windows features on or off</em>, tick
+      <em>Virtual Machine Platform</em> and <em>Windows Subsystem for
+      Linux</em>, click OK, restart, then re-run <code>wsl --install</code>.
+      Windows 11 enables both by default.
+    </div>
+  </section>
+
+  <!-- ══ STEP 2 ══════════════════════════════════════════════ -->
+  <section class="section" id="step2">
+    <h2><span class="step-badge">Step 2</span>Install juliaup &amp; Julia</h2>
+
+    <h3>What is juliaup, and why not just install Julia directly?</h3>
+    <p>
+      <strong>juliaup</strong> is the official Julia <em>version manager</em>.
+      A version manager keeps several Julia versions installed at once and
+      lets you switch between them per project. This matters because:
+    </p>
+    <ul>
+      <li>Different libraries support different Julia versions. Your cluster
+        might have Julia 1.10 LTS while you experiment with 1.11 at home.</li>
+      <li>When the next Julia release comes out you can install it
+        side-by-side, try your code, and roll back if anything breaks
+        without re-downloading the previous one.</li>
+      <li>The same idea exists in other ecosystems —
+        <code>pyenv</code>/<code>conda</code> for Python, <code>nvm</code>
+        for Node, <code>rustup</code> for Rust.</li>
+    </ul>
+
+    <h3>2.1 Install juliaup and the latest Julia</h3>
+    <p>
+      Run these from inside your WSL Ubuntu terminal (not PowerShell):
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">curl -fsSL https://install.julialang.org | sh
+source ~/.bashrc
+juliaup add release && juliaup default release
+julia --version</code></pre>
+    </div>
+    <p>What those four lines do:</p>
+    <ul>
+      <li><code>curl -fsSL …</code> downloads the official juliaup installer
+        script and pipes it into <code>sh</code> (the shell). The flags mean
+        "fail on errors, silent, follow redirects, dump to stdout".</li>
+      <li><code>source ~/.bashrc</code> reloads your shell configuration so
+        the new <code>juliaup</code> and <code>julia</code> commands are on
+        your <code>PATH</code> in the same terminal — without it you would
+        have to close and reopen the terminal first.</li>
+      <li><code>juliaup add release</code> downloads the latest stable Julia
+        release. <code>juliaup default release</code> tells juliaup that when
+        you type <code>julia</code> with no extra arguments, you want that
+        version.</li>
+      <li><code>julia --version</code> verifies it worked. Expect output
+        like <code>julia version 1.11.2</code>.</li>
+    </ul>
+
+    <h3>2.2 The juliaup cheatsheet</h3>
+    <p>
+      Bookmark this — these are the only juliaup commands you will use day
+      to day:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>juliaup add release</code></td><td>Install the latest stable Julia</td></tr>
+          <tr><td><code>juliaup add 1.10.4</code></td><td>Install a specific version</td></tr>
+          <tr><td><code>juliaup default 1.10.4</code></td><td>Switch the default version</td></tr>
+          <tr><td><code>juliaup list</code></td><td>Show installed versions</td></tr>
+          <tr><td><code>juliaup update</code></td><td>Update Julia and juliaup</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>"release" vs "lts" — which to pick?</strong>
+      <code>release</code> is whatever Julia was published most recently.
+      <code>lts</code> ("long-term support", currently Julia 1.10) gets bug
+      fixes for years and is what HPC clusters typically install. For this
+      guide either works, but if your cluster pins 1.10, run
+      <code>juliaup add 1.10</code> at home for an exact match.
+    </div>
+
+    <h3>2.3 Your first Julia program — meet the REPL</h3>
+    <p>
+      Type <code>julia</code> in your terminal. You enter the
+      <strong>REPL</strong> — Julia's <em>Read-Eval-Print Loop</em>: an
+      interactive prompt where every line you type is parsed, run, and the
+      result printed. Try this:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">println("Hello, Julia!")
+x = 3.14
+println(2x^2 + 1)
+f(x) = exp(-x^2)
+println(f(1.0))</code></pre>
+    </div>
+    <p>Things to notice:</p>
+    <ul>
+      <li><code>2x^2 + 1</code> — Julia lets you skip the multiplication
+        sign before a variable. <code>2x</code> means <code>2*x</code>.</li>
+      <li><code>f(x) = exp(-x^2)</code> — single-line function definition.
+        Equivalent to <code>function f(x); exp(-x^2); end</code>.</li>
+      <li>Everything has a type. <code>x = 3.14</code> creates a
+        <code>Float64</code>; <code>x = 3</code> would have been an
+        <code>Int64</code>.</li>
+    </ul>
+
+    <h3>2.4 The four REPL modes</h3>
+    <p>
+      The REPL has four different "modes", each with its own prompt
+      color. Switch between them with a single keystroke at an empty
+      prompt — backspace returns to normal mode:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Key</th><th>Mode</th><th>What for</th></tr></thead>
+        <tbody>
+          <tr><td>(default)</td><td><code>julia&gt;</code></td><td>Run Julia code</td></tr>
+          <tr><td><code>]</code></td><td><code>(env) pkg&gt;</code></td><td>Manage packages: <code>add</code>, <code>rm</code>, <code>status</code>, <code>test</code>, <code>instantiate</code></td></tr>
+          <tr><td><code>?</code></td><td><code>help?&gt;</code></td><td>Show docs for a function — try <code>?sin</code></td></tr>
+          <tr><td><code>;</code></td><td><code>shell&gt;</code></td><td>Run a single shell command without leaving the REPL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info">
+      <strong>Why the REPL is special</strong>
+      Most languages compile your whole program then run it. Julia compiles
+      <em>each function the first time it is called</em> and keeps the
+      compiled version in memory. So the REPL is not just a toy interactive
+      prompt — it is a full-speed environment where you can develop and
+      benchmark code as you write it. We will build on this with Revise in
+      Step 6.
+    </div>
+  </section>
+
+  <!-- ══ STEP 7 ══════════════════════════════════════════════ -->
+  <section class="section" id="step7">
+    <h2><span class="step-badge">Step 3</span>Configure VS Code for Julia + WSL</h2>
+
+    <h3>Why VS Code?</h3>
+    <p>
+      You can absolutely write Julia in any editor — Vim, Emacs, plain
+      <code>nano</code>. We recommend <strong>VS Code</strong> because of
+      one specific feature: it can <em>connect</em> seamlessly to your
+      WSL Ubuntu (and later, to the cluster over SSH) and edit files
+      there as if they were local. The editor runs on Windows, the
+      language server and the Julia process run inside WSL — best of
+      both worlds. Setup is a one-time, ~5-minute job.
+    </p>
+
+    <h3>3.1 Install the right extensions</h3>
+    <p>
+      Open the Extensions sidebar (Ctrl+Shift+X) and install these four
+      from Microsoft's marketplace. Each does exactly one job:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Extension</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><strong>WSL</strong></td><td>Lets VS Code "open a folder in WSL" — runs the editor's backend inside Linux so paths, terminals, and Julia all match the cluster.</td></tr>
+          <tr><td><strong>Julia</strong></td><td>Adds syntax highlighting, code completion (IntelliSense), inline error reporting, and an integrated REPL inside VS Code.</td></tr>
+          <tr><td><strong>Jupyter</strong></td><td>Lets you open <code>.ipynb</code> notebooks and run them with a Julia kernel — useful for exploratory analysis.</td></tr>
+          <tr><td><strong>Remote — SSH</strong></td><td>Same idea as the WSL extension, but for editing files directly on the HPC cluster (Step 9).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.2 Open your package in WSL mode</h3>
+    <p>
+      Press <kbd>F1</kbd> (or <kbd>Ctrl+Shift+P</kbd>) to open the command
+      palette, type <em>"WSL: Open Folder in WSL"</em>, then point to
+      <code>~/projects/julia-docx-tutorial/juliaPDEs</code>. The bottom-
+      left status bar should now say <em>WSL: Ubuntu</em>. Open the
+      integrated terminal (Ctrl+`) — you are inside WSL, ready to run
+      <code>julia --project=.</code> exactly as in Step 6.
+    </p>
+
+    <h3>3.3 Pluto.jl — reactive notebooks</h3>
+    <p>
+      <strong>Pluto.jl</strong> is a Julia-native alternative to Jupyter.
+      The killer feature: cells are <em>reactive</em> — change a variable
+      definition in one cell and every cell that depends on it
+      automatically re-runs in the right order. There are no hidden
+      out-of-order states. Great for live exploration of PDE parameters
+      with sliders:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Pkg; Pkg.add(["Pluto", "PlutoUI"])
+using Pluto
+Pluto.run()    # opens at localhost:1234</code></pre>
+    </div>
+    <p>
+      Your default browser opens a Pluto landing page; create a new
+      notebook or open <code>pde_explorer.jl</code> from this repo to see
+      the heat / wave / Poisson examples with parameter sliders.
+    </p>
+  </section>
+
+  <!-- ══ BASICS: FUNCTIONS ════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="overview.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">0 &middot; Overview</span>
+    </a>
+    <a class="next" href="basics.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">2 &middot; Language basics</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 01 &middot; Install &amp; configure
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

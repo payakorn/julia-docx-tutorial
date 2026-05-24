@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Use existing packages &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Learn Julia</div>
+    <div class="ch-label">Chapter 03</div>
+    <h1>Use existing packages</h1>
+    <p>Install, manage environments, and learn the packages every PDE student will end up reaching for.</p>
+  </header>
+  <section class="section" id="step3">
+    <h2><span class="step-badge">Step 4</span>Installing Julia Packages</h2>
+
+    <h3>What is a "package" and what is an "environment"?</h3>
+    <p>
+      A <strong>package</strong> in Julia is a self-contained piece of
+      software you can re-use — a plotting library, a sparse-matrix solver,
+      a CFD engine. <code>Plots.jl</code>, <code>SparseArrays</code>,
+      <code>DifferentialEquations.jl</code> are all packages.
+    </p>
+    <p>
+      An <strong>environment</strong> is just a folder that says "for this
+      project, use these specific package versions". Concretely, the folder
+      contains two files:
+    </p>
+    <ul>
+      <li><code>Project.toml</code> — the high-level list:
+        <em>"this project depends on Plots and SparseArrays"</em>.</li>
+      <li><code>Manifest.toml</code> — the low-level lock file:
+        <em>"Plots is exactly version 1.41.6, which itself depends on
+        Showoff 1.1.0, GR 0.73.7, ..."</em>. Every transitive dependency is
+        pinned to an exact version.</li>
+    </ul>
+    <p>
+      Together they make your work <strong>reproducible</strong>. If you
+      hand someone these two files plus your code, they can recreate your
+      Julia setup byte-for-byte by running one command
+      (<code>Pkg.instantiate()</code>). This is how published computational
+      results stay reproducible years after the paper.
+    </p>
+
+    <div class="callout info">
+      <strong>Compare with Python</strong>
+      <code>Project.toml</code> is the equivalent of
+      <code>requirements.txt</code> or <code>pyproject.toml</code>;
+      <code>Manifest.toml</code> is the equivalent of a
+      <code>pip freeze</code>/<code>poetry.lock</code> output. The
+      difference: in Julia these files are first-class language features,
+      not third-party tooling, so <em>everyone</em> uses them.
+    </div>
+
+    <h3>4.1 Create a project folder and activate its environment</h3>
+    <p>
+      The convention is one folder per project. Inside that folder, start
+      Julia with <code>--project=.</code> so it uses the local environment
+      rather than your global default:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">mkdir -p ~/julia-pde && cd ~/julia-pde
+julia --project=.</code></pre>
+    </div>
+    <p>
+      <code>mkdir -p</code> creates the folder (the <code>-p</code> flag
+      means "don't error if it already exists, and create parents as
+      needed"). <code>cd</code> moves into it.
+      <code>julia --project=.</code> starts Julia and uses the current
+      directory as the project. The first time, both
+      <code>Project.toml</code> and <code>Manifest.toml</code> will be
+      created automatically when you add your first package.
+    </p>
+
+    <h3>4.2 Add packages in package mode</h3>
+    <p>
+      Inside the REPL, press <code>]</code> to enter package mode. The
+      prompt changes from <code>julia&gt;</code> to
+      <code>(@julia-pde) pkg&gt;</code> — that <code>(@julia-pde)</code>
+      part is the active environment. Now run:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia (pkg mode — press ])</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">(@julia-pde) pkg> add DifferentialEquations Plots SparseArrays</code></pre>
+    </div>
+    <p>
+      Julia downloads each package and all its transitive dependencies,
+      precompiles them, and writes the choices into <code>Project.toml</code>
+      and <code>Manifest.toml</code>. The first run takes a few minutes
+      because there is a lot to download; subsequent <code>add</code> calls
+      take seconds.
+    </p>
+
+    <h3>4.3 Package-mode cheatsheet</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package mode</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>add Plots</code></td><td>Install <code>Plots.jl</code> into the active environment</td></tr>
+          <tr><td><code>rm Plots</code></td><td>Remove a package from <code>Project.toml</code></td></tr>
+          <tr><td><code>update</code></td><td>Update every package to the latest compatible version</td></tr>
+          <tr><td><code>status</code></td><td>List installed packages with their versions</td></tr>
+          <tr><td><code>instantiate</code></td><td>Re-create the environment from <code>Manifest.toml</code> (after cloning a project)</td></tr>
+          <tr><td><code>activate /path/to/proj</code></td><td>Switch the REPL to a different environment</td></tr>
+          <tr><td><code>test</code></td><td>Run the test suite of the active package</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>Always commit both <code>.toml</code> files to git</strong>
+      <code>Project.toml</code> alone says "I depend on Plots". The exact
+      version comes from <code>Manifest.toml</code>. Without the manifest,
+      a colleague who clones your repo a year later might get a newer Plots
+      that breaks your code. Commit both, then anyone can restore your
+      environment with <code>] instantiate</code>.
+    </div>
+
+    <div class="callout warn">
+      <strong>If <code>add</code> hangs on first run</strong>
+      The very first <code>add</code> command needs to clone the General
+      package registry (~50 MB). On a slow network this can take a few
+      minutes; let it finish. If it errors out, run
+      <code>] registry update</code> and try again.
+    </div>
+  </section>
+
+  <!-- ══ STEP 4 ══════════════════════════════════════════════ -->
+  <section class="section" id="step4">
+    <h2><span class="step-badge">Step 5</span>Key Julia Packages for Scientific Computing</h2>
+    <p>
+      A whirlwind tour of the libraries you will hear mentioned in PDE
+      papers, lectures, and on the cluster. You do not need to install all
+      of these now — Step 6 will tell you exactly which ones the
+      <code>juliaPDEs</code> package needs. Use this table as a reference
+      for "what package would I reach for if I needed feature X".
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><code>LinearAlgebra</code> (stdlib)</td><td>Dense matrix ops, eigensystems</td></tr>
+          <tr><td><code>SparseArrays</code> (stdlib)</td><td>Sparse PDE matrices</td></tr>
+          <tr><td><code>FFTW.jl</code></td><td>Spectral methods (FFT)</td></tr>
+          <tr><td><code>DifferentialEquations.jl</code></td><td>ODE/PDE solver suite</td></tr>
+          <tr><td><code>Gmsh.jl</code></td><td>Unstructured mesh generation (used in §5.5)</td></tr>
+          <tr><td><code>Ferrite.jl</code> / <code>Gridap.jl</code></td><td>Finite element methods</td></tr>
+          <tr><td><code>Oceananigans.jl</code></td><td>Production CFD on HPC</td></tr>
+          <tr><td><code>Plots.jl</code> / <code>Makie.jl</code></td><td>Visualization</td></tr>
+          <tr><td><code>MPI.jl</code> / <code>CUDA.jl</code></td><td>HPC parallelism</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What each category is for, in plain English</h3>
+    <ul>
+      <li><strong>Standard libraries</strong> — <code>LinearAlgebra</code>
+        gives you matrix multiplication, eigenvalues, SVD, the backslash
+        operator <code>A \ b</code> for solving linear systems, and so on.
+        <code>SparseArrays</code> stores matrices that are mostly zero
+        without wasting memory on the zeros — essential for any PDE on a
+        large grid. Both ship with Julia, no install needed; you just write
+        <code>using LinearAlgebra</code>.</li>
+      <li><strong>Spectral methods</strong> — when your geometry is
+        periodic (think: simulating turbulence in a cube with periodic
+        boundaries) you can solve PDEs by switching to Fourier space, doing
+        derivatives there as multiplications, and switching back. The fast
+        switch is the FFT, and <code>FFTW.jl</code> wraps the famous FFTW
+        C library.</li>
+      <li><strong>ODE/PDE suites</strong> —
+        <code>DifferentialEquations.jl</code> is a one-stop shop with
+        dozens of time-integrators (Euler, RK4, Tsit5, Rosenbrock23, ...)
+        and quality-of-life features like adaptive timestepping, event
+        handling, and easy GPU offload. Use it once you outgrow the simple
+        explicit-Euler loops we will write in Step 7.</li>
+      <li><strong>Mesh generation</strong> — most real geometry (engine
+        parts, blood vessels) is too irregular for a uniform grid.
+        <code>Gmsh.jl</code> drives the open-source Gmsh mesher to
+        triangulate arbitrary 2D/3D domains, with refinement near
+        interesting features. Section 5.5 walks through this.</li>
+      <li><strong>Finite element frameworks</strong> —
+        <code>Ferrite.jl</code> and <code>Gridap.jl</code> are higher-level
+        frameworks that handle FEM bookkeeping for you (basis functions,
+        quadrature, assembly). Useful when you want to solve a real PDE,
+        not just learn how the pieces fit together.</li>
+      <li><strong>Domain-specific solvers</strong> —
+        <code>Oceananigans.jl</code> is a production-grade incompressible
+        Navier–Stokes solver, optimized for ocean and atmosphere
+        simulations on CPU and GPU. It is what we will call from
+        <code>src/Navier_Stokes.jl</code> in Step 6 because we are not
+        going to reinvent CFD from scratch.</li>
+      <li><strong>Visualisation</strong> — <code>Plots.jl</code> is the
+        easy-to-use, MATLAB-style plotting library; great for quick
+        figures. <code>Makie.jl</code> is a more powerful (and prettier)
+        modern plotting library for 3D and interactive visualisation —
+        slower to start up but worth it for anything publication-quality.</li>
+      <li><strong>Parallelism</strong> — <code>MPI.jl</code> wraps the
+        Message Passing Interface that powers most multi-node HPC code:
+        you launch many copies of your program on different nodes and they
+        send messages to each other. <code>CUDA.jl</code> targets NVIDIA
+        GPUs from Julia almost as easily as writing a normal array
+        operation — <code>x .+ y</code> on a <code>CuArray</code> runs on
+        the GPU.</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>What does <code>.jl</code> mean?</strong>
+      The <code>.jl</code> suffix is purely a naming convention — it tells
+      you the project is a Julia package, the way <code>.py</code> hints at
+      Python. The actual package name in Julia code is just the part before
+      it: <code>using Plots</code>, not <code>using Plots.jl</code>.
+    </div>
+  </section>
+
+  <!-- ══ READING JULIA'S TYPE NOTATION ════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="basics.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">2 &middot; Language basics</span>
+    </a>
+    <a class="next" href="build-package.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">4 &middot; Build your own package</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 03 &middot; Existing packages
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

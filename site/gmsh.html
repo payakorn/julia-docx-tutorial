@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>7.5 Mesh → Matrix with Gmsh — Julia for HPC</title>
+  <title>Meshes with Gmsh &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
@@ -21,88 +23,58 @@
 
 <aside id="sidebar">
   <div class="brand">
-    <h1>Julia Programming</h1>
-    <p>Getting Started Guide</p>
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
   </div>
   <nav>
-    <a href="index.html#overview">Overview</a>
-    <a href="index.html#why-fast" class="sub">↳ Why Julia is fast</a>
-    <div class="section-label">Set up your computer</div>
-    <a href="index.html#step1">Step 1 — Install WSL2</a>
-    <a href="index.html#step2">Step 2 — Install Julia (juliaup)</a>
-    <a href="index.html#step7">Step 3 — Configure VS Code</a>
-    <div class="section-label">Learn Julia (basics)</div>
-    <a href="index.html#basics-functions">Functions</a>
-    <a href="index.html#basics-arrays">Vectors &amp; matrices</a>
-    <a href="index.html#basics-builtins">Useful built-ins</a>
-    <a href="index.html#basics-linalg">Linear algebra</a>
-    <div class="section-label">Use existing packages</div>
-    <a href="index.html#step3">Step 4 — Install packages</a>
-    <a href="index.html#step4">Step 5 — PDE-related packages</a>
-    <div class="section-label">Build your own package</div>
-    <a href="index.html#type-notation">Reading Julia's type notation</a>
-    <a href="index.html#pkg-create">Create a package (juliaPDEs)</a>
-    <a href="index.html#pkg-structure" class="sub">Package structure</a>
-    <a href="index.html#pkg-revise"    class="sub">Revise — live reload</a>
-    <a href="index.html#pkg-workflow"  class="sub">Dev workflow loop</a>
-    <a href="index.html#parametric-types" class="sub">↳ How structs make Julia fast</a>
-    <div class="section-label">Solve PDEs (easy → hard)</div>
-    <a href="index.html#step5">Step 7 — The PDE workflow</a>
-    <a href="index.html#step5-model"   class="sub">7.1 Classify the PDE</a>
-    <a href="index.html#step5-discret" class="sub">7.2 Discretization rules</a>
-    <a href="index.html#pde-heat"       class="sub">A. Heat (any N)</a>
-    <a href="index.html#pde-heat-2d"   class="sub2">↳ 2D example</a>
-    <a href="index.html#pde-heat-3d"   class="sub2">↳ 3D example</a>
-    <a href="index.html#pde-wave"      class="sub">B. Wave (any N)</a>
-    <a href="index.html#pde-wave-2d"   class="sub2">↳ 2D example</a>
-    <a href="index.html#pde-wave-3d"   class="sub2">↳ 3D example</a>
-    <a href="index.html#pde-poisson"   class="sub">C. Poisson (any N)</a>
-    <a href="index.html#pde-poisson-3d" class="sub2">↳ 3D example</a>
-    <a href="index.html#pde-ns"        class="sub">D. Navier-Stokes (2D)</a>
-    <a href="index.html#step5-verify"  class="sub">7.3 Verify &amp; converge</a>
-    <a href="index.html#step5-bc"      class="sub">7.4 Boundary conditions (N-D)</a>
-    <a href="gmsh.html"                class="sub active">7.5 Mesh → matrix (Gmsh)</a>
-    <div class="section-label">Polish your code</div>
-    <a href="index.html#step6">Step 8 — Package design patterns</a>
-    <a href="index.html#step6-arch"      class="sub">8.1 Struct design patterns</a>
-    <a href="index.html#step6-abstract"  class="sub">8.2 Abstract type hierarchy</a>
-    <a href="index.html#step6-solution"  class="sub">8.3 PDESolution &amp; AbstractArray</a>
-    <a href="index.html#step6-free"      class="sub">8.4 What you get for free</a>
-    <a href="index.html#step6-when"      class="sub">8.5 When NOT to subtype AbstractArray</a>
-    <a href="index.html#step6-solve"     class="sub">8.6 Unified solve() dispatch</a>
-    <a href="index.html#step6-layout"    class="sub">8.7 Full package layout</a>
-    <a href="index.html#step6-calling"   class="sub">8.8 Calling the package</a>
-    <div class="section-label">Practice</div>
-    <a href="index.html#homework">Homework</a>
-    <a href="index.html#hw1" class="sub">1 — Type hierarchy</a>
-    <a href="index.html#hw2" class="sub">2 — AbstractArray ops</a>
-    <a href="index.html#hw3" class="sub">3 — Poisson solver</a>
-    <a href="index.html#hw4" class="sub">4 — describe() dispatch</a>
-    <a href="index.html#hw5" class="sub">5 — Wave BCs</a>
-    <a href="index.html#hw6" class="sub">6 — Convergence study</a>
-    <a href="index.html#hw7" class="sub">7 — Mutable structs</a>
-    <a href="index.html#hw8" class="sub">8 — Parameterized struct</a>
-    <div class="section-label">Run on the HPC cluster</div>
-    <a href="index.html#step8">Step 9 — SSH to the cluster</a>
-    <a href="index.html#step9">Step 10 — Submit Slurm jobs</a>
-    <div class="section-label">Share your code</div>
-    <a href="index.html#step-git">Git &amp; GitHub</a>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
   </nav>
 </aside>
 
 <div id="content">
 
-  <header class="hero">
-    <div class="tag">Chapter 7.5 · Unstructured meshes</div>
-    <h1>Mesh → Matrix with <span>Gmsh</span></h1>
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs &nbsp;/&nbsp; Meshes with Gmsh</div>
+    <div class="ch-label">Chapter 11</div>
+    <h1>Mesh &rarr; Matrix with Gmsh</h1>
     <p>Going from a geometric description to a sparse linear system
-       <em>A</em><strong>u</strong> = <strong>b</strong> — the universal
-       indexing pattern behind every FEM/FVM code.</p>
-    <p style="margin-top:0.8em;">
-      <a href="index.html#step5-bc">← back to 7.4 Boundary conditions</a>
-      &nbsp;·&nbsp;
-      <a href="index.html#step6">continue to Step 8 — Package design patterns →</a>
-    </p>
+       <em>A</em><strong>u</strong>&nbsp;=&nbsp;<strong>b</strong> &mdash;
+       the universal indexing pattern behind every FEM/FVM code.</p>
   </header>
 
   <!-- ══ 7.5  Gmsh — Mesh → Matrix ══════════════════════════ -->
@@ -902,30 +874,24 @@ end</code></pre>
         <code>Ferrite.jl</code>) read it directly.</li>
     </ul>
 
-    <p style="margin-top:2em; padding-top:1em; border-top:1px solid var(--border);">
-      <a href="index.html#step5-bc">← back to 7.4 Boundary conditions</a>
-      &nbsp;·&nbsp;
-      <a href="index.html#step6">continue to Step 8 — Package design patterns →</a>
-    </p>
   </section>
 
+  <nav class="page-nav">
+    <a class="prev" href="pde-bc-verify.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">10 &middot; BCs &amp; verification</span>
+    </a>
+    <a class="next" href="polish.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">12 &middot; Package design</span>
+    </a>
+  </nav>
+
   <footer>
-    Julia for HPC — Student Setup Guide &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; v0.2.0
-    <div id="build-info" style="margin-top:0.5em;font-size:0.85em;opacity:0.7;">loading build info…</div>
+    Julia for HPC &middot; Chapter 11 &middot; Meshes with Gmsh
+    <div id="build-info" style="margin-top:0.5em;font-size:0.85em;opacity:0.7;">loading build info&hellip;</div>
   </footer>
 
-  <script>
-    fetch('version.json', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(v => {
-        const started = new Date(v.started_at).toLocaleString();
-        document.getElementById('build-info').textContent =
-          `commit ${v.commit_short} · last updated ${started}`;
-      })
-      .catch(() => {
-        document.getElementById('build-info').textContent = 'build info unavailable';
-      });
-  </script>
 
 </div>
 

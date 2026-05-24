@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDE workflow overview &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs</div>
+    <div class="ch-label">Chapter 05</div>
+    <h1>PDE workflow overview</h1>
+    <p>Classify a PDE, pick the right discretisation, and decide what you'll need to verify before trusting the answer.</p>
+  </header>
+  <section class="section" id="step5">
+    <h2><span class="step-badge">Step 7</span>The PDE Solving Workflow</h2>
+    <p>
+      Every PDE problem you will solve in this guide follows the same
+      five-stage pipeline:
+    </p>
+    <ol>
+      <li><strong>Model.</strong> Write down the equation, the spatial
+        domain, the boundary conditions, and (for time-dependent problems)
+        the initial condition.</li>
+      <li><strong>Discretize.</strong> Lay a grid over the domain. Replace
+        every continuous derivative with a finite-difference stencil so
+        the unknowns become a finite array of numbers.</li>
+      <li><strong>Build the system.</strong> Assemble the discrete
+        operators — either as an explicit update rule (heat, wave) or as
+        a matrix system $A\mathbf{u} = \mathbf{b}$ (Poisson).</li>
+      <li><strong>Solve.</strong> Step forward in time, or call a linear
+        solver, or hand the problem off to a library like Oceananigans.</li>
+      <li><strong>Visualize &amp; verify.</strong> Plot snapshots, run
+        tests, compare with an analytic solution if you have one. Refine
+        the grid and watch the error fall — that is convergence.</li>
+    </ol>
+    <p>
+      The most important skill is reading an equation from a paper and
+      converting each mathematical term into code, one operation at a
+      time. The four worked examples below — heat, wave, Poisson,
+      Navier–Stokes — walk through that translation in detail. They share
+      the same two discretisation primitives (the central-difference
+      stencil and forward Euler) which we explain first.
+    </p>
+
+    <figure class="figure">
+      <img src="output/figures/pde_pipeline.png"
+           alt="Five-stage PDE-solving pipeline: Model, Discretize, Build System, Solve, Visualize."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 1.</strong> The five-stage PDE-solving pipeline.
+        Every example in this guide flows left to right through the same
+        five boxes — model, discretize, build system, solve, visualize.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_pde_pipeline()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots
+
+function fig_pde_pipeline()
+    stages = [("Model",       "PDE + BCs + ICs\nClassify type"),
+              ("Discretize",  "Grid, FDM/FEM\nTime scheme"),
+              ("Build System","Assemble A, b\nSparse matrices"),
+              ("Solve",       "Direct / iterative\nTime-stepping"),
+              ("Visualize",   "Plot, verify\nConvergence")]
+    colors = [:steelblue, :dodgerblue, :seagreen, :darkorange, :gray]
+
+    plt = plot(size=(1200, 380), legend=false, framestyle=:none,
+               xlim=(-0.3, 12.5), ylim=(0, 2.2), aspect_ratio=:equal,
+               background_color=:white, dpi=150)
+
+    for (i, (title, desc)) in enumerate(stages)
+        x = (i - 1) * 2.4
+        plot!(plt, [x, x+2, x+2, x, x], [0.3, 0.3, 1.7, 1.7, 0.3],
+              seriestype=:shape, fillcolor=colors[i], linecolor=:black,
+              linewidth=1.5, fillalpha=0.85)
+        annotate!(plt, x+1.0, 1.35,
+                  text("$i. $title", :white, :center, 13, :bold))
+        annotate!(plt, x+1.0, 0.78,
+                  text(desc, :white, :center, 10))
+        if i &lt; length(stages)
+            annotate!(plt, x+2.2, 1.0, text("→", :black, :center, 22, :bold))
+        end
+    end
+    title!(plt, "The PDE-Solving Pipeline")
+    savefig(plt, "pde_pipeline.png")
+end
+
+fig_pde_pipeline()</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- 5.1 Classification -->
+  <section class="section" id="step5-model">
+    <h3>7.1 Classify the PDE before writing a single line</h3>
+    <p>
+      Before discretising anything, decide what <em>kind</em> of PDE you
+      are looking at. The classification matters because it tells you
+      which time scheme is allowed, whether you need a time loop at all,
+      and what kind of linear solver you will end up calling. The four
+      families below cover everything in this guide:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Prototype</th><th>Key property</th><th>Example below</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Parabolic</strong></td><td>$\partial u/\partial t = \alpha\nabla^2 u$</td><td>Smooth over time, stable explicit schemes</td><td>Heat equation</td></tr>
+          <tr><td><strong>Hyperbolic</strong></td><td>$\partial^2 u/\partial t^2 = c^2\nabla^2 u$</td><td>Propagates features, tight CFL</td><td>Wave equation</td></tr>
+          <tr><td><strong>Elliptic</strong></td><td>$-\nabla^2 u = f$</td><td>Steady state — no time, solve $Au=b$</td><td>Poisson equation</td></tr>
+          <tr><td><strong>Nonlinear / Coupled</strong></td><td>NS momentum + $\nabla\cdot\mathbf{u}=0$</td><td>Needs projection or implicit treatment</td><td>Navier-Stokes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure class="figure">
+      <img src="output/figures/pde_types.png"
+           alt="Four PDE families — Parabolic, Hyperbolic, Elliptic, Mixed/Nonlinear — with prototype equations."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 2.</strong> The four major PDE families and their
+        prototype equations. The classification you pick determines
+        which time scheme is allowed (Step 7.2) and which solver to use
+        (Step 7.3).
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_pde_types()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors
+
+function fig_pde_types()
+    types = [("Parabolic",  "Heat / Diffusion\n∂u/∂t = α∇²u",
+             "Smooths features\nover time", :darkorange),
+             ("Hyperbolic", "Wave / Advection\n∂²u/∂t² = c²∇²u",
+             "Preserves features\nfinite speed c", :dodgerblue),
+             ("Elliptic",   "Poisson / Laplace\n−∇²u = f",
+             "Steady state\nno time evolution", :seagreen),
+             ("Mixed/NL",   "Navier-Stokes\n∂u/∂t + (u·∇)u\n= −∇p + ν∇²u",
+             "Hardest!\nFluid dynamics", :firebrick)]
+
+    plt = plot(size=(1200, 500), legend=false, framestyle=:none,
+               xlim=(-0.3, 12.0), ylim=(0.8, 4.4),
+               background_color=:white, dpi=150)
+
+    for (i, (cat, eq, desc, color)) in enumerate(types)
+        x = (i - 1) * 3
+        plot!(plt, [x, x+2.6, x+2.6, x, x], [1.5, 1.5, 4.0, 4.0, 1.5],
+              seriestype=:shape, fillcolor=color, fillalpha=0.18,
+              linecolor=color, linewidth=2)
+        annotate!(plt, x+1.3, 3.7, text(cat, color, :center, 14, :bold))
+        annotate!(plt, x+1.3, 3.0, text(eq,  :black, :center, 10))
+        annotate!(plt, x+1.3, 2.0, text(desc, RGB(0.35,0.35,0.35),
+                                        :center, 10, :italic))
+    end
+    title!(plt, "PDE Classification — Four Major Types")
+    savefig(plt, "pde_types.png")
+end
+
+fig_pde_types()</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       5.2  DISCRETIZATION RULES
+       ══════════════════════════════════════════════════════════ -->
+  <section class="section" id="step5-discret">
+    <h3>7.2 Two rules that appear in every PDE solver</h3>
+    <p>
+      A computer cannot work with continuous functions $u(x, t)$. The
+      first job of any numerical method is to replace those continuous
+      objects with a <em>finite</em> set of numbers — the values of $u$
+      at $N$ grid points $x_1, x_2, \ldots, x_N$ and at discrete time
+      slices $t^0, t^1, \ldots$ This process is called
+      <strong>discretisation</strong>.
+    </p>
+    <p>
+      Discretisation has two halves: how to handle space (derivatives
+      become stencils) and how to handle time (the equation becomes a
+      step-by-step rule). You only need two formulas — Rule 1
+      (central-difference for space) and Rule 2 (forward Euler for time)
+      — and once you recognize them, every explicit solver in this guide
+      is just a couple of lines of code on top.
+    </p>
+
+    <!-- Rule 1 -->
+    <h4>Rule 1 — Central difference: how to approximate a second derivative</h4>
+    <p>
+      Suppose you have measured a quantity $u$ at $N$ equally-spaced grid points
+      with spacing $h = \Delta x$. The second derivative at point $i$ is approximated
+      using only its two immediate neighbors:
+    </p>
+
+    $$\frac{d^2 u}{d x^2}\bigg|_{x_i} \approx \frac{u_{i+1} - 2\,u_i + u_{i-1}}{h^2}$$
+
+    <p>The three weights $[+1,\; -2,\; +1]$ form what is called the <em>stencil</em>:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Stencil role</th><th>Notation</th><th>Julia index (interior loop)</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Left neighbor</td><td>$u_{i-1}$</td><td><code>u[i-1]</code> → vectorized: <code>u[1:end-2]</code></td><td>+1</td></tr>
+          <tr><td>Centre point</td><td>$u_i$</td><td><code>u[i]</code> → vectorized: <code>u[2:end-1]</code></td><td>−2</td></tr>
+          <tr><td>Right neighbor</td><td>$u_{i+1}$</td><td><code>u[i+1]</code> → vectorized: <code>u[3:end]</code></td><td>+1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Here is a complete, runnable example — no external setup needed:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — run this yourself</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># 5 grid points on [0, 1], spacing h = 0.25
+h = 0.25
+u = [0.0, 1.0, 1.5, 1.0, 0.0]   # some values at those points
+#    u[1] u[2] u[3] u[4] u[5]
+
+# Second derivative at the single interior point i = 3:
+i = 3
+d2u_at_i = (u[i+1] - 2*u[i] + u[i-1]) / h^2
+println("d²u/dx² at i=3: ", d2u_at_i)   # -16.0
+
+# Apply the stencil to ALL interior points at once (Julia broadcast):
+d2u_all = (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2]) ./ h^2
+println("d²u/dx² at all interior points: ", d2u_all)   # [-16.0, -16.0, -16.0]</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Why u[2:end-1] and not u[1:end]?</strong>
+      The stencil needs both a left and a right neighbor, so it cannot be
+      applied at the first or last point. Those boundary points are fixed by the
+      boundary conditions — they are never updated by the solver.
+    </div>
+
+    <!-- Rule 2 -->
+    <h4>Rule 2 — Forward Euler: how to step forward in time</h4>
+    <p>
+      Once you have a way to compute derivatives in space (Rule 1), you need a way
+      to march the solution forward in time. The simplest method is
+      <strong>forward Euler</strong>: if you know the current state $u^n$ and its
+      rate of change (the right-hand side of the PDE), you predict the next state
+      $u^{n+1}$:
+    </p>
+
+    $$u_i^{n+1} = u_i^n + \Delta t \cdot \underbrace{f(u^n, x_i)}_{\text{right-hand side}}$$
+
+    <p>Continuing the same example — now adding a time dimension:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — run this yourself</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">h  = 0.25
+dt = 0.01         # timestep Δt  (must be chosen carefully — see CFL below)
+u  = [0.0, 1.0, 1.5, 1.0, 0.0]   # u^n at t = 0
+
+# Imagine the PDE says: du/dt = d²u/dx²  (heat equation with α=1)
+# Right-hand side = d²u/dx² computed with Rule 1:
+rhs = (u[3:end] .- 2 .* u[2:end-1] .+ u[1:end-2]) ./ h^2
+
+# Forward Euler: u^{n+1} = u^n + Δt × rhs
+# Only update interior points — boundary values stay fixed
+u[2:end-1] .+= dt .* rhs
+
+println("u after one step: ", u)
+# u[1] and u[5] unchanged (boundary conditions)
+# u[2], u[3], u[4] updated by the PDE</code></pre>
+    </div>
+
+    <div class="callout warn">
+      <strong>The CFL condition — choosing a safe Δt</strong>
+      Forward Euler is only stable when $\Delta t$ is small enough.
+      Each PDE has its own limit — see the box in each worked example.
+      Using too large a $\Delta t$ causes the numbers to blow up to <code>Inf</code> or <code>NaN</code>
+      within a few steps.
+    </div>
+
+    <p>
+      These two rules — Rule 1 (stencil) and Rule 2 (Euler step) — are the
+      building blocks for every solver in the next section. When you see
+      <code>(u[3:end] .- 2.*u[2:end-1] .+ u[1:end-2]) ./ dx^2</code>
+      anywhere below, that is always Rule 1. When you see
+      <code>u[2:end-1] .+= dt .* (...)</code>, that is always Rule 2.
+    </p>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE A: HEAT EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="build-package.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">4 &middot; Build your own package</span>
+    </a>
+    <a class="next" href="pde-heat.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">6 &middot; Heat equation</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 05 &middot; PDE workflow
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

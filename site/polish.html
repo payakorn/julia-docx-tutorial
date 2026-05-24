@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Package design patterns &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Polish &amp; ship</div>
+    <div class="ch-label">Chapter 12</div>
+    <h1>Package design patterns</h1>
+    <p>Abstract type hierarchies, AbstractArray subtyping, and a unified solve() dispatch.</p>
+  </header>
+  <section class="section" id="step6">
+    <h2><span class="step-badge">Step 8</span>Package Design Patterns: Structs, Dispatch &amp; Plots</h2>
+    <p>
+      A well-designed Julia package separates three concerns into three
+      types: the <em>grid</em> (where), the <em>problem</em> (what), and
+      the <em>solution</em> (result). Multiple dispatch then lets you write
+      one function name — <code>solve</code>, <code>plot</code> — and Julia
+      picks the right method automatically based on which types you pass in.
+      This section builds a minimal <code>PDESolvers</code> package from
+      scratch to show that workflow.
+    </p>
+
+    <h3 id="step6-arch">8.1 Struct Design Patterns — From Simple to Package-Ready</h3>
+    <p>
+      A <strong>struct</strong> is a custom data type that bundles related
+      values under one name. Julia gives you four increasingly powerful
+      forms, and understanding when to use each one is the key skill of
+      package design. We will build up from the simplest form to the
+      pattern used in <code>juliaPDEs</code>.
+    </p>
+
+    <h4>Pattern 1 — Plain struct (immutable, no defaults)</h4>
+    <p>
+      The most basic form. Fields have types but no default values, so
+      every field must be supplied when constructing an instance. The
+      struct is <em>immutable</em> — you cannot change a field after
+      creation:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct Point2D
+    x::Float64
+    y::Float64
+end
+
+p = Point2D(1.0, 2.5)
+p.x           # 1.0
+p.y           # 2.5
+p.x = 9.0    # ERROR — structs are immutable by default</code></pre>
+    </div>
+    <p>
+      Immutability is a feature, not a limitation. The compiler can pass
+      small immutable structs in registers instead of on the heap, making
+      them as fast as raw numbers.
+    </p>
+
+    <h4>Pattern 2 — Mutable struct</h4>
+    <p>
+      Add the <code>mutable</code> keyword when fields need to change
+      after construction — for example a simulation state that is updated
+      every time step:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">mutable struct SimState
+    t::Float64          # current time
+    step::Int           # step counter
+    u::Vector{Float64}  # current solution
+end
+
+state = SimState(0.0, 0, zeros(100))
+state.t    = 0.01   # ok — mutable
+state.step = 1      # ok</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Rule of thumb:</strong> use immutable structs for
+      <em>parameters</em> (things you set once — grid size, diffusivity,
+      boundary conditions) and mutable structs for <em>state</em> (things
+      that evolve — current time, iteration count, running error).
+    </div>
+
+    <h4>Pattern 3 — @kwdef struct (keyword defaults)</h4>
+    <p>
+      The <code>Base.@kwdef</code> macro rewrites the struct to accept
+      every field as a keyword argument with an optional default.
+      You only need to specify the fields you want to override:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatConfig
+    N::Int     = 200          # grid points
+    α::Float64 = 0.01         # thermal diffusivity
+    L::Float64 = 1.0          # domain length
+    T::Float64 = 1.0          # final time
+end
+
+# All defaults:
+cfg1 = HeatConfig()
+
+# Override only what you need:
+cfg2 = HeatConfig(N=800, α=0.005)
+
+# Read fields with dot notation:
+println(cfg2.α)   # 0.005
+println(cfg2.N)   # 800
+println(cfg2.L)   # 1.0  ← used the default</code></pre>
+    </div>
+    <p>
+      Fields can also be <em>derived</em> from earlier fields in the same
+      <code>@kwdef</code> block. Julia evaluates them in order, so
+      <code>dx</code> can reference <code>N</code> and <code>L</code>:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatConfigFull
+    N ::Int     = 200
+    L ::Float64 = 1.0
+    α ::Float64 = 0.01
+    T ::Float64 = 1.0
+    dx::Float64 = L / (N + 1)          # derived: depends on L and N
+    dt::Float64 = 0.4 * dx^2 / α       # derived: depends on dx and α
+end
+
+c = HeatConfigFull(N=400)
+c.dx   # 0.002497… — computed automatically
+c.dt   # 2.496e-7  — computed automatically</code></pre>
+    </div>
+
+    <h4>Pattern 4 — Struct inheriting from an abstract type</h4>
+    <p>
+      When multiple structs share a common role, declare an
+      <strong>abstract type</strong> as their common parent. You can never
+      create an instance of an abstract type directly — it only exists to
+      let dispatch treat all its subtypes uniformly:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">abstract type PDEProblem end
+abstract type ParabolicProblem &lt;: PDEProblem end   # &lt;: means "is a subtype of"
+
+Base.@kwdef struct HeatEquation &lt;: ParabolicProblem
+    N::Int = 200;  α::Float64 = 0.01;  L::Float64 = 1.0;  T::Float64 = 1.0
+    f_init::Function = x -> exp(-100*(x-0.5)^2)
+end
+
+Base.@kwdef struct WaveEquation &lt;: HyperbolicProblem
+    nx::Int = 300;  c::Float64 = 1.0;  L::Float64 = 1.0;  T::Float64 = 1.5
+end
+
+# A function accepting the abstract type works for ALL concrete subtypes:
+function describe(p::PDEProblem)
+    println("T_final = $(p.T), domain length = $(p.L)")
+end
+
+describe(HeatEquation())   # works
+describe(WaveEquation())   # works too — same function, different type</code></pre>
+    </div>
+
+    <h4>Pattern 5 — Parameterized struct</h4>
+    <p>
+      Add a type parameter <code>{T}</code> to make the struct generic.
+      The compiler generates a specialized, fully-optimized version for
+      every concrete <code>T</code> you use — no boxing, no runtime
+      dispatch:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># T is the element type of the stored array
+struct FieldSnapshot{T}
+    x ::Vector{Float64}   # grid
+    u ::Vector{T}         # values — Float32 or Float64 chosen by caller
+    t ::Float64
+end
+
+snap_f64 = FieldSnapshot(x, u_float64, 1.0)   # T = Float64
+snap_f32 = FieldSnapshot(x, u_float32, 1.0)   # T = Float32 — half the memory
+
+# Multiple parameters: T for value type, N for number of dimensions
+struct PDESolution{T, N} &lt;: AbstractArray{T, N}
+    grid ::NTuple{N, Vector{Float64}}
+    u    ::Array{T, N}
+    t    ::Float64
+    problem::PDEProblem
+end</code></pre>
+    </div>
+
+    <h4>Full example — how the package uses all five patterns together</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pattern</th><th>Used for</th><th>Example in juliaPDEs</th></tr></thead>
+        <tbody>
+          <tr><td>Abstract type</td><td>Common parent — enables dispatch</td><td><code>PDEProblem</code>, <code>ParabolicProblem</code></td></tr>
+          <tr><td>@kwdef + abstract parent</td><td>Problem parameters</td><td><code>HeatEquation &lt;: ParabolicProblem</code></td></tr>
+          <tr><td>@kwdef + abstract parent</td><td>Problem parameters</td><td><code>PoissonEquation &lt;: EllipticProblem</code></td></tr>
+          <tr><td>Parameterized + AbstractArray</td><td>Solution result</td><td><code>PDESolution{T, N}</code></td></tr>
+          <tr><td>Mutable struct</td><td>Simulation state (if needed)</td><td>(used inside solver loops)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — complete pattern in one file</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># --- Step 1: abstract hierarchy ---
+abstract type PDEProblem end
+abstract type ParabolicProblem &lt;: PDEProblem end
+
+# --- Step 2: concrete problem struct (Pattern 3 + 4) ---
+Base.@kwdef struct HeatEquation &lt;: ParabolicProblem
+    N ::Int      = 200
+    α ::Float64  = 0.01
+    L ::Float64  = 1.0
+    T ::Float64  = 1.0
+    f_init::Function = x -> exp(-100*(x-0.5)^2)
+end
+
+# --- Step 3: result struct (Pattern 5) ---
+struct PDESolution{T, N} &lt;: AbstractArray{T, N}
+    grid   ::NTuple{N, Vector{Float64}}
+    u      ::Array{T, N}
+    t      ::Float64
+    problem::PDEProblem
+end
+Base.size(s::PDESolution)           = size(s.u)
+Base.getindex(s::PDESolution, I...) = s.u[I...]
+
+# --- Step 4: solve dispatches on problem type ---
+function solve(p::HeatEquation)
+    dx = p.L / (p.N + 1)
+    x  = collect(range(dx, p.L - dx, length=p.N))
+    r  = 0.4; dt = r * dx^2 / p.α
+    u  = p.f_init.(x)
+    for _ in 1:ceil(Int, p.T / dt)
+        u[2:end-1] .+= r .* (u[3:end] .- 2u[2:end-1] .+ u[1:end-2])
+    end
+    return PDESolution((x,), u, p.T, p)
+end
+
+# --- Step 5: use it ---
+sol = solve(HeatEquation(N=400, α=0.005))
+sol[1]           # first grid value — AbstractArray
+length(sol)      # 400
+sol.problem.α    # 0.005 — back-reference to problem</code></pre>
+    </div>
+
+    <h3 id="step6-abstract">8.2 Abstract Type Hierarchy</h3>
+    <p>
+      Every PDE in mathematics is classified into one of three families —
+      <em>parabolic</em> (heat-like, diffusion dominates),
+      <em>hyperbolic</em> (wave-like, information travels at finite speed),
+      and <em>elliptic</em> (steady-state, no time evolution). Julia lets
+      you encode this classification directly in the type system using
+      <strong>abstract types</strong>. An abstract type cannot be
+      instantiated — you can never create a variable whose type is exactly
+      <code>PDEProblem</code> — but you <em>can</em> write a function that
+      accepts any subtype of <code>PDEProblem</code> at once.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">#  PDEProblem
+#  ├── ParabolicProblem        (time-dependent, diffusion — e.g. Heat)
+#  ├── HyperbolicProblem       (time-dependent, wave-like — e.g. Wave)
+#  ├── EllipticProblem         (steady-state — e.g. Poisson)
+#  └── IncompressibleNSProblem (Navier-Stokes)
+
+abstract type PDEProblem                  end
+abstract type ParabolicProblem         &lt;: PDEProblem end
+abstract type HyperbolicProblem        &lt;: PDEProblem end
+abstract type EllipticProblem          &lt;: PDEProblem end
+abstract type IncompressibleNSProblem  &lt;: PDEProblem end</code></pre>
+    </div>
+    <p>
+      Concrete problem structs then inherit from the right branch:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct HeatEquation &lt;: ParabolicProblem
+    N::Int = 200;  α::Float64 = 0.01;  L::Float64 = 1.0;  T::Float64 = 1.0
+    f_init::Function = x -> exp(-100*(x - 0.5)^2)
+end
+
+Base.@kwdef struct WaveEquation &lt;: HyperbolicProblem
+    nx::Int = 300;  nt::Int = 300;  c::Float64 = 1.0
+    L::Float64 = 1.0;  T::Float64 = 1.5;  bc::Symbol = :Dirichlet
+    f_init::Function = x -> sin.(π .* x)
+    dx::Float64 = L / (nx - 1);  dt::Float64 = T / nt
+end
+
+Base.@kwdef struct NavierStokes &lt;: IncompressibleNSProblem
+    nx::Int = 64;  ny::Int = 64;  Re::Float64 = 100.0;  T::Float64 = 10.0
+    lid_speed::Float64 = 1.0
+end</code></pre>
+    </div>
+    <p>
+      The hierarchy lets you write functions that work for <em>any</em>
+      time-dependent PDE at once, and more specific methods for individual
+      types — Julia picks the most specific one automatically:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Works for HeatEquation AND WaveEquation (both &lt;: PDEProblem)
+describe(p::PDEProblem) = println("Any PDE: T=$(p.T)")
+
+# Works only for parabolic problems (HeatEquation)
+describe(p::ParabolicProblem) = println("Parabolic PDE, α=$(p.α)")
+
+describe(HeatEquation())     # → "Parabolic PDE, α=0.01"
+describe(WaveEquation())     # → "Any PDE: T=1.5"
+
+# Type checks
+p = HeatEquation()
+p isa PDEProblem          # true  — all equations are PDEProblems
+p isa ParabolicProblem    # true  — HeatEquation lives in this branch
+p isa HyperbolicProblem   # false — different branch</code></pre>
+    </div>
+
+    <h3 id="step6-solution">8.3 PDESolution — Subtyping AbstractArray</h3>
+    <p>
+      The solution struct stores the grid coordinates, the field values,
+      and the final time. Instead of inventing a bespoke indexing API, we
+      declare it a subtype of Julia's built-in
+      <code>AbstractArray{T, N}</code>. The type parameter <code>N</code>
+      is the <em>number of dimensions</em>, so one struct covers 1-D, 2-D,
+      and any higher-dimensional result:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct PDESolution{T, N} &lt;: AbstractArray{T, N}
+    grid    :: NTuple{N, Vector{Float64}}   # one coord vector per dimension
+    u       :: Array{T, N}                  # field values
+    t       :: Float64                      # final simulation time
+    problem :: PDEProblem                   # original problem (for plotting)
+end</code></pre>
+    </div>
+    <p>
+      To activate the <code>AbstractArray</code> interface, you only need
+      to implement <strong>three methods</strong>. Everything else — over
+      50 functions in Base — is derived from these three automatically:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl (AbstractArray interface)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># 1. Report the shape
+Base.size(s::PDESolution) = size(s.u)
+
+# 2. Read an element (or a slice)
+Base.getindex(s::PDESolution, I...) = s.u[I...]
+
+# 3. Write an element
+Base.setindex!(s::PDESolution, v, I...) = (s.u[I...] = v)</code></pre>
+    </div>
+    <p>
+      We also add shortcut properties so <code>sol.x</code> and
+      <code>sol.y</code> reach the first and second grid vectors without
+      typing <code>sol.grid[1]</code>:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl (convenience properties)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function Base.getproperty(s::PDESolution, sym::Symbol)
+    g = getfield(s, :grid)
+    sym === :x && return g[1]
+    if sym === :y
+        length(g) >= 2 || error("$(typeof(s)) has no y dimension")
+        return g[2]
+    end
+    return getfield(s, sym)
+end</code></pre>
+    </div>
+
+    <h3 id="step6-free">8.4 What You Get for Free</h3>
+    <p>
+      Once the three interface methods are in place, Julia's standard
+      library automatically supplies every array operation. None of the
+      following needs any extra code in your package:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol = solve(HeatEquation())       # PDESolution{1D}
+
+# Indexing (from getindex)
+sol[1]          # first grid value
+sol[end]        # last grid value
+sol[10:20]      # slice → Vector{Float64}
+
+# Shape queries (from size)
+length(sol)     # number of grid points
+size(sol)       # (200,) for a 200-point 1D solution
+ndims(sol)      # 1
+
+# Iteration (from size + getindex)
+for v in sol ... end
+collect(sol)    # copies into a plain Vector
+
+# Math (from AbstractArray broadcasting rules)
+sol .* 2        # scale every value
+sol .+ 1.0      # shift
+maximum(sol)    # largest value
+sum(sol)        # integral proxy
+norm(sol)       # L2-style norm (from LinearAlgebra)</code></pre>
+    </div>
+    <p>
+      For 2D solutions (wave history, Navier-Stokes, Poisson) the same
+      operations extend naturally to matrix indexing:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol2d = solve(WaveEquation(), return_history=true)  # space × time matrix
+
+sol2d[50, :]     # time series at spatial point 50
+sol2d[:, 1]      # initial condition (t=0 column)
+sol2d[:, end]    # final state
+size(sol2d)      # (300, 301) — 300 space pts × 301 time steps
+sol2d.x          # spatial grid vector
+sol2d.y          # time grid vector
+
+# 2D Navier-Stokes speed field
+ns  = solve(NavierStokes())
+ns[32, 32]       # speed at grid cell (32, 32)
+ns.x             # x coordinates
+ns.y             # y coordinates
+maximum(ns)      # peak speed in the domain</code></pre>
+    </div>
+
+    <h4>Why this matters — the payoff for three small methods</h4>
+    <p>
+      Defining <code>size</code>, <code>getindex</code>, and
+      <code>IndexStyle</code> took ten lines of code. In return, your
+      <code>PDESolution</code> type becomes a <strong>first-class array</strong>:
+      every function in Julia's standard library, in
+      <code>LinearAlgebra</code>, in <code>Statistics</code>, in
+      <code>Plots</code>, in <code>FFTW</code>, in <code>DelimitedFiles</code>
+      — anything that takes an <code>AbstractArray</code> — accepts your
+      solution directly. This is the <em>duck-typing payoff</em>: write the
+      interface once, get the entire ecosystem for free.
+    </p>
+
+    <div class="callout tip">
+      <strong>Why bother subtyping <code>AbstractArray</code> at all?</strong><br>
+      You could store your solution as a plain <code>Vector</code> or
+      <code>Matrix</code> — those already work with the standard library.
+      The reason to wrap them in a custom type is to attach <em>context</em>:
+      the grid coordinates, the original problem, the final time. Once
+      wrapped, you would <em>lose</em> all the array machinery unless you
+      explicitly opt back in. Subtyping <code>AbstractArray</code> is how
+      you keep both: rich metadata <em>and</em> the full array language.
+    </div>
+
+    <h4>Concrete benefit #1 — Physical diagnostics in one line</h4>
+    <p>
+      The reductions inherited from <code>AbstractArray</code> map directly
+      onto quantities a numerical analyst already cares about:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — physical diagnostics</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol = solve(HeatEquation())
+
+# Mass / total heat — should be approximately conserved
+# (integral ≈ Δx · Σuᵢ for uniform grid)
+total_heat = sum(sol) * (sol.problem.L / (sol.problem.N + 1))
+
+# Peak temperature and its grid index
+peak_value, peak_idx = findmax(sol)
+peak_x              = sol.x[peak_idx]
+println("Peak T = ", round(peak_value, sigdigits=4), " at x = ", round(peak_x, digits=3))
+
+# Range of the field
+extrema(sol)        # (minimum, maximum) in one call
+
+# Number of grid points with u > threshold
+count(>(0.1), sol)  # how many cells are still "hot"</code></pre>
+    </div>
+
+    <h4>Concrete benefit #2 — Error norms for free (convergence study)</h4>
+    <p>
+      Convergence analysis becomes one line. <code>LinearAlgebra.norm</code>,
+      <code>sum</code>, and broadcasting already understand any
+      <code>AbstractArray</code>, so you can subtract two solutions, square
+      the result, and take a square root with no boilerplate:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — convergence in a few lines</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using LinearAlgebra
+
+num   = solve(PoissonEquation(N=80))                    # PDESolution
+exact = [sin(π*x)*sin(π*y) for x in num.x, y in num.y]  # reference field
+
+err   = num .- exact          # broadcasting works on PDESolution
+L²    = norm(err) / length(err)                # discrete L² norm
+L∞    = maximum(abs, err)                      # max-norm
+println("L²=", round(L², sigdigits=3), "  L∞=", round(L∞, sigdigits=3))</code></pre>
+    </div>
+
+    <p>
+      None of those operations have been defined for <code>PDESolution</code>
+      explicitly — they fall through to the generic <code>AbstractArray</code>
+      implementations, which call <code>size</code> and <code>getindex</code>
+      under the hood.
+    </p>
+
+    <h4>Concrete benefit #3 — Plotting just works</h4>
+    <p>
+      <code>Plots.jl</code> dispatches on <code>AbstractArray</code>, so it
+      will plot your solution without knowing anything about your custom
+      type:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — plot dispatch</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Plots
+
+sol1 = solve(HeatEquation())
+plot(sol1.x, sol1)                 # 1D line plot — sol1 acts as a Vector
+
+sol2 = solve(PoissonEquation())
+heatmap(sol2.x, sol2.y, sol2)      # 2D — sol2 acts as a Matrix
+contour(sol2.x, sol2.y, sol2; levels=10)
+
+# Compare two solutions in the same figure
+sol_coarse = solve(HeatEquation(N=50))
+sol_fine   = solve(HeatEquation(N=400))
+plot(sol_coarse.x, sol_coarse, lw=2, label="N=50")
+plot!(sol_fine.x,  sol_fine,   lw=2, label="N=400", ls=:dash)</code></pre>
+    </div>
+
+    <h4>Concrete benefit #4 — Math notation matches the page</h4>
+    <p>
+      Broadcasting (<code>.+</code>, <code>.*</code>, <code>@.</code>) lets
+      you write field arithmetic the same way you would write it on paper.
+      Compare these two solutions, scale by a coefficient, or build a
+      finite-difference combination — no loops, no allocations to manage:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — broadcasting</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">u  = solve(HeatEquation(T=0.5))
+v  = solve(HeatEquation(T=1.0))
+
+# Vector arithmetic — produces a plain Vector (auto-promoted from PDESolution)
+diff      = v .- u                  # change between snapshots
+scaled    = 2 .* u .+ 3.5           # linear combination
+nonlinear = @. exp(-u) * sin(v)     # any pointwise function works
+total_E   = sum(v .^ 2)             # discrete L² energy</code></pre>
+    </div>
+
+    <h4>Concrete benefit #5 — Search, filter, and statistics</h4>
+    <p>
+      Iteration is generated automatically from <code>size</code> +
+      <code>getindex</code>, which means <code>findmax</code>,
+      <code>findfirst</code>, <code>filter</code>, <code>count</code>,
+      <code>mean</code>, <code>std</code>, <code>median</code> — anything
+      that consumes an iterable — works without further setup:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — search &amp; statistics</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Statistics
+
+sol = solve(PoissonEquation())
+
+mean(sol)              # average field value
+std(sol)               # standard deviation
+median(sol)            # robust central value
+
+# Find the first cell exceeding a threshold
+findfirst(>(0.5), sol)
+
+# Collect only the cells that are above the mean
+above = filter(x -> x > mean(sol), sol)</code></pre>
+    </div>
+
+    <h4>Concrete benefit #6 — File I/O and interop</h4>
+    <p>
+      Any package that accepts <code>AbstractArray</code> for serialization
+      or transformation works on <code>PDESolution</code> unchanged:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — interoperability</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using DelimitedFiles, FFTW
+
+sol = solve(HeatEquation())
+
+# Save / reload as plain text
+writedlm("u.dat", sol)
+u_back = readdlm("u.dat")            # plain Matrix, but same numbers
+
+# Frequency analysis — straight from the AbstractArray interface
+û = fft(sol)
+power = abs.(û).^2</code></pre>
+    </div>
+
+    <h4>The cost of <em>not</em> doing this</h4>
+    <p>
+      Imagine <code>PDESolution</code> were just a plain
+      <code>struct</code> with no <code>AbstractArray</code> subtype.
+      To get the same conveniences you would have to write, by hand:
+    </p>
+
+    <table class="perf-table">
+      <thead>
+        <tr>
+          <th>What the user wants</th>
+          <th>Without the interface</th>
+          <th>With <code>&lt;: AbstractArray</code></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Read a value</td><td>Define your own <code>getval(sol,i)</code></td><td><code>sol[i]</code> ✓ free</td></tr>
+        <tr><td>Get size</td><td>Add <code>numpoints(sol)</code> wrapper</td><td><code>length(sol)</code>, <code>size(sol)</code> ✓ free</td></tr>
+        <tr><td>Iterate</td><td>Hand-rolled <code>for</code>-loop helper</td><td><code>for v in sol</code> ✓ free</td></tr>
+        <tr><td>Sum / mean / max</td><td>Three custom functions</td><td><code>sum, mean, maximum</code> ✓ free</td></tr>
+        <tr><td>Difference of solutions</td><td>Custom <code>subtract(a,b)</code></td><td><code>a .- b</code> ✓ free</td></tr>
+        <tr><td>L² / L∞ norm</td><td>Write your own loop</td><td><code>norm(sol)</code> ✓ free</td></tr>
+        <tr><td>Plot</td><td>Extract internal array first</td><td><code>plot(sol)</code>, <code>heatmap(sol)</code> ✓ free</td></tr>
+        <tr><td>Save to disk</td><td>Bespoke serialization</td><td><code>writedlm("u.dat", sol)</code> ✓ free</td></tr>
+        <tr><td>FFT</td><td>Convert to <code>Vector</code> first</td><td><code>fft(sol)</code> ✓ free</td></tr>
+      </tbody>
+    </table>
+
+    <h4>The complete "for-free" cheat-sheet</h4>
+    <p>
+      Anything an <code>AbstractArray</code> accepts works on
+      <code>PDESolution</code>. A non-exhaustive list, grouped by what you
+      typically need for PDE work:
+    </p>
+
+    <ul>
+      <li><strong>Inspection:</strong>
+        <code>length</code>, <code>size</code>, <code>ndims</code>,
+        <code>axes</code>, <code>eachindex</code>,
+        <code>CartesianIndices</code>,
+        <code>firstindex</code>, <code>lastindex</code></li>
+      <li><strong>Indexing &amp; slicing:</strong>
+        <code>sol[i]</code>, <code>sol[i, j]</code>, <code>sol[1:10]</code>,
+        <code>sol[:, end]</code>, <code>view(sol, :, 1)</code>,
+        <code>sol[CartesianIndex(2,3)]</code></li>
+      <li><strong>Reductions:</strong>
+        <code>sum</code>, <code>prod</code>, <code>maximum</code>,
+        <code>minimum</code>, <code>extrema</code>, <code>any</code>,
+        <code>all</code>, <code>count</code>,
+        <code>cumsum</code>, <code>cumprod</code>,
+        <code>reduce</code>, <code>mapreduce</code></li>
+      <li><strong>Search:</strong>
+        <code>findmax</code>, <code>findmin</code>, <code>findfirst</code>,
+        <code>findlast</code>, <code>findall</code>,
+        <code>filter</code>, <code>map</code></li>
+      <li><strong>Statistics (<code>using Statistics</code>):</strong>
+        <code>mean</code>, <code>median</code>, <code>std</code>,
+        <code>var</code>, <code>cor</code>, <code>quantile</code></li>
+      <li><strong>Broadcasting / pointwise math:</strong>
+        <code>a .+ b</code>, <code>2 .* sol</code>,
+        <code>@. exp(-sol)</code>, <code>sin.(sol)</code></li>
+      <li><strong>Linear algebra (<code>using LinearAlgebra</code>):</strong>
+        <code>norm</code>, <code>dot</code>, <code>cross</code>,
+        <code>tr</code>, <code>diagm</code>,
+        and any matrix factorisation if shape matches</li>
+      <li><strong>Plotting (<code>using Plots</code>):</strong>
+        <code>plot</code>, <code>plot!</code>, <code>scatter</code>,
+        <code>heatmap</code>, <code>contour</code>, <code>surface</code></li>
+      <li><strong>Iteration patterns:</strong>
+        <code>for v in sol</code>,
+        <code>collect(sol)</code>, <code>zip(sol, other)</code>,
+        <code>enumerate(sol)</code></li>
+      <li><strong>I/O &amp; interop:</strong>
+        <code>writedlm</code>, <code>readdlm</code>, <code>fft</code>,
+        <code>BSON.bson</code>, <code>HDF5.write</code> — anything that
+        accepts <code>AbstractArray</code></li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>Try it yourself — REPL challenge</strong><br>
+      Open a Julia REPL with <code>using juliaPDEs, LinearAlgebra,
+      Statistics, Plots</code>, build any solution with
+      <code>sol = solve(HeatEquation())</code>, and try every line below.
+      Each one should "just work" — no errors, no extra method definitions.
+      <pre style="margin-top:8px;"><code class="language-julia">sol[1];  sol[end];  sol[10:20]
+length(sol);  size(sol);  ndims(sol)
+sum(sol);  mean(sol);  std(sol);  extrema(sol)
+findmax(sol);  count(>(0), sol)
+norm(sol);  dot(sol, sol);  sol .* 2
+plot(sol.x, sol)</code></pre>
+      Every line above leverages code <em>you did not write</em>. That is
+      the leverage you get by spending ten minutes on three interface
+      methods.
+    </div>
+
+    <h3 id="step6-when">8.5 When NOT to subtype <code>AbstractArray</code></h3>
+    <p>
+      Section 8.4 makes subtyping <code>AbstractArray</code> look like a free
+      lunch — and for <code>PDESolution</code> it really is. So a fair student
+      question is: <em>why isn't <code>HeatEquation</code> also a subtype of
+      <code>AbstractArray</code>? Wouldn't we get the same goodies?</em>
+      Short answer: <strong>no</strong>, because <code>HeatEquation</code>
+      is not an array of values — it is a parameter bundle. Subtyping
+      <code>AbstractArray</code> only pays off when your struct really does
+      represent a collection of values laid out on a grid.
+    </p>
+
+    <h4>The two questions to ask</h4>
+    <p>Before writing <code>struct Foo &lt;: AbstractArray{T, N}</code>, ask:</p>
+    <ol>
+      <li>
+        <strong>Does my object have a primary collection of values
+        addressable by integer indices?</strong> If <code>foo[1, 2]</code>
+        does not have an obvious meaning, you do not have an array.
+      </li>
+      <li>
+        <strong>Would users expect to broadcast, iterate, or reduce over
+        it?</strong> If the natural verb is <em>read a named field</em>
+        (<code>foo.α</code>), not <em>walk every element</em>, you do not
+        have an array.
+      </li>
+    </ol>
+
+    <table class="perf-table">
+      <thead>
+        <tr><th>Struct</th><th>Has indexable values?</th><th>Right parent</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>PDESolution{T, N}</code></td>
+          <td>Yes — <code>sol[i, j]</code> is the field value at grid cell <em>(i, j)</em></td>
+          <td><code>&lt;: AbstractArray{T, N}</code> ✓</td>
+        </tr>
+        <tr>
+          <td><code>HeatEquation{N, F}</code></td>
+          <td>No — it stores <code>α</code>, <code>T</code>, <code>N_grid</code>, <code>f_init</code></td>
+          <td><code>&lt;: ParabolicProblem</code> ✓ (dispatch only)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      What would <code>heat[1]</code> even mean? The first grid size?
+      <code>α</code>? A sample of <code>f_init</code>? None of those are
+      what a user expects when they index an array. The abstract hierarchy
+      <code>HeatEquation &lt;: ParabolicProblem &lt;: PDEProblem</code> exists
+      for a different purpose: <strong>multiple dispatch</strong>. It lets
+      <code>solve(p::HeatEquation)</code> pick the right method without
+      caring about <em>arrays</em> at all.
+    </p>
+
+    <div class="callout tip">
+      <strong>Rule of thumb.</strong> Use <code>&lt;: AbstractArray</code>
+      when the struct <em>is</em> a table of values with metadata bolted on.
+      Use a plain abstract-type hierarchy when the struct <em>describes</em>
+      a problem, configuration, or recipe.
+    </div>
+
+    <h4>A minimal toy: <code>NamedSeries</code> — feel the payoff in 15 lines</h4>
+    <p>
+      To make the benefit tangible, here is the smallest useful array-like
+      struct you can write. <code>NamedSeries</code> wraps a plain
+      <code>Vector{Float64}</code> together with a descriptive name (think:
+      "Temperature at sensor A, sampled every second"). Subtyping
+      <code>AbstractVector{Float64}</code> means we keep the label
+      <em>and</em> inherit every reduction, slice, broadcast, and plot
+      adapter in Julia:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct NamedSeries &lt;: AbstractVector{Float64}
+    name :: String
+    data :: Vector{Float64}
+end
+
+# Three-method AbstractArray interface — that is the whole contract.
+Base.size(s::NamedSeries)          = size(s.data)
+Base.getindex(s::NamedSeries, i)   = s.data[i]
+Base.setindex!(s::NamedSeries, v, i) = (s.data[i] = v)</code></pre>
+    </div>
+
+    <p>Now try it. None of the methods below were defined for <code>NamedSeries</code>:</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Statistics, LinearAlgebra
+
+s = NamedSeries("sensor-A", [20.1, 20.4, 21.0, 21.7, 22.3, 22.0])
+
+s[1]              # 20.1            — getindex
+s[end]            # 22.0            — endpoint dispatch is automatic
+length(s)         # 6               — derived from size
+sum(s)            # 127.5           — reduction
+mean(s)           # 21.25           — Statistics works
+std(s)            # 0.91            — Statistics works
+maximum(s)        # 22.3            — reduction
+findmax(s)        # (22.3, 5)       — search
+norm(s)           # 52.1            — LinearAlgebra works
+s .+ 1.0          # broadcast — note: returns a plain Vector, not a NamedSeries
+collect(s)        # → Vector{Float64}, copies the data
+for v in s; println(v); end          # iteration works
+
+# And `s.name` is still there — the metadata survived.
+println("Series: ", s.name, "  μ=", mean(s))</code></pre>
+    </div>
+
+    <p>
+      Compare that with the "wrong" choice — making <code>NamedSeries</code>
+      a plain struct. Then <code>mean(s)</code> errors, <code>s[3]</code>
+      errors, <code>sum(s)</code> errors, and you have to either expose
+      <code>s.data</code> everywhere or write each method yourself. Three
+      lines of interface earned dozens of free methods.
+    </p>
+
+    <h4>More function calls you get for free — grouped by use case</h4>
+    <p>
+      The same <code>s = NamedSeries(...)</code> object flows through every
+      group below. Read each block as <em>"all of these calls would have
+      required hand-written methods on a plain struct"</em>. Paste them into
+      the REPL one block at a time and watch them all just work.
+    </p>
+
+    <p><strong>Inspection &amp; shape</strong> — once <code>size</code> is
+    defined, every shape query is derived for you:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">size(s)          # (6,)
+length(s)        # 6
+ndims(s)         # 1
+axes(s)          # (Base.OneTo(6),)
+eachindex(s)     # 1:6
+firstindex(s)    # 1
+lastindex(s)     # 6
+isempty(s)       # false
+eltype(s)        # Float64</code></pre>
+    </div>
+
+    <p><strong>Slicing &amp; views</strong> — any indexing pattern that
+    works on <code>Vector</code> works on <code>NamedSeries</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s[2:4]                  # [20.4, 21.0, 21.7] — range slice
+s[end-1:end]            # last two readings
+s[[1, 3, 5]]            # fancy indexing
+view(s, 2:4)            # non-allocating window into s
+s[s .&gt; 21.0]            # boolean mask: only "above 21°C"
+reverse(s)              # → Vector{Float64} in reverse order
+first(s, 3); last(s, 2) # first/last N elements</code></pre>
+    </div>
+
+    <p><strong>Reductions</strong> — anything that walks the elements once:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sum(s)                  # 127.5
+prod(s)                 # product of all readings
+minimum(s); maximum(s)  # 20.1, 22.3
+extrema(s)              # (20.1, 22.3) — one pass
+cumsum(s)               # running total
+cumprod(s)              # running product
+reduce(+, s)            # same as sum(s)
+mapreduce(x -&gt; x^2, +, s)  # sum of squares without a temp array
+any(&gt;(22), s)           # true if any reading > 22
+all(&gt;(20), s)           # true if every reading > 20
+count(&gt;(21), s)         # 4 — how many exceed 21</code></pre>
+    </div>
+
+    <p><strong>Search &amp; filter</strong> — iteration is auto-generated
+    from <code>size</code> + <code>getindex</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">findmax(s)              # (22.3, 5)  — value and index of the peak
+findmin(s)              # (20.1, 1)
+findfirst(&gt;(21.5), s)   # 4 — first reading above 21.5°C
+findlast(&lt;(22), s)      # 4 — last reading still under 22
+findall(&gt;(21), s)       # [3, 4, 5, 6]
+filter(&gt;(21), s)        # [21.0, 21.7, 22.3, 22.0]
+map(x -&gt; x - 20, s)     # offset every reading</code></pre>
+    </div>
+
+    <p><strong>Statistics</strong> (<code>using Statistics</code>) — pure
+    consumer of <code>AbstractArray</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Statistics
+
+mean(s)                 # 21.25
+median(s)               # 21.35
+std(s); var(s)          # spread
+quantile(s, 0.9)        # 90th percentile
+cor(s, reverse(s))      # correlation between two AbstractVectors
+mean(x -&gt; x^2, s)       # RMS² — mean of a function over s</code></pre>
+    </div>
+
+    <p><strong>Broadcasting &amp; pointwise math</strong> — write the
+    formula the way it looks on paper:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s .+ 273.15             # convert °C → K (returns Vector{Float64})
+s .- mean(s)            # center the series
+(s .- mean(s)) ./ std(s)         # z-score normalization
+@. exp(-(s - 21)^2 / 2)          # Gaussian weights, one fused loop
+s .* s                  # elementwise square
+s .&gt;= 21                # BitVector mask
+zero(s)                 # vector of zeros, same shape
+similar(s)              # uninitialised buffer, same shape</code></pre>
+    </div>
+
+    <p><strong>Mutation</strong> — because we defined <code>setindex!</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">s[1] = 19.8             # write a single element
+s[2:3] .= 20.0          # broadcast assignment to a slice
+fill!(s, 0.0)           # zero everything (from AbstractArray)
+copyto!(s, [1.0, 2, 3, 4, 5, 6])  # bulk copy from another iterable</code></pre>
+    </div>
+
+    <p><strong>Linear algebra</strong> (<code>using LinearAlgebra</code>) —
+    treats your series as a vector in ℝⁿ:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using LinearAlgebra
+
+norm(s)                 # ‖s‖₂ — Euclidean / L² norm
+norm(s, 1)              # L¹ norm — sum of absolute values
+norm(s, Inf)            # L∞ norm — maximum absolute value
+dot(s, s)               # inner product
+normalize(s)            # unit-norm copy (plain Vector)</code></pre>
+    </div>
+
+    <p><strong>File I/O &amp; interop</strong> — any package that accepts
+    <code>AbstractArray</code> accepts <code>NamedSeries</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using DelimitedFiles
+
+writedlm("sensor.csv", s, ',')   # one row of CSV — no conversion needed
+back = readdlm("sensor.csv", ',') # comes back as Matrix{Float64}
+
+# Conversions
+collect(s)              # Vector{Float64}
+Vector(s)               # Vector{Float64} (explicit)
+Tuple(s)                # (20.1, 20.4, …)</code></pre>
+    </div>
+
+    <p><strong>Plotting</strong> — <code>Plots.jl</code> dispatches on
+    <code>AbstractVector</code>:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using Plots
+
+plot(s, lw=2, label=s.name)            # line plot — uses the metadata!
+scatter(s, ms=4)                       # scatter
+histogram(s, bins=5)                   # distribution
+
+# Compare two series on the same axes
+s2 = NamedSeries("sensor-B", [19.0, 19.3, 19.7, 20.2, 20.5, 20.1])
+plot(s,  label=s.name, lw=2)
+plot!(s2, label=s2.name, lw=2, ls=:dash)</code></pre>
+    </div>
+
+    <p><strong>Passing to functions written for <code>AbstractVector</code></strong>
+    — the real payoff: code <em>other people</em> wrote for vectors accepts
+    your custom type without modification:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># A generic function someone else wrote — knows nothing about NamedSeries:
+function moving_average(v::AbstractVector, k::Int)
+    [mean(@view v[max(1, i-k+1):i]) for i in eachindex(v)]
+end
+
+moving_average(s, 3)    # works! returns a Vector{Float64}
+
+# Or a function that only requires `length` + `getindex`:
+function summarise(v::AbstractVector)
+    return (n = length(v),
+            μ = sum(v) / length(v),
+            range = maximum(v) - minimum(v))
+end
+
+summarise(s)            # (n = 6, μ = 21.25, range = 2.2)</code></pre>
+    </div>
+
+    <h4>The same pattern in 2D — <code>NamedMatrix</code></h4>
+    <p>
+      The interface scales to any dimension just by changing the
+      <code>AbstractArray</code> parameter. Here is the 2D analogue —
+      a matrix that knows its <em>row</em> and <em>column</em> labels:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">struct NamedMatrix &lt;: AbstractMatrix{Float64}
+    rows :: Vector{String}
+    cols :: Vector{String}
+    data :: Matrix{Float64}
+end
+
+Base.size(m::NamedMatrix)           = size(m.data)
+Base.getindex(m::NamedMatrix, i, j) = m.data[i, j]
+Base.setindex!(m::NamedMatrix, v, i, j) = (m.data[i, j] = v)
+
+M = NamedMatrix(
+    ["sensor-A", "sensor-B", "sensor-C"],
+    ["t=0", "t=1", "t=2", "t=3"],
+    [20.1 20.4 21.0 21.7;
+     19.0 19.3 19.7 20.2;
+     22.5 22.7 22.9 23.0],
+)
+
+size(M)              # (3, 4)
+M[1, :]              # row 1 → Vector{Float64}
+M[:, end]            # last column
+sum(M, dims=2)       # row-wise totals — 3×1 Matrix
+mean(M, dims=1)      # column-wise means — 1×4 Matrix
+maximum(M)           # global peak
+M'                   # transpose works
+M * M'               # matrix product! LinearAlgebra dispatches by shape
+
+using Plots
+heatmap(M.cols, M.rows, M)   # heatmap — uses the labels as tick text</code></pre>
+    </div>
+
+    <p>
+      Same three-method recipe, same payoff in every dimension. This is
+      exactly how <code>PDESolution{T, N}</code> works — only with grid
+      coordinates instead of string labels and a parametric <code>N</code>
+      so one struct handles 1D, 2D, and 3D simultaneously.
+    </p>
+
+    <h4>Now the contrast: a <em>plain</em> struct that should stay plain</h4>
+    <p>
+      <code>SensorConfig</code> below is the analogue of
+      <code>HeatEquation</code> — a parameter bundle. There is no natural
+      "value at index <em>i</em>" to return, so we do <strong>not</strong>
+      subtype <code>AbstractArray</code>. Instead we group it under an
+      abstract type (here <code>Configuration</code>) so dispatch can target
+      "any configuration":
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — paste into REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">abstract type Configuration end
+
+struct SensorConfig &lt;: Configuration
+    name         :: String
+    sample_rate  :: Float64    # Hz
+    threshold    :: Float64    # °C
+end
+
+cfg = SensorConfig("sensor-A", 10.0, 25.0)
+
+cfg.name           # "sensor-A"      — named-field access is the point
+cfg.threshold      # 25.0
+
+# These would all be errors — and rightly so:
+# cfg[1]            ❌ no integer indexing
+# sum(cfg)          ❌ what would you even sum?
+# mean(cfg)         ❌ ditto
+
+# Dispatch is still possible — that is what the abstract type is for:
+describe(c::Configuration) = "$(c.name) @ $(c.sample_rate) Hz"
+describe(cfg)              # "sensor-A @ 10.0 Hz"</code></pre>
+    </div>
+
+    <p>
+      <code>HeatEquation</code> follows exactly this pattern: a
+      <code>@kwdef</code> struct holding parameters, parented to
+      <code>ParabolicProblem &lt;: PDEProblem</code> so <code>solve</code> can
+      dispatch on it. No indexing, no broadcasting — and that is the
+      <em>correct</em> design, not a missed opportunity.
+    </p>
+
+    <div class="callout tip">
+      <strong>Mental model.</strong>
+      <code>&lt;: AbstractArray</code> answers <em>"what is this a
+      collection of?"</em>
+      <code>&lt;: AbstractProblem</code> (or any custom abstract type) answers
+      <em>"what category of thing is this, for dispatch?"</em>
+      They are orthogonal — your <code>PDESolution</code> uses the first,
+      your <code>HeatEquation</code> uses the second, and a hypothetical
+      <code>SolutionHistory</code> could use both at once.
+    </div>
+
+    <h3 id="step6-solve">8.6 Unified solve() Dispatch</h3>
+    <p>
+      Each solver file defines one method of <code>solve</code>. Julia
+      picks the correct one from the argument type alone — no
+      <code>if/elseif</code> chain required. Every method returns a
+      <code>PDESolution</code>: the grid is a tuple of coordinate vectors,
+      and <code>u</code> is the field array with as many dimensions as
+      entries in the tuple:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/heat.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve(p::HeatEquation)
+    dx, x = interior_grid(p.L, p.N)        # one helper, same in 1D/2D/3D
+    dt    = p.T / p.Nt
+    r     = p.α * dt / dx^2                # r = α·dt/dx² ≤ 0.5
+    u     = p.f_init.(x)
+    for _ in 1:p.Nt
+        u[2:end-1] .+= r .* (u[3:end] .- 2u[2:end-1] .+ u[1:end-2])
+    end
+    return PDESolution((x,), u, p.T, p)   # 1D: grid is a 1-tuple
+end</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (history variant)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function solve(p::WaveEquation; return_history::Bool=false)
+    x = collect(range(0, p.L, length=p.nx))
+    # ... time-stepping loop ...
+    if return_history
+        t_grid = collect(range(0, p.T, length=p.nt + 1))
+        return PDESolution((x, t_grid), U, p.T, p)  # 2D: space × time
+    else
+        return PDESolution((x,), u_curr, p.T, p)     # 1D: final snapshot
+    end
+end</code></pre>
+    </div>
+
+    <h4>The same trick works for <em>your own</em> helpers — <code>l2_error</code> by dimension</h4>
+    <p>
+      Multiple dispatch is not reserved for <code>solve</code>. Any
+      function you write can carry several methods that differ in their
+      type signature, and Julia routes the call to the most specific one.
+      The package's <code>l2_error</code> is a clean example: the formula
+      for the discrete $L^2$ norm picks up a different power of $h$ in
+      each dimension ($h^{1/2}$ in 1D, $h$ in 2D, $h^{3/2}$ in 3D), so
+      each dimension gets its own method — same name, same call site:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (2D method)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, 2}) where T
+    p = sol.problem
+    isnothing(p.u_exact) && return nothing
+    N = size(sol, 1);  h = p.L / (N + 1)
+    err2 = 0.0
+    for j in 1:N, i in 1:N
+        e = sol[i, j] - p.u_exact(sol.x[i], sol.y[j])
+        err2 += e^2
+    end
+    return h * sqrt(err2)           # 2D L² norm uses h¹
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (3D method, same name)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, 3}) where T
+    p = sol.problem
+    isnothing(p.u_exact) && return nothing
+    N = size(sol, 1);  h = p.L / (N + 1)
+    err2 = 0.0
+    for k in 1:N, j in 1:N, i in 1:N
+        e = sol[i, j, k] - p.u_exact(sol.x[i], sol.y[j], sol.z[k])
+        err2 += e^2
+    end
+    return h^(3/2) * sqrt(err2)     # 3D L² norm uses h^{3/2}
+end</code></pre>
+    </div>
+
+    <p>
+      Both methods share the name <code>l2_error</code>; what differs is
+      the second type parameter of <code>PDESolution</code>:
+      <code>{T, 2}</code> versus <code>{T, 3}</code>. Julia inspects the
+      type of the argument <em>at the call site</em> and picks the
+      matching method with zero runtime cost — the choice is baked into
+      the compiled code:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — one call site, two methods</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">sol2d = solve(PoissonEquation(N_grid=(40, 40)))      # PDESolution{Float64, 2}
+sol3d = solve(PoissonEquation(N_grid=(20, 20, 20),   # PDESolution{Float64, 3}
+                              f=(x,y,z)->3π^2*sin(π*x)*sin(π*y)*sin(π*z),
+                              u_exact=(x,y,z)->sin(π*x)*sin(π*y)*sin(π*z)))
+
+l2_error(sol2d)        # runs the N=2 method automatically
+l2_error(sol3d)        # runs the N=3 method automatically
+
+# See which method Julia dispatched to:
+@which l2_error(sol2d)   # → l2_error(sol::PDESolution{T, 2}) where T
+@which l2_error(sol3d)   # → l2_error(sol::PDESolution{T, 3}) where T
+
+# List every method that goes by this name:
+methods(l2_error)</code></pre>
+    </div>
+
+    <p>
+      To support a fourth dimension you would write a third method —
+      <code>l2_error(sol::PDESolution{T, 4}) where T</code> — and every
+      existing call site keeps working unchanged. <em>That</em> is the
+      practical payoff of writing dispatch on parametric types
+      (Step 7): you extend the system by <strong>adding</strong> code,
+      never by editing old code.
+    </p>
+
+    <div class="callout tip">
+      <strong>Pattern to remember</strong><br>
+      When a function's mathematical formula depends on the dimension
+      (or any other type-level property), put that property in the type
+      signature and write one focused method per case. The result is
+      shorter, faster, and grows by addition — the opposite of a
+      growing <code>if/elseif</code> ladder.
+    </div>
+
+    <h4>Don't repeat the grid formula — one helper, every solver</h4>
+    <p>
+      Every solver above started with the same two lines:
+      <code>dx = L/(N+1)</code> and <code>x = collect(range(dx, L-dx, length=N))</code>.
+      That formula appears identically in <em>five</em> solver methods
+      (Heat 1D/2D/3D, Poisson 2D/3D) — and a different but equally repeated
+      version (<code>L/(N-1)</code>, endpoints included) shows up in the
+      two wave solvers. Whenever the same calculation lives in five places,
+      one of those copies is going to drift first. Pull it into
+      <code>types.jl</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Dirichlet-interior grid — boundary nodes 0 and L are not stored.
+function interior_grid(L::Real, N::Integer)
+    dx = L / (N + 1)
+    x  = collect(range(dx, L - dx, length=N))
+    return dx, x
+end
+
+# Closed-interval grid — endpoints 0 and L are stored.
+function endpoint_grid(L::Real, N::Integer)
+    dx = L / (N - 1)
+    x  = collect(range(0, L, length=N))
+    return dx, x
+end</code></pre>
+    </div>
+
+    <p>
+      Even better — there is now exactly <em>one</em> <code>solve</code>
+      method per PDE family. It collapses the per-axis calls into a single
+      <code>ntuple</code> that runs over whatever dimension the user asked
+      for, with no per-dimension code at all:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/types.jl (N-D solver)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">grids        = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i]), N)
+d            = ntuple(i -> grids[i][1], N)   # spacings, one per axis
+axes_coords  = ntuple(i -> grids[i][2], N)   # coordinate vectors, one per axis</code></pre>
+    </div>
+
+    <p>
+      The helpers are exported (<code>using juliaPDEs</code> brings them
+      into scope), so error analyses like <code>l2_error</code> and
+      <code>convergence_table</code> can reuse them too — that is how the
+      <em>same</em> $h$ value reaches the discretisation, the error norm,
+      and the convergence-rate column without ever being typed twice:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — single source of truth</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, N}) where {T, N}
+    p = sol.problem
+    h = ntuple(i -> interior_grid(p.a[i], p.b[i], p.N_grid[i])[1], N)
+    # … sum of squared errors over CartesianIndices(sol.u) …
+    return sqrt(prod(h)) * sqrt(err2)      # ← same helper as the solver used
+end</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Why this is more than a style change</strong><br>
+      If you ever decide your convention is wrong — say you want the grid
+      to <em>include</em> the boundary nodes for a different BC scheme —
+      you change <strong>one</strong> line in <code>interior_grid</code>
+      and every solver, every error helper, and every convergence table
+      picks up the new definition automatically. Without the helper, you
+      would be hunting for <code>L/(N+1)</code> in seven files praying you
+      didn't miss one.
+    </div>
+
+    <h3 id="step6-layout">8.7 Full Package Layout</h3>
+    <p>
+      <code>types.jl</code> must be included first because every other
+      file uses <code>PDEProblem</code> and <code>PDESolution</code>.
+      Sub-files only define functions and structs — all
+      <code>using</code> and <code>export</code> statements live in the
+      module entry point:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">shell</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-bash">juliaPDEs/
+├── Project.toml
+└── src/
+    ├── juliaPDEs.jl       # module entry — using, include, export
+    ├── types.jl           # abstract hierarchy + PDESolution{T,N}
+    ├── heat.jl            # HeatEquation &lt;: ParabolicProblem  + solve
+    ├── wave.jl            # WaveEquation &lt;: HyperbolicProblem + solve
+    └── Navier_Stokes.jl   # NavierStokes &lt;: IncompressibleNSProblem + solve</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/juliaPDEs.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">module juliaPDEs
+
+using Plots, Oceananigans
+
+include("types.jl")           # always first — defines the type tree
+include("heat.jl")
+include("wave.jl")
+include("Navier_Stokes.jl")
+
+export PDEProblem, ParabolicProblem, HyperbolicProblem,
+       EllipticProblem, IncompressibleNSProblem
+export PDESolution
+export HeatEquation, WaveEquation, NavierStokes
+export solve, wave_exact, animate_wave, animate_navier_stokes
+
+end</code></pre>
+    </div>
+
+    <h3 id="step6-calling">8.8 Calling the Package</h3>
+    <p>
+      With the hierarchy and <code>AbstractArray</code> interface in place,
+      switching physics is a one-word change; the grid, indexing, and plot
+      calls are identical for every problem type:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — REPL</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+# Heat — 1D final snapshot
+hsol = solve(HeatEquation(N=400, α=0.005, T=0.5))
+hsol[1]        # first node value
+length(hsol)   # 400
+plot(hsol.x, hsol.u, label="Heat")
+
+# Wave — 2D history (space × time)
+wsol = solve(WaveEquation(nx=300, c=1.5, T=2.0), return_history=true)
+wsol[:, 1]     # initial condition
+wsol[:, end]   # final state
+wsol[150, :]   # time trace at the mid-point
+
+# Type checks work because of the hierarchy
+hsol.problem isa PDEProblem       # true
+hsol.problem isa ParabolicProblem # true
+wsol.problem isa HyperbolicProblem # true</code></pre>
+    </div>
+  </section>
+
+  <!-- ══ HOMEWORK ══════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="gmsh.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">11 &middot; Meshes with Gmsh</span>
+    </a>
+    <a class="next" href="homework.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">13 &middot; Homework</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 12 &middot; Package design patterns
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

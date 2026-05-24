@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Language basics &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Learn Julia</div>
+    <div class="ch-label">Chapter 02</div>
+    <h1>Julia language basics</h1>
+    <p>Functions, arrays, broadcasting, and linear algebra &mdash; enough to read and write scientific Julia.</p>
+  </header>
+  <section class="section" id="basics-functions">
+    <h2>Functions</h2>
+    <p>
+      A function in Julia is a named piece of computation that takes
+      <em>arguments</em> in and returns a <em>result</em>. You will spend
+      almost all of your scientific code time either writing functions
+      (your solvers, your post-processing) or calling them (other people's
+      libraries). It is the only abstraction you absolutely need to be
+      fluent with.
+    </p>
+    <p>
+      Three things make Julia functions slightly different from what you
+      might know from Python or MATLAB:
+    </p>
+    <ul>
+      <li><strong>First-class values.</strong> A function is a value just
+        like a number — you can store it in a variable, pass it to another
+        function, or return it from one.</li>
+      <li><strong>Multiple dispatch.</strong> You can define many methods
+        of the <em>same</em> function, and Julia picks the right one based
+        on the types of <em>all</em> the arguments. We will see why this is
+        powerful below.</li>
+      <li><strong>Compiled, not interpreted.</strong> The first time you
+        call <code>solve(prob)</code>, Julia compiles a specialized
+        machine-code version for that argument type combination and caches
+        it. Subsequent calls are at C speed.</li>
+    </ul>
+
+    <h3>Defining functions — the two main forms</h3>
+    <p>
+      Julia gives you two ways to write a function. The block form is for
+      anything that takes more than one line; the one-liner is what you
+      reach for when the body is a single expression — typical for
+      mathematical formulas:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Full block form
+function greet(name)
+    println("Hello, ", name)
+end
+
+# One-liner (most common for math)
+square(x) = x^2
+cube(x)   = x^3
+
+# Call them
+greet("Julia")   # Hello, Julia
+square(5)        # 25
+cube(3)          # 27</code></pre>
+    </div>
+    <p>
+      Notice there is no <code>return</code> on the one-liners — Julia
+      returns the value of the last expression in the body automatically.
+      You <em>can</em> write <code>return</code> explicitly when it makes
+      the intent clearer (early-return on a special case, for example), but
+      it is optional at the end.
+    </p>
+
+    <h3>Anonymous functions</h3>
+    <p>
+      Sometimes you need a tiny function only once — you do not want to
+      give it a name, you just want to hand it to someone else's code. In
+      Julia those are written with the arrow <code>-&gt;</code>. They are
+      essential when passing a function as an argument (e.g. to
+      <code>map</code>, <code>filter</code>, or our
+      <code>WaveEquation.f_init</code> field):
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">f = x -> x^2 + 1          # single argument
+g = (x, y) -> x^2 + y^2   # two arguments
+
+f(3)    # 10
+g(3, 4) # 25
+
+# Inline in map
+map(x -> x^2, [1, 2, 3, 4])   # [1, 4, 9, 16]</code></pre>
+    </div>
+
+    <h3>Default and keyword arguments</h3>
+    <p>
+      A <strong>default argument</strong> is a value used when the caller
+      does not supply that argument. It saves typing common defaults at
+      every call site. A <strong>keyword argument</strong> goes
+      <em>after a semicolon</em> in the signature and must be passed by
+      name at the call site — it is the right choice when you have many
+      configuration knobs and order would be hard to remember (think:
+      <code>HeatEquation(; N_grid=(200,), α=0.01, T=1.0, Nt=1000)</code> — what
+      would the order even be?):
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Default argument
+function power(x, n=2)
+    return x^n
+end
+power(3)      # 9   (n defaults to 2)
+power(3, 3)   # 27
+
+# Keyword arguments (after the semicolon)
+function make_point(; x=0.0, y=0.0)
+    return (x, y)
+end
+make_point(y=5.0)   # (0.0, 5.0)</code></pre>
+    </div>
+    <p>
+      The PDE solvers we will write almost always use keyword arguments —
+      most physical parameters have sensible defaults, and the call site
+      stays self-documenting: <code>WaveEquation(c=2.0, T=0.5)</code> is
+      readable; <code>WaveEquation(2.0, 0.5)</code> is not.
+    </p>
+
+    <h3>Multiple dispatch — Julia's superpower</h3>
+    <p>
+      In most languages a function name has one definition; in Julia, the
+      same name can have many <em>methods</em> and Julia picks the right
+      one based on the types of <em>all</em> the arguments at the call
+      site. This lets a library author specialize behavior for new types
+      you define in your own code, without monkey-patching:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">describe(x::Int)     = println("integer: ", x)
+describe(x::Float64) = println("float:   ", x)
+describe(x::String)  = println("string:  ", x)
+
+describe(42)      # integer: 42
+describe(3.14)    # float:   3.14
+describe("hi")    # string:  hi</code></pre>
+    </div>
+
+    <h3>Functions that modify their input — the <code>!</code> convention</h3>
+    <p>
+      Julia has a strong cultural rule: any function whose name ends in
+      <code>!</code> ("bang") modifies at least one of its arguments
+      <em>in place</em>. Functions without the bang return a new value and
+      leave their inputs alone. This is purely convention (the language
+      does not enforce it), but every standard library and major package
+      follows it religiously, so you can read code at a glance:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># sort  returns a new sorted array (does not change original)
+# sort! sorts the array in-place (modifies the argument)
+v = [3, 1, 4, 1, 5, 9]
+sorted = sort(v)    # new array; v is unchanged
+sort!(v)            # v is now [1, 1, 3, 4, 5, 9]
+
+# Same pattern: push! append! fill! normalize! etc.</code></pre>
+    </div>
+    <p>
+      Why does the bang matter for PDEs? Performance. Allocating a new
+      array every timestep is expensive — for a million-grid-point heat
+      simulation over 10&thinsp;000 steps, that is 10 billion bytes of garbage
+      for the GC to clean up. We instead update the array in place. In our
+      heat solver we wrote <code>u[2:end-1] .+= ...</code> — that is
+      effectively a bang operation on <code>u</code>.
+    </p>
+
+    <div class="callout tip">
+      <strong>Convention</strong>
+      A trailing <code>!</code> signals the function modifies at least one of its arguments.
+      When in doubt, prefer the non-<code>!</code> form and assign the result.
+    </div>
+  </section>
+
+  <!-- ══ BASICS: ARRAYS ═══════════════════════════════════════ -->
+  <section class="section" id="basics-arrays">
+    <h2>Vectors &amp; Matrices</h2>
+    <p>
+      Almost every numerical algorithm reduces, in the end, to operations
+      on vectors and matrices — discretized functions on a grid, stiffness
+      matrices, time-history snapshots. Julia treats these as first-class
+      citizens: built into the language, with optimized low-level code
+      already wired up to the standard linear-algebra libraries (BLAS,
+      LAPACK).
+    </p>
+
+    <h3>Two conventions to internalise on day one</h3>
+    <ul>
+      <li><strong>1-based indexing.</strong> The first element is
+        <code>v[1]</code>, not <code>v[0]</code>. The last is
+        <code>v[end]</code>. If you are coming from Python or C, this trips
+        you up for about ten minutes; after that it never bothers you
+        again.</li>
+      <li><strong>Column-major storage.</strong> A matrix
+        <code>A[i, j]</code> is laid out in memory column by column, so
+        looping <em>down a column first</em> is the cache-friendly order.
+        This matches Fortran and MATLAB; it is the opposite of C and
+        NumPy. We will revisit this when we discuss performance.</li>
+    </ul>
+    <p>
+      The two conventions interact: when you write a tight inner loop over
+      a matrix, the right pattern is
+      <code>for j in axes(A, 2), i in axes(A, 1)</code> — outer loop over
+      columns, inner over rows. That keeps you walking through memory in
+      order.
+    </p>
+
+    <h3>Creating vectors</h3>
+    <p>
+      A <code>Vector</code> in Julia is just a 1-D array. The simplest way
+      to create one is to write the elements in square brackets, separated
+      by commas:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [1.0, 2.0, 3.0, 4.0]   # column vector, Float64
+w = [1, 2, 3, 4]            # Int64 by default
+
+zeros(5)                     # [0.0, 0.0, 0.0, 0.0, 0.0]
+ones(4)                      # [1.0, 1.0, 1.0, 1.0]
+rand(6)                      # 6 random numbers in [0,1)
+
+# Range-based
+r = 0.0:0.25:1.0             # lazy range: 0, 0.25, 0.5, 0.75, 1.0
+x = collect(r)               # convert to a plain Vector
+x = range(0, 1, length=101)  # 101 equally-spaced points</code></pre>
+    </div>
+    <p>
+      A <em>range</em> like <code>0.0:0.25:1.0</code> is special — it is
+      <strong>lazy</strong>: Julia stores only the start, step, and stop,
+      not the actual numbers. <code>length(r)</code> still works, you can
+      index into it, and most array functions accept it. Use
+      <code>collect</code> only when you really need a concrete
+      <code>Vector</code> (e.g. to mutate it). For PDE grids, the very
+      common <code>range(0, 1, length=101)</code> form lets you specify
+      "I want exactly 101 points from 0 to 1 inclusive" — Julia computes
+      the step for you.
+    </p>
+
+    <h3>Creating matrices</h3>
+    <p>
+      Matrix literals use spaces between elements in a row, and semicolons
+      between rows. Constructor functions like <code>zeros(m, n)</code>
+      take two size arguments instead of one. The identity matrix
+      <code>I</code> lives in <code>LinearAlgebra</code>:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [1 2 3;              # rows separated by ;
+     4 5 6;
+     7 8 9]
+
+zeros(3, 4)              # 3×4 matrix of zeros
+ones(2, 5)               # 2×5 matrix of ones
+rand(4, 4)               # 4×4 random matrix
+Matrix{Float64}(I, 3, 3) # 3×3 identity (needs LinearAlgebra)</code></pre>
+    </div>
+
+    <h3>Indexing and slicing</h3>
+    <p>
+      <code>A[i, j]</code> is the element at row <code>i</code>, column
+      <code>j</code>. A colon <code>:</code> means "all of this dimension"
+      — so <code>A[1, :]</code> is the entire first row,
+      <code>A[:, 2]</code> the entire second column. Ranges
+      (<code>1:2</code>) extract sub-blocks. <code>end</code> is a
+      magic word meaning "the last index along this dimension":
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [10 20 30;
+     40 50 60;
+     70 80 90]
+
+A[2, 3]      # 60  — row 2, column 3
+A[1, :]      # [10, 20, 30]  — entire first row
+A[:, 2]      # [20, 50, 80]  — entire second column
+A[1:2, 1:2]  # 2×2 top-left submatrix
+
+v = [10, 20, 30, 40, 50]
+v[end]       # 50  — last element
+v[end-1]     # 40
+v[2:4]       # [20, 30, 40]</code></pre>
+    </div>
+
+    <h3>Array comprehensions</h3>
+    <p>
+      The most readable way to build arrays from a formula. The syntax
+      mirrors mathematical set-builder notation: <em>"the array of f(x) for
+      x in some range"</em>. With two indices in the comprehension, you
+      get a 2-D matrix automatically. We will use this constantly to
+      evaluate initial conditions and source terms on a grid:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">xs = [i^2 for i in 1:5]              # [1, 4, 9, 16, 25]
+ys = [sin(π*x) for x in 0:0.1:1]    # sin at 11 points
+
+# 2-D comprehension → matrix
+A = [i + j for i in 1:3, j in 1:4]  # 3×4 matrix</code></pre>
+    </div>
+
+    <h3>Broadcasting with <code>.</code></h3>
+    <p>
+      <strong>Broadcasting</strong> is Julia's element-wise operation
+      mechanism. Any function or operator can be turned element-wise by
+      adding a <code>.</code> in the right place: <code>sin.(v)</code>,
+      <code>v .^ 2</code>, <code>A .* B</code>. The killer feature is that
+      Julia <em>fuses</em> chains of dotted operations into a single loop —
+      no temporary arrays for intermediate results — so
+      <code>exp.(v) .- 1</code> is exactly as fast as a hand-written loop.
+      This is the workhorse of all the PDE update steps you will write:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [0.0, π/6, π/4, π/3, π/2]
+
+sin.(v)          # element-wise sin
+v .^ 2           # element-wise square
+v .* 2           # element-wise multiply by scalar
+exp.(v) .- 1     # chain: (eˣ - 1) for every element
+
+# Works on matrices too
+A = rand(3, 3)
+log.(A)          # element-wise log
+A .> 0.5         # element-wise boolean</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Broadcasting rule</strong>
+      Any function call can be dotted: <code>f.(x)</code> applies <code>f</code> to every element.
+      Chain multiple dots in one expression — Julia fuses them into a single pass.
+    </div>
+
+    <h3>Growing and combining arrays</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = Float64[]       # empty vector
+push!(v, 1.0)       # append one element
+push!(v, 2.0, 3.0)  # append multiple
+append!(v, [4.0, 5.0])
+
+# Concatenate existing arrays
+a = [1, 2, 3]
+b = [4, 5, 6]
+vcat(a, b)          # [1,2,3,4,5,6]  (vertical / row-wise)
+hcat(a, b)          # 3×2 matrix     (horizontal / column-wise)
+[a; b]              # same as vcat
+[a b]               # same as hcat (row vectors)</code></pre>
+    </div>
+
+    <h3>Use Case Examples for PDE Solvers</h3>
+    <p>
+      To support the PDE implementations in later sections, let's look at three practical patterns where vectors and matrices are used to manage simulation grids, memory efficiently, and boundary values.
+    </p>
+
+    <h4>Use Case 1: Vector Slicing for 1D Spatial Stencils</h4>
+    <p>
+      When computing second derivatives $\frac{d^2u}{dx^2}$ using central differences, we update interior grid points by accessing their left and right neighbors. Instead of writing slow element-by-element loops, we use <strong>vector slicing</strong> to shift the entire array at once. Using the <code>@views</code> macro ensures these slices are lightweight pointer references rather than expensive memory copies.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Suppose u represents temperature along a 1D metal bar
+u = [0.0, 10.0, 20.0, 30.0, 0.0]  # endpoints are fixed at 0.0
+
+# Extract shifted views for the 3-point stencil: u_{i+1} - 2u_i + u_{i-1}
+@views left_nbrs  = u[1:end-2]    # [0.0, 10.0, 20.0]
+@views centers    = u[2:end-1]    # [10.0, 20.0, 30.0]
+@views right_nbrs = u[3:end]      # [20.0, 30.0, 0.0]
+
+# Compute the discrete second derivative simultaneously for all interior nodes
+dx = 0.1
+d2u_dx2 = (right_nbrs .- 2 .* centers .+ left_nbrs) ./ dx^2
+
+# Update interior points in place using broadcasting
+centers .+= 0.01 .* d2u_dx2</code></pre>
+    </div>
+
+    <h4>Use Case 2: Flattening &amp; Reshaping for 2D Boundary Value Problems</h4>
+    <p>
+      Standard linear algebra solvers ($A\mathbf{x} = \mathbf{b}$) expect 1D column vectors. However, physical fields in 2D (like source terms or electric potentials) live naturally on a 2D matrix grid. We use <code>vec</code> to flatten a matrix into a column vector for the solver, and <code>reshape</code> to fold the 1D solution back into a 2D matrix for visualization.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">N = 4
+F_grid = [sin(x)*cos(y) for x in 1:N, y in 1:N]  # 4×4 physical source matrix
+
+# 1. Flatten to a 1D column vector of length 16 without copying data
+b = vec(F_grid)
+
+# 2. Solve the linear system A * u_flat = b (suppose A is our sparse Laplacian)
+# u_flat = A \ b
+
+# 3. Fold the 1D vector solution back into a 4×4 matrix for plotting
+# U_matrix = reshape(u_flat, N, N)</code></pre>
+    </div>
+
+    <h4>Use Case 3: Matrix Views &amp; Boundary Conditions in 2D Simulations</h4>
+    <p>
+      In 2D fluid dynamics (like the Navier-Stokes lid-driven cavity), we frequently extract interior regions of a matrix to compute advection and apply boundary conditions to specific outer rows or columns.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">velocity_u = zeros(5, 5)  # 5×5 grid initialized to stationary fluid
+
+# Apply the moving lid boundary condition along the top row (North wall)
+velocity_u[1, :] .= 1.0
+
+# Apply no-slip (zero velocity) boundary conditions on the remaining walls
+velocity_u[end, :] .= 0.0  # Bottom wall
+velocity_u[:, 1]   .= 0.0  # Left wall
+velocity_u[:, end] .= 0.0  # Right wall
+
+# Access the interior 3×3 fluid domain without allocating memory
+@views interior_u = velocity_u[2:end-1, 2:end-1]</code></pre>
+    </div>
+
+    <h4>Use Case 4: 3D Arrays for Volumetric Problems ($x, y, z$)</h4>
+    <p>
+      When simulating physical processes in 3D space — such as heat diffusion in a solid block or fluid flow inside a fully volumetric chamber — the field depends on three spatial coordinates ($x, y, z$). The standard approach is to pre-allocate a 3D array and iterate over the grid points to evaluate the initial solution. 
+    </p>
+    <p>
+      Because Julia uses <strong>column-major storage</strong>, the leftmost index varies fastest in memory. To achieve peak C-level performance, your nested loops should traverse the array in cache-friendly order: the outermost loop over the third dimension ($z$), the middle loop over the second dimension ($y$), and the innermost loop over the first dimension ($x$).
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Define the grid resolution along each dimension
+Nx, Ny, Nz = 30, 30, 30
+
+# Create the 1D coordinate vectors for x, y, and z
+x = range(0, 1, length=Nx)
+y = range(0, 1, length=Ny)
+z = range(0, 1, length=Nz)
+
+# Pre-allocate the 3D matrix for the initial solution field u(x, y, z)
+u_3d = zeros(Nx, Ny, Nz)
+
+# Iterate over the 3D grid in cache-friendly order (k -> j -> i)
+for k in 1:Nz
+    for j in 1:Ny
+        for i in 1:Nx
+            # Evaluate a 3D Gaussian initial condition centered at (0.5, 0.5, 0.5)
+            r2 = (x[i] - 0.5)^2 + (y[j] - 0.5)^2 + (z[k] - 0.5)^2
+            u_3d[i, j, k] = exp(-20.0 * r2)
+        end
+    end
+end
+
+# Verification: inspect the dimensions of our pre-allocated 3D array
+println("Dimensions of u_3d: ", size(u_3d))  # prints (30, 30, 30)</code></pre>
+    </div>
+  </section>
+
+  <!-- ══ BASICS: USEFUL BUILT-INS ═════════════════════════════ -->
+  <section class="section" id="basics-builtins">
+    <h2>Useful Built-in Functions</h2>
+    <p>
+      A short reference of the everyday functions you will use to
+      <em>inspect</em>, <em>summarise</em>, and <em>reshape</em> arrays.
+      All of these live in Julia's <code>Base</code> module — they are
+      always available, no <code>using</code> required. Treat this as a
+      cheat-sheet you can come back to.
+    </p>
+
+    <h3>Array inspection</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = rand(3, 4)
+
+size(A)        # (3, 4)
+size(A, 1)     # 3   (number of rows)
+size(A, 2)     # 4   (number of columns)
+length(A)      # 12  (total elements)
+ndims(A)       # 2
+eltype(A)      # Float64</code></pre>
+    </div>
+
+    <h3>Reductions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = [3.0, 1.0, 4.0, 1.0, 5.0, 9.0]
+
+sum(v)           # 23.0
+prod(v)          # 540.0
+minimum(v)       # 1.0
+maximum(v)       # 9.0
+argmin(v)        # 2  (index of minimum)
+argmax(v)        # 6  (index of maximum)
+mean(v)          # 3.833...  (needs Statistics: using Statistics)
+cumsum(v)        # running total
+
+# Along a dimension of a matrix
+A = [1 2; 3 4]
+sum(A, dims=1)   # sum each column  →  [4 6]
+sum(A, dims=2)   # sum each row     →  [3; 7]</code></pre>
+    </div>
+
+    <h3>Reshaping and iteration</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">v = 1:12
+
+reshape(v, 3, 4)    # 3×4 matrix (column-major fill)
+reshape(v, 2, 2, 3) # 3-D array
+
+# Iterating
+for (i, val) in enumerate(v)
+    println(i, " => ", val)
+end
+
+# map / filter
+squares = map(x -> x^2, 1:5)        # [1, 4, 9, 16, 25]
+evens   = filter(x -> x % 2 == 0, 1:10)  # [2, 4, 6, 8, 10]</code></pre>
+    </div>
+
+    <h3>Math constants and common functions</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">π          # 3.14159...  (type \pi + Tab)
+ℯ          # 2.71828...  (type \euler + Tab)
+Inf        # infinity
+NaN        # not a number
+
+abs(-3.0)  # 3.0
+sqrt(9.0)  # 3.0
+cbrt(8.0)  # 2.0
+floor(2.9) # 2.0
+ceil(2.1)  # 3.0
+round(2.5) # 2.0  (banker's rounding)
+clamp(x, lo, hi)  # keep x within [lo, hi]
+
+isnan(NaN)     # true
+isinf(Inf)     # true
+isfinite(1.0)  # true</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Task</th><th>Julia</th></tr></thead>
+        <tbody>
+          <tr><td>Print with newline</td><td><code>println("value = ", x)</code></td></tr>
+          <tr><td>Print without newline</td><td><code>print("x = ", x)</code></td></tr>
+          <tr><td>String interpolation</td><td><code>"x is $(x), x² is $(x^2)"</code></td></tr>
+          <tr><td>Type of value</td><td><code>typeof(x)</code></td></tr>
+          <tr><td>Convert type</td><td><code>Float64(3)</code>, <code>Int(2.0)</code></td></tr>
+          <tr><td>Check type</td><td><code>x isa Float64</code></td></tr>
+          <tr><td>Ternary expression</td><td><code>x > 0 ? "pos" : "non-pos"</code></td></tr>
+          <tr><td>Short-circuit and/or</td><td><code>&amp;&amp;</code> / <code>||</code></td></tr>
+          <tr><td>Element-wise compare</td><td><code>v .== 3</code>, <code>v .&gt; 0</code></td></tr>
+          <tr><td>Find indices where true</td><td><code>findall(v .&gt; 0)</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <strong>Unicode identifiers</strong>
+      Julia accepts Unicode variable names. Type <code>\alpha</code> then Tab to get
+      <code>α</code>, <code>\Delta</code> for <code>Δ</code>, <code>\^2</code> for superscript ².
+      This lets your code look exactly like the math on the page.
+    </div>
+  </section>
+
+  <!-- ══ BASICS: LINEAR ALGEBRA ═══════════════════════════════ -->
+  <section class="section" id="basics-linalg">
+    <h2>Linear Algebra</h2>
+    <p>
+      Most of scientific computing eventually boils down to a linear
+      algebra problem: solve $A\mathbf{x} = \mathbf{b}$, find the
+      eigenvalues of $A$, decompose $A$ into easier-to-work-with factors.
+      Julia's <code>LinearAlgebra</code> standard library wraps the
+      industry-standard BLAS and LAPACK Fortran libraries, so a one-line
+      Julia call is the same code that runs underneath MATLAB, NumPy, R,
+      and most scientific software written in the past 30 years.
+    </p>
+    <p>
+      A few mental models that help in this section:
+    </p>
+    <ul>
+      <li>A matrix can be thought of as a <em>linear function</em> from
+        vectors to vectors: <code>A * x</code> applies the function. Most
+        useful matrices have structure (symmetric, tridiagonal, sparse) —
+        recognising that structure is what makes solving fast.</li>
+      <li>You almost never want to compute <code>inv(A)</code> explicitly.
+        Solving <code>A * x = b</code> is a different (and cheaper)
+        operation than computing the inverse, and Julia gives you the
+        <code>\</code> operator for exactly that.</li>
+      <li>Many algorithms have a <em>factorise once, solve many</em>
+        structure: factor <code>F = lu(A)</code> takes most of the time;
+        each subsequent <code>F \ b</code> is cheap. The same applies to
+        <code>cholesky</code>, <code>qr</code>, <code>svd</code>.</li>
+    </ul>
+    <p>Load <code>LinearAlgebra</code> (standard library — no install needed) for the full feature set:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using LinearAlgebra</code></pre>
+    </div>
+
+    <h3>Basic matrix operations</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [4.0 3.0; 6.0 3.0]
+b = [10.0, 12.0]
+v = [1.0, 2.0, 3.0]
+w = [4.0, 5.0, 6.0]
+
+A * b           # matrix–vector product
+A * A           # matrix–matrix product
+A'              # transpose (adjoint for real matrices)
+A' * A          # A^T A
+
+dot(v, w)       # dot product  = 1*4 + 2*5 + 3*6 = 32
+cross(v, w)     # cross product (3-D only)
+norm(v)         # Euclidean norm  √(1+4+9)
+norm(v, 1)      # 1-norm (sum of abs values)
+norm(v, Inf)    # ∞-norm (max abs value)</code></pre>
+    </div>
+
+    <h3>Solving linear systems — $Ax = b$</h3>
+    <p>
+      The backslash <code>A \ b</code> is Julia's "solve this linear
+      system" operator. It looks at <code>A</code>, picks the right
+      algorithm (LU for general matrices, Cholesky for symmetric positive
+      definite, QR for non-square least squares, sparse direct or iterative
+      for sparse), and returns the solution. This is one of the most
+      pleasant pieces of API in any scientific language — you get the
+      right algorithm without choosing one by hand:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [2.0 1.0; 5.0 7.0]
+b = [11.0, 13.0]
+
+x = A \ b        # solve Ax = b  →  x = [-3.0, 17.0] (approx)
+                 # uses LU factorization automatically
+
+# Verify the solution
+norm(A * x - b)  # should be ≈ 0</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Use \\ not inv()</strong>
+      <code>A \ b</code> is faster and more numerically stable than <code>inv(A) * b</code>.
+      Never compute the inverse explicitly unless you need it for analysis.
+    </div>
+
+    <h3>Factorizations</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [4.0 2.0; 2.0 3.0]   # symmetric positive-definite
+
+F = lu(A)          # LU factorization  (general square)
+F = cholesky(A)    # Cholesky  (symmetric positive-definite)
+F = qr(A)          # QR  (least-squares, rectangular)
+F = svd(A)         # SVD
+
+# Once factorized, solve multiple right-hand sides cheaply
+x1 = F \ b1
+x2 = F \ b2</code></pre>
+    </div>
+
+    <h3>Eigenvalues and eigenvectors</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">A = [2.0 1.0; 1.0 3.0]
+
+vals        = eigvals(A)    # eigenvalues only
+vals, vecs  = eigen(A)      # both: vals[i], vecs[:,i]
+λ_max       = maximum(vals) # spectral radius
+cond(A)                     # condition number</code></pre>
+    </div>
+
+    <h3>Sparse matrices</h3>
+    <p>
+      A finite-difference Laplacian on a 1&nbsp;000 × 1&nbsp;000 grid produces
+      a one-million × one-million matrix. As a dense array that is 8 TB.
+      As a sparse array — five non-zeros per row — it fits in 80 MB.
+      <code>SparseArrays</code> is what makes any non-trivial PDE solve
+      possible. The same <code>\</code>, <code>*</code>, <code>+</code>
+      operators work on sparse matrices, and Julia automatically picks a
+      sparse-aware algorithm:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using SparseArrays
+
+# Build from (row, col, value) triplets
+rows = [1, 2, 3, 1]
+cols = [1, 2, 3, 3]
+vals = [4.0, 5.0, 6.0, 7.0]
+S = sparse(rows, cols, vals, 3, 3)
+
+# Or convert a dense matrix
+A_dense  = [1.0 0.0; 0.0 2.0]
+A_sparse = sparse(A_dense)
+
+# Tridiagonal shortcut
+n = 5
+T = spdiagm(-1 => -ones(n-1),
+             0 =>  2*ones(n),
+             1 => -ones(n-1))
+
+# Sparse solve uses the same \ syntax
+x = T \ b</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operation</th><th>Julia</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Matrix–vector product</td><td><code>A * x</code></td><td>Dense or sparse</td></tr>
+          <tr><td>Transpose</td><td><code>A'</code></td><td>Conjugate transpose; use <code>transpose(A)</code> for non-conjugate</td></tr>
+          <tr><td>Solve $Ax = b$</td><td><code>A \ b</code></td><td>Auto-selects best algorithm</td></tr>
+          <tr><td>Dot product</td><td><code>dot(u, v)</code> or <code>u ⋅ v</code></td><td><code>\cdot</code> + Tab</td></tr>
+          <tr><td>Norm</td><td><code>norm(v)</code></td><td>Euclidean; add <code>p</code> for p-norm</td></tr>
+          <tr><td>Determinant</td><td><code>det(A)</code></td><td>Dense only; avoid for large matrices</td></tr>
+          <tr><td>Eigenvalues</td><td><code>eigvals(A)</code></td><td>Use <code>eigen</code> for vectors too</td></tr>
+          <tr><td>Condition number</td><td><code>cond(A)</code></td><td>Estimates ill-conditioning</td></tr>
+          <tr><td>Rank</td><td><code>rank(A)</code></td><td>Via SVD threshold</td></tr>
+          <tr><td>Trace</td><td><code>tr(A)</code></td><td>Sum of diagonal elements</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ STEP 3 ══════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="setup.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">1 &middot; Install &amp; configure</span>
+    </a>
+    <a class="next" href="packages.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">3 &middot; Existing packages</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 02 &middot; Language basics
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

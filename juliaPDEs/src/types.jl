@@ -42,6 +42,14 @@ Base.@kwdef struct Grid{N}
   space::NTuple{N,Vector{Float64}} = ntuple(i -> collect(range(a[i], b[i], length=numgrid[i])), length(a))
 end
 
+
+struct TestGrid{N,F}
+  grid::Grid{N}
+  bc1::NTuple{N,Function}
+  bc2::NTuple{N,Function}
+  f_init::F
+end
+
 # ── AbstractArray interface ───────────────────────────────────────────────────
 Base.size(s::PDESolution) = size(s.u)
 Base.getindex(s::PDESolution, I...) = s.u[I...]

@@ -72,12 +72,25 @@ N_pts = (70, 70, 70)
 T_end = 0.5
 Nt    = 5000          # number of time steps (same for both versions for a fair comparison)
 
-# Fast version using the parameterized struct from juliaPDEs
+# Fast version using the parameterized struct from juliaPDEs.
+# HeatEquation now takes a TestGrid that bundles the Grid, the Dirichlet BCs
+# (one per axis on each face), and the initial-condition closure.
+zero_bc = (args...) -> 0.0
+heat_testgrid = TestGrid(
+    Grid(
+        a        = (0.0, 0.0, 0.0),
+        b        = (1.0, 1.0, 1.0),
+        stepsize = (1.0 / N_pts[1], 1.0 / N_pts[2], 1.0 / N_pts[3]),
+    ),
+    (zero_bc, zero_bc, zero_bc),                                 # bc1 (lower faces)
+    (zero_bc, zero_bc, zero_bc),                                 # bc2 (upper faces)
+    (x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2)),
+)
+
 fast_prob = HeatEquation(
-    N_grid = N_pts,
-    Nt     = Nt,
-    T      = T_end,
-    f_init = (x, y, z) -> exp(-100 * ((x - 0.5)^2 + (y - 0.5)^2 + (z - 0.5)^2))
+    testgrid = heat_testgrid,
+    Nt       = Nt,
+    T        = T_end,
 )
 
 # Slow version using our abstractly typed struct

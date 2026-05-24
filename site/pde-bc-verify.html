@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BCs &amp; verification &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs</div>
+    <div class="ch-label">Chapter 10</div>
+    <h1>BCs &amp; verification</h1>
+    <p>Manufactured solutions, convergence tables, and a boundary-condition checklist for any dimension.</p>
+  </header>
+  <section class="section" id="step5-verify">
+    <h3>7.3 Verify — Convergence Study</h3>
+    <p>
+      A solver that runs without crashing is not the same as a correct
+      solver. The single most powerful sanity check in numerical analysis
+      is a <strong>convergence study</strong>: pick a problem with a known
+      exact answer, run the solver at several grid resolutions, and check
+      that the error shrinks at the rate the theory predicts.
+    </p>
+    <p>
+      The error of a finite-difference scheme is governed by the order of
+      the spatial discretisation. Our central-difference Laplacian
+      (Rule 1) is <strong>second-order accurate</strong>, meaning:
+    </p>
+
+    $$\|u_h - u_{\text{exact}}\|_\infty = C\,h^p, \quad p = 2 \text{ for central differences}$$
+
+    <p>
+      What does this practically mean? If you halve the grid spacing
+      ($h \to h/2$), the error should drop by a factor of
+      $2^p = 2^2 = 4$. Doing this at three or four resolutions and
+      verifying the ratio is the standard correctness test.
+    </p>
+
+    <h4>The one-liner — <code>convergence_table()</code></h4>
+    <p>
+      <code>juliaPDEs</code> ships a ready-to-use convergence helper in
+      <code>src/poisson.jl</code>. It runs the solver at every resolution in
+      <code>Ns</code>, computes the discrete $L^2$ error against the exact
+      solution stored in <code>PoissonEquation.u_exact</code>, and prints
+      a tidy table with the empirical order $\log_2(e_{N/2} / e_N)$:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function convergence_table(Ns=[10, 20, 40, 80, 160])
+    println(rpad("N", 6), rpad("h", 12), rpad("L² error", 14), "order")
+    println("-"^40)
+    prev_err = NaN
+    for N in Ns
+        sol = solve(PoissonEquation(N=N))
+        h   = sol.problem.L / (N + 1)
+        err = l2_error(sol)
+        ord = isnan(prev_err) ? "—" : string(round(log2(prev_err / err), digits=2))
+        println(rpad(N, 6),
+                rpad(round(h,   digits=6),   12),
+                rpad(round(err, sigdigits=4), 14),
+                ord)
+        prev_err = err
+    end
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs
+
+convergence_table()                            # default sweep N = 10, 20, 40, 80, 160
+convergence_table([16, 32, 64, 128, 256])     # custom doubling sequence
+
+# N     h           L² error      order
+# ----------------------------------------
+# 10    0.090909    0.00825       —
+# 20    0.047619    0.00207       2.0
+# 40    0.02439     0.000517      2.0
+# 80    0.012346    0.000129      2.0
+# 160   0.006211    3.23e-5       2.0</code></pre>
+    </div>
+
+    <p>
+      The <code>order</code> column is the observed convergence rate
+      $\log_2(e_{N/2}/e_N)$ — it lands on <strong>2.00</strong> for the
+      5-point Laplacian, exactly as predicted by the truncation analysis.
+      If your order column drifts away from 2 (or worse, stalls near 1.0),
+      look for off-by-ones in the grid, mismatched boundary handling, or a
+      forcing term that doesn't match the chosen exact solution.
+    </p>
+
+    <h4>What the helper does under the hood</h4>
+    <p>
+      Sometimes you want the raw error values for a custom plot, or you want
+      to compare against a different exact solution. Doing the same study
+      by hand uses tools you already know — <code>solve</code>,
+      <code>l2_error</code>, a <code>for</code>-loop, and <code>Plots</code>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — manual version</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+Ns  = [10, 20, 40, 80, 160]
+hs  = Float64[]
+err = Float64[]
+
+for N in Ns
+    sol = solve(PoissonEquation(N=N))
+    h   = sol.problem.L / (N + 1)
+    push!(hs,  h)
+    push!(err, l2_error(sol))
+    ratio = length(err) > 1 ? round(err[end-1] / err[end], digits=2) : "—"
+    println("N=", rpad(N, 4),
+            "  h=",     round(h,         digits=5),
+            "  L²err=", round(err[end],  sigdigits=3),
+            "  ratio=", ratio)
+end
+# ratio ≈ 4.0 each row confirms 2nd-order convergence
+
+plot(hs, err, xscale=:log10, yscale=:log10, marker=:o, lw=2,
+     xlabel="h", ylabel="L² error", title="Convergence study", label="Numerical")
+plot!(hs, err[1] .* (hs ./ hs[1]).^2, ls=:dash, label="O(h²) reference")</code></pre>
+    </div>
+
+    <figure class="figure">
+      <img src="output/figures/convergence_study.png"
+           alt="Convergence study: log-log error vs h on the left, solver runtime vs grid size on the right."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 7.</strong> Convergence and scaling.
+        <em>Left:</em> the L∞ error follows the slope-2 reference line on
+        the log–log plot — that is the visual signature of $O(h^2)$
+        accuracy. <em>Right:</em> solver wall-clock time vs grid size for
+        the sparse direct solve — sub-quadratic in $N$, the typical
+        behavior of UMFPACK on 2-D Laplacians.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_convergence_study()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Colors
+
+function fig_convergence_study()
+    Ns = [10, 20, 40, 80, 160]
+    hs       = Float64[]
+    errors   = Float64[]
+    runtimes = Float64[]
+
+    poisson_exact(x, y) = sin(π*x) * sin(π*y)
+
+    for N in Ns
+        h  = 1.0 / (N + 1)
+        t0 = time()
+        sol = solve(PoissonEquation(N_grid=(N, N)))
+        xs, ys, U = sol.x, sol.y, sol.u
+        t1 = time()
+        U_exact = [poisson_exact(x, y) for y in ys, x in xs]
+        push!(hs, h)
+        push!(errors, maximum(abs.(U .- U_exact)))
+        push!(runtimes, t1 - t0)
+    end
+
+    ref_h2 = errors[1] .* (hs ./ hs[1]).^2
+
+    p1 = plot(hs, errors, xscale=:log10, yscale=:log10,
+              marker=:circle, ms=7, lw=2.2, color=:dodgerblue,
+              label="L∞ error (numerical)",
+              xlabel="grid spacing h",
+              ylabel="max |u_num − u_exact|",
+              title="Convergence — Poisson 2D",
+              grid=true, gridalpha=0.3, framestyle=:box,
+              legend=:bottomright)
+    plot!(p1, hs, ref_h2, ls=:dash, lw=1.8, color=:firebrick,
+          label="O(h²) reference")
+
+    p2 = plot(Ns, runtimes, marker=:diamond, ms=7, lw=2.2,
+              color=:seagreen, xscale=:log10, yscale=:log10,
+              xlabel="grid points per side N",
+              ylabel="solve time (s)",
+              title="Sparse direct solver scaling",
+              grid=true, gridalpha=0.3, framestyle=:box, legend=false)
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
+    savefig(plt, "convergence_study.png")
+end
+
+fig_convergence_study()</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- ══ 7.4  Boundary Conditions in N Dimensions ═══════════ -->
+  <section class="section" id="step5-bc">
+    <h3>7.4 Boundary Conditions — One Tiny Helper, Any Dimension</h3>
+
+    <p>
+      The boundary nodes of a Cartesian-grid PDE are <em>not</em> a
+      separate data structure — they are simply the outermost slices of
+      the same array <code>u</code> that holds the interior. The only
+      thing the solver actually needs is a way to <strong>address one
+      face at a time</strong> without writing a different slice expression
+      for every dimension. Two small functions do the whole job.
+    </p>
+
+    <h4>The naming problem — compass words run out</h4>
+    <p>
+      In 2D, students naturally reach for compass labels: north, south,
+      east, west. In 3D you can still say <em>top</em>, <em>bottom</em>,
+      <em>north</em>, <em>south</em>, <em>east</em>, <em>west</em>, but
+      the convention is already shaky (does "north" mean +y or +z?). In
+      4D you have eight faces; in 5D, ten. English ran out of names at
+      3D — mathematics never did.
+    </p>
+
+    <p>
+      The boundary of a box $\Omega = [0, L_1] \times \cdots \times [0, L_N]$
+      consists of exactly $2N$ flat faces, each characterised by fixing
+      one coordinate $x_i$ at either its minimum or maximum. So we label
+      every face by a pair $(i, \sigma)$ with $i \in \{1, \dots, N\}$ and
+      $\sigma \in \{\mathrm{lo}, \mathrm{hi}\}$ — and the same vocabulary
+      covers every dimension:
+    </p>
+
+    <div style="overflow-x:auto;">
+      <table class="perf-table">
+        <thead>
+          <tr><th>Geometric intuition</th><th>Axis-side label</th><th>Array slice</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1D — left endpoint</td>          <td>(1, :lo)</td><td><code>u[1]</code></td></tr>
+          <tr><td>1D — right endpoint</td>         <td>(1, :hi)</td><td><code>u[end]</code></td></tr>
+          <tr><td>2D — west edge ($x = 0$)</td>    <td>(1, :lo)</td><td><code>u[1, :]</code></td></tr>
+          <tr><td>2D — east edge ($x = L_x$)</td>  <td>(1, :hi)</td><td><code>u[end, :]</code></td></tr>
+          <tr><td>2D — south edge ($y = 0$)</td>   <td>(2, :lo)</td><td><code>u[:, 1]</code></td></tr>
+          <tr><td>2D — north edge ($y = L_y$)</td> <td>(2, :hi)</td><td><code>u[:, end]</code></td></tr>
+          <tr><td>3D — bottom face ($z = 0$)</td>  <td>(3, :lo)</td><td><code>u[:, :, 1]</code></td></tr>
+          <tr><td>3D — top face ($z = L_z$)</td>   <td>(3, :hi)</td><td><code>u[:, :, end]</code></td></tr>
+          <tr><td>5D — fifth axis, low end</td>    <td>(5, :lo)</td><td><code>u[:, :, :, :, 1]</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Two helpers — that is the whole abstraction</h4>
+    <p>
+      Julia ships <code>selectdim(u, axis, idx)</code>, which returns a
+      <em>view</em> (no copy) of array <code>u</code> with the given axis
+      fixed at index <code>idx</code>. Wrap it once with our $(i,\sigma)$
+      labels and you are done:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the entire helper</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># A view of the boundary face on `axis` at `:lo` or `:hi`.
+face(u, axis::Int, side::Symbol) =
+    selectdim(u, axis, side === :lo ? 1 : size(u, axis))
+
+# A view of the FIRST INTERIOR layer right next to that face — needed for
+# Neumann (copy interior outward) and Periodic (wrap around).
+face_interior(u, axis::Int, side::Symbol) =
+    selectdim(u, axis, side === :lo ? 2 : size(u, axis) - 1)</code></pre>
+    </div>
+
+    <p>
+      That is it. No new struct, no abstract type hierarchy, no dispatch
+      table. Every common boundary condition is now a one-liner regardless
+      of the array's dimension — because <code>selectdim</code> already
+      knows how to slice in any direction.
+    </p>
+
+    <h4>Every common BC as a one-liner</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Dirichlet (fixed value)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># u = 0 on the lower x-face
+face(u, 1, :lo) .= 0.0
+
+# u = sin(y) on the upper x-face of a 2D array (varying value)
+face(u, 1, :hi) .= sin.(y)
+
+# u = T_hot on every face of any N-D box
+for axis in 1:ndims(u), side in (:lo, :hi)
+    face(u, axis, side) .= T_hot
+end</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Neumann (zero flux / insulated wall)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># ∂u/∂n = 0  →  copy the first interior layer onto the boundary
+face(u, 2, :lo) .= face_interior(u, 2, :lo)
+face(u, 2, :hi) .= face_interior(u, 2, :hi)
+
+# Non-zero flux ∂u/∂n = g uses the same line plus a ±h·g term:
+face(u, 1, :lo) .= face_interior(u, 1, :lo) .- h * g</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Periodic (wrap-around)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Mirror the opposite side's interior neighbor onto each face
+face(u, 1, :lo) .= face_interior(u, 1, :hi)
+face(u, 1, :hi) .= face_interior(u, 1, :lo)</code></pre>
+    </div>
+
+    <h4>Sealing every face of a 3D box — the noisy version vs the new one</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — before</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">u[1, :, :] .= 0;  u[end, :, :] .= 0
+u[:, 1, :] .= 0;  u[:, end, :] .= 0
+u[:, :, 1] .= 0;  u[:, :, end] .= 0</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — after</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">for axis in 1:3, side in (:lo, :hi)
+    face(u, axis, side) .= 0
+end
+# …or even shorter, and works for any dimension:
+foreach(s -> (face(u, s[1], s[2]) .= 0), Iterators.product(1:ndims(u), (:lo, :hi)))</code></pre>
+    </div>
+
+    <h4>Mixing BC kinds — channel flow in 2D</h4>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — example mixed BCs</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Streamwise (axis 1) periodic; walls (axis 2) no-slip Dirichlet
+function apply_channel_bc!(u)
+    face(u, 1, :lo) .= face_interior(u, 1, :hi)   # periodic
+    face(u, 1, :hi) .= face_interior(u, 1, :lo)
+    face(u, 2, :lo) .= 0.0                         # no-slip bottom
+    face(u, 2, :hi) .= 0.0                         # no-slip top
+end</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>What this design buys you</strong>
+      <ol>
+        <li><em>No new data structure.</em> Boundary values live in the
+          same array as the interior — exactly as you already think about
+          them mathematically.</li>
+        <li><em>Dimension-agnostic.</em> <code>face</code> and
+          <code>face_interior</code> work in 1D, 2D, 3D, or 7D without
+          changing a line.</li>
+        <li><em>Readable physics.</em> Each BC reads close to its math:
+          "the lo-face equals zero" or "the hi-face mirrors its lo
+          interior".</li>
+      </ol>
+    </div>
+
+    <h4>Caveat — Cartesian boxes only</h4>
+    <p>
+      Everything above relies on the domain being a tensor product of
+      intervals: <em>each face is a single coordinate hyperplane</em>.
+      Real engineering geometries — an airfoil cross-section, a brain
+      MRI volume, a porous-rock sample — are not boxes. There each
+      boundary node has to be identified individually from an unstructured
+      mesh, and the outward normal varies from point to point. That is the
+      job of the meshing layer covered next in
+      <a href="gmsh.html">7.5 — Mesh → matrix with Gmsh</a>.
+    </p>
+  </section>
+
+
+  <!-- ══ STEP 6 ══════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="pde-ns.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">9 &middot; Navier&ndash;Stokes</span>
+    </a>
+    <a class="next" href="gmsh.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">11 &middot; Meshes with Gmsh</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 10 &middot; BCs &amp; verification
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

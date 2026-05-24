@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wave equation &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs</div>
+    <div class="ch-label">Chapter 07</div>
+    <h1>Wave equation</h1>
+    <p>Leap-frog in any dimension; the CFL condition and how it tightens as you add axes.</p>
+  </header>
+  <section class="section" id="pde-wave">
+    <h3>Example B — Wave Equation (Hyperbolic)</h3>
+    <p>
+      The wave equation describes any disturbance that <em>propagates</em>
+      with a finite speed — sound in air, light, vibrations on a string,
+      seismic shocks. The classic 1-D version is what you get from
+      modelling a tightly stretched guitar string: the acceleration of the
+      string at every point is proportional to its local curvature, with
+      proportionality $c^2$ (the wave speed squared).
+    </p>
+    <p>
+      Mathematically, the wave equation looks <em>almost</em> like the
+      heat equation — the right-hand side is exactly the same Laplacian
+      $\partial^2 u/\partial x^2$ — but the left-hand side is now a
+      <em>second</em> time derivative instead of a first. That single
+      change has two big consequences:
+    </p>
+    <ol>
+      <li>We need an initial condition for both $u$ and $\dot u$, because
+        a second-order ODE in time needs two starting values.</li>
+      <li>The natural time-stepping scheme is leap-frog, which keeps
+        track of <em>three</em> time levels — past, present, future —
+        instead of the two we had for heat.</li>
+    </ol>
+    <p>
+      Rule 1 (the spatial stencil) is applied identically — only the time
+      discretisation changes. Read the cards below the same way as for
+      heat: textbook equation on the left, Julia code on the right, one
+      transformation at a time.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the PDE from the paper</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper / textbook</span>
+            $$\frac{\partial^2 u}{\partial t^2} = c^2\,\frac{\partial^2 u}{\partial x^2}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              BCs: $u(0,t) = u(L,t) = 0$ (fixed ends — like a guitar string)<br>
+              ICs: $u(x,0) = u_0(x)$, $\;\dot{u}(x,0) = 0$ (plucked, then released)<br>
+              Parameter: $c$ = wave speed
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — three time levels needed</span>
+            <pre># Because the PDE has ∂²u/∂t², we need:
+#   u_prev = u^{n-1}  (one step ago)
+#   u_curr = u^n      (current)
+#   u_next = u^{n+1}  (what we compute)
+u_prev = initial_condition.(x)
+u_curr = copy(u_prev)   # explained in step 5</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">the right side is identical to Example A — apply Rule 1 (central difference) to c²∂²u/∂x²</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Right side: c² ∂²u/∂x² — same Rule 1 stencil, scaled by c²</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form (identical to heat equation)</span>
+            $$c^2\,\frac{\partial^2 u}{\partial x^2} \;\approx\; \frac{c^2}{\Delta x^2}\!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — Rule 1 scaled by c²</span>
+            <pre>right_side = (c^2 / dx^2) .*
+  (u_curr[3:end] .- 2 .* u_curr[2:end-1]
+                 .+ u_curr[1:end-2])
+# Same stencil as Example A — only α replaced by c²</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">now discretize the LEFT side — ∂²u/∂t² needs a central difference across three time levels</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Left side: approximate ∂²u/∂t² with a central difference in time</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Discrete form</span>
+            $$\frac{\partial^2 u}{\partial t^2} \;\approx\; \frac{u_i^{n+1} - 2u_i^n + u_i^{n-1}}{\Delta t^2}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Compare to Rule 1: the same $[+1,\,-2,\,+1]$ pattern — but across
+              <em>time</em> instead of space.
+              Solve for $u_i^{n+1}$:
+              $\;u_i^{n+1} = 2u_i^n - u_i^{n-1} + \Delta t^2 \cdot(\ldots)$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — solve for u_next</span>
+            <pre># u^{n+1} = 2u^n - u^{n-1} + Δt² × right_side
+u_next[2:end-1] .=
+  2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+  dt^2 .* right_side</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">substitute and simplify — define λ = c·Δt/Δx to write the update compactly</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Combine both sides into the leap-frog update rule</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Full discrete update rule</span>
+            $$u_i^{n+1} = 2u_i^n - u_i^{n-1}
+              + \underbrace{\!\left(\frac{c\,\Delta t}{\Delta x}\right)^{\!2}}_{\lambda^2}
+              \!\left(u_{i+1}^n - 2u_i^n + u_{i-1}^n\right)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Notice: the space stencil $[+1,-2,+1]$ is <em>identical</em> to the
+              heat equation — only the time part differs.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — compact with λ²</span>
+            <pre>λ = (c * dt / dx)^2   # CFL number squared
+
+u_next[2:end-1] .=
+  2 .* u_curr[2:end-1] .- u_prev[2:end-1] .+
+  λ .* (u_curr[3:end] .- 2 .* u_curr[2:end-1]
+                       .+ u_curr[1:end-2])</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">handle the zero initial velocity condition, then choose a stable Δt</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Zero initial velocity and CFL condition</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Initial condition for velocity</span>
+            $$\frac{\partial u}{\partial t}(x, 0) = 0
+              \quad\Longrightarrow\quad u^{-1} = u^0$$
+            <p style="margin-top:10px; font-size:0.84rem; color:#4a6a8a;">
+              <strong>CFL stability:</strong>
+              $\lambda = c\,\Delta t / \Delta x \leq 1$
+              $\;\Longrightarrow\;$
+              $\Delta t \leq \Delta x / c$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia</span>
+            <pre># Zero velocity IC: u_prev = u_curr at t=0
+# (the update formula gives the right result)
+u_prev = copy(u_curr)
+
+# CFL: λ = c·dt/dx ≤ 1
+dt = 0.4 * dx / c    # λ = 0.4 < 1  ✓</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">assemble the complete solver</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">6</div>
+          <span class="deriv-title">Assembled solver</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+# Triangular pluck as the initial condition
+pluck(x) = x &lt; 0.5 ? 2x : 2(1 - x)
+
+prob = WaveEquation(
+    N_grid = (300,),
+    c      = 1.0,
+    T      = 1.5,
+    Nt     = 600,
+    f_init = pluck,
+)
+
+sol = solve(prob)        # dispatches to solve(::WaveEquation) — leap-frog inside
+
+plot(sol.x, sol.u, xlabel="x", ylabel="u(x,T)", title="Wave equation  T=1.5", lw=2)</code></pre>
+    </div>
+
+    <figure class="figure">
+      <img src="output/figures/wave_equation.png"
+           alt="Wave equation: snapshots showing two pulses propagating in opposite directions, plus a space–time heatmap revealing characteristic lines."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 4.</strong> Wave equation. <em>Left:</em> snapshots
+        showing the initial pulse split into a left- and a right-moving
+        copy that bounce off the fixed ends — d'Alembert's solution in
+        action. <em>Right:</em> the space–time heatmap shows the
+        characteristic lines $x \pm c\,t = \mathrm{const}$ as the bright
+        diagonals along which information travels.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_wave_equation()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots, Printf, Colors
+
+function fig_wave_equation()
+    sol = solve(WaveEquation(N_grid=(300,), Nt=600, T=1.5,
+                              f_init = x -> x < 0.5 ? 2x : 2(1 - x)))
+    x, snapshots, U_hist, t_grid = sol.x, sol.snapshots, sol.U_hist, sol.t_grid
+
+    times_sorted = sort(collect(keys(snapshots)))
+    n    = length(times_sorted)
+    cmap = cgrad(:viridis, range(0.1, 0.9, length=n))
+
+    p1 = plot(xlabel="x", ylabel="u(x, t)",
+              title="Wave Equation:  ∂²u/∂t² = c² ∇²u",
+              legend=:topright, grid=true, gridalpha=0.3,
+              ylim=(-1.1, 1.1), framestyle=:box)
+    hline!(p1, [0], color=:gray, lw=0.5, label="")
+    for (i, tt) in enumerate(times_sorted)
+        plot!(p1, x, snapshots[tt], lw=2.0, color=cmap[i],
+              label=@sprintf("t = %.2f", tt))
+    end
+
+    # Run a longer simulation for the space-time plot
+    sol_long = solve(WaveEquation(N_grid=(300,), Nt=1600, T=4.0,
+                                  f_init = x -> x < 0.5 ? 2x : 2(1 - x)))
+    U_long, t_long = sol_long.U_hist, sol_long.t_grid
+
+    p2 = heatmap(t_long, x, U_long, c=:RdBu, clims=(-1, 1),
+                 xlabel="time t", ylabel="x",
+                 title="Space-time: characteristic lines",
+                 colorbar_title="u")
+
+    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
+    savefig(plt, "wave_equation.png")
+end
+
+fig_wave_equation()</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE B-2: 2D WAVE EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-wave-2d">
+    <h3>Wave Equation — 2D</h3>
+    <p>
+      The wave solver, like the heat solver, is dimension-agnostic. There is
+      one parametric struct <code>WaveEquation{N, F}</code> in
+      <code>src/wave.jl</code>; for 2D you pass a 2-tuple for
+      <code>N_grid</code> and Julia specializes the leap-frog loop for
+      $N = 2$. The struct definition:
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/wave.jl (struct, dimension-free)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct WaveEquation{N, F} &lt;: HyperbolicProblem
+    N_grid::NTuple{N, Int}                                       # endpoint-inclusive grid
+    a::NTuple{N, Float64} = ntuple(_ -> 0.0, length(N_grid))     # lower bound per axis
+    b::NTuple{N, Float64} = ntuple(_ -> 1.0, length(N_grid))     # upper bound per axis
+    Nt::Int    = 300
+    T::Float64 = 1.0
+    c::Float64 = 1.0
+    f_init::F  = x -> sin(π * x)                                 # default is 1D
+end</code></pre>
+    </div>
+
+    <p>The PDE and its leap-frog discretisation (CFL: $\lambda_x + \lambda_y \le 1$):</p>
+    $$\frac{\partial^2 u}{\partial t^2} = c^2\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right)$$
+    $$u_{i,j}^{n+1} = 2u_{i,j}^n - u_{i,j}^{n-1} + \lambda_x\,\delta_x^2 u^n + \lambda_y\,\delta_y^2 u^n$$
+    <p>where $\lambda_x = (c\,\Delta t/\Delta x)^2$ and $\lambda_y = (c\,\Delta t/\Delta y)^2$.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — usage (2D)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+prob = WaveEquation(
+    N_grid = (100, 100),                                # ⇒ N = 2
+    Nt     = 300,
+    T      = 1.0,
+    c      = 1.0,
+    f_init = (x, y) -> exp(-80 * ((x - 0.5)^2 + (y - 0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 100×100
+
+heatmap(sol.x, sol.y, sol.u',
+        xlabel="x", ylabel="y", title="2D Wave  t=$(sol.t)",
+        color=:RdBu, aspect_ratio=1, clims=(-1,1))</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE B-3: 3D WAVE EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-wave-3d">
+    <h3>Wave Equation — 3D</h3>
+    <p>
+      No new struct, no new solver — pass a 3-tuple for <code>N_grid</code>
+      and a 3-arg <code>f_init</code> and Julia compiles the leap-frog loop
+      specialized for $N = 3$. The CFL tightens to
+      $\lambda_x+\lambda_y+\lambda_z\le 1$; keep <code>N_grid ≤ (50,50,50)</code>
+      — memory scales as $N^3$.
+    </p>
+
+    <p>The 3D wave equation and its 7-point leap-frog stencil:</p>
+    $$\frac{\partial^2 u}{\partial t^2} = c^2\!\left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2}\right)$$
+    $$u_{i,j,k}^{n+1} = 2u_{i,j,k}^n - u_{i,j,k}^{n-1} + \lambda_x\,\delta_x^2 u^n + \lambda_y\,\delta_y^2 u^n + \lambda_z\,\delta_z^2 u^n$$
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — usage (3D, same WaveEquation struct)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+prob = WaveEquation(
+    N_grid = (40, 40, 40),                              # ⇒ N = 3
+    Nt     = 100,
+    T      = 0.5,
+    c      = 1.0,
+    f_init = (x, y, z) -> exp(-80 * ((x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)),
+)
+sol = solve(prob)                                       # PDESolution — 40×40×40
+
+# Plot a mid-plane z-slice:
+mid = div(prob.N_grid[3], 2)
+heatmap(sol.x, sol.y, sol.u[:, :, mid]',
+        title="3D Wave — z=$(round(sol.z[mid], digits=2))  t=$(sol.t)",
+        xlabel="x", ylabel="y", color=:RdBu, aspect_ratio=1, clims=(-1,1))</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE C: POISSON EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="pde-heat.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">6 &middot; Heat equation</span>
+    </a>
+    <a class="next" href="pde-poisson.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">8 &middot; Poisson equation</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 07 &middot; Wave equation
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

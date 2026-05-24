@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poisson equation &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+    <a href="overview.html"><span class="ch-num">00</span>Overview</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+  </nav>
+</aside>
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Solve PDEs</div>
+    <div class="ch-label">Chapter 08</div>
+    <h1>Poisson equation</h1>
+    <p>Steady-state, sparse Laplacian via Kronecker sum, and a clean convergence study.</p>
+  </header>
+  <section class="section" id="pde-poisson">
+    <h3>Example C — Poisson Equation (Elliptic)</h3>
+    <p>
+      Poisson's equation $-\nabla^2 u = f$ shows up everywhere in
+      physics. It governs the steady-state temperature distribution in a
+      body with heat sources (the heat equation in equilibrium), the
+      electric potential created by a charge density (Gauss's law), the
+      pressure field that keeps an incompressible fluid divergence-free
+      (we will see this inside Navier–Stokes), and the deflection of a
+      thin membrane under load. Same equation, different physical
+      meanings — that is part of why mastering it pays off.
+    </p>
+    <p>
+      Computationally, Poisson is fundamentally different from heat and
+      wave: there is <em>no time</em>. The unknown $u$ is a single static
+      field defined for all points at once. Instead of a time loop that
+      marches each point forward step by step, we apply Rule 1 (the
+      Laplacian stencil) <em>simultaneously</em> at every interior grid
+      point. That gives one big linear equation per grid point — together
+      they form the system $A\mathbf{u} = \mathbf{b}$, which we solve in
+      one shot with Julia's backslash operator.
+    </p>
+    <p>
+      The key new idea is therefore <strong>matrix assembly</strong>:
+      turning the stencil into a sparse matrix $A$ whose row $k$ encodes
+      the equation centred on grid point $k$. Get this right once and the
+      same pattern reappears in every elliptic, implicit, or steady
+      problem you will solve.
+    </p>
+
+    <div class="deriv-flow">
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">1</div>
+          <span class="deriv-title">Write down the PDE — notice there is no time derivative</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Paper / textbook</span>
+            $$-\nabla^2 u(x,y) = f(x,y), \quad (x,y) \in [0,L]^2$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              BC: $u = 0$ on all four walls<br>
+              Test case (known exact answer):<br>
+              &ensp;$f(x,y) = 2\pi^2\sin(\pi x)\sin(\pi y)$<br>
+              &ensp;$u_{\text{exact}}(x,y) = \sin(\pi x)\sin(\pi y)$
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — grid and source term</span>
+            <pre>N  = 50
+h  = 1.0 / (N + 1)
+xs = range(h, 1-h, length=N)
+ys = range(h, 1-h, length=N)
+
+# Source term matrix F[j,i] = f(xs[i], ys[j])
+F = [2π^2*sin(π*x)*sin(π*y)
+     for y in ys, x in xs]</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">expand ∇² in 2D and apply Rule 1 at every interior node (i, j)</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">2</div>
+          <span class="deriv-title">Apply the 5-point stencil at each node — this gives one equation per grid point</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Rule 1 applied in x and y</span>
+            $$-\frac{u_{i+1,j}+u_{i-1,j}+u_{i,j+1}+u_{i,j-1}-4u_{i,j}}{h^2} = f_{i,j}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              There are $N^2$ such equations (one per interior point).
+              Each involves up to 5 unknowns.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">What this means structurally</span>
+            <pre># N² unknowns, N² equations
+# → one large sparse linear system  A·u = b
+#
+# A is sparse: each row has ≤ 5 nonzeros
+#   diagonal:     4/h²  (the -2u_i term ×2)
+#   off-diagonals: -1/h² (the +1 neighbor terms)
+#
+# Solve once:  u = A \ b</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">stack all N² equations into matrix form using Kronecker products</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">3</div>
+          <span class="deriv-title">Build the sparse matrix A from 1D pieces using Kronecker products</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Matrix construction</span>
+            $$T_{1D} = \frac{1}{h^2}\begin{pmatrix}-2&1&&\\1&-2&1&\\&\ddots&\ddots&\\&&1&-2\end{pmatrix}$$
+            $$A = -(I_N \otimes T_{1D} + T_{1D} \otimes I_N)$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              $\otimes$ is the Kronecker product — it "tiles" the 1D stencil
+              across all rows and columns of the 2D grid.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia — sparse assembly</span>
+            <pre>using SparseArrays, LinearAlgebra
+
+e   = ones(N)
+T1D = spdiagm(
+   0 => -2 .* e,
+   1 =>  e[1:end-1],   # super-diagonal
+  -1 =>  e[1:end-1])   # sub-diagonal
+T1D ./= h^2
+
+I_N = sparse(I, N, N)
+A = -(kron(I_N, T1D) + kron(T1D, I_N))</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">flatten the source term to a vector b, then call Julia's backslash solver</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">4</div>
+          <span class="deriv-title">Solve A·u = b — Julia's \ calls a sparse direct solver automatically</span>
+        </div>
+        <div class="deriv-panels">
+          <div class="deriv-math-panel">
+            <span class="deriv-panel-label">Linear system</span>
+            $$A\,\mathbf{u} = \mathbf{b}
+              \quad\Longrightarrow\quad
+              \mathbf{u} = A \backslash \mathbf{b}$$
+            <p style="margin-top:8px; font-size:0.84rem; color:#4a6a8a;">
+              Julia's <code>\</code> detects that $A$ is sparse and uses
+              SuiteSparse's UMFPACK solver.
+              One call — no iteration needed.
+            </p>
+          </div>
+          <div class="deriv-code-panel">
+            <button class="copy-btn">Copy</button>
+            <span class="deriv-panel-label">Julia</span>
+            <pre># b = F flattened to a column vector
+b = vec(F)
+
+# Solve A·u = b  →  u = A\b
+u_vec = A \ b
+
+# Reshape the solution back to N×N
+u = reshape(u_vec, N, N)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="deriv-connector">assemble the complete solver and verify against the exact solution</div>
+
+      <div class="deriv-card">
+        <div class="deriv-card-head">
+          <div class="deriv-num">5</div>
+          <span class="deriv-title">Assembled solver with verification</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+# 1. Bundle the problem — source term f and known exact solution u_exact
+prob = PoissonEquation(
+    N_grid  = (50, 50),                                     # 50×50 interior grid
+    f       = (x, y) -&gt; 2π^2 * sin(π*x) * sin(π*y),         # right-hand side
+    u_exact = (x, y) -&gt; sin(π*x) * sin(π*y),                # for verification
+)
+
+# 2. One call — `solve` dispatches on PoissonEquation, builds the sparse Laplacian,
+#               and returns a PDESolution wrapping the 2-D u(x,y).
+sol = solve(prob)
+
+# 3. Verification against the analytic solution
+println("L∞ error = ", l2_error(sol))                        # ≈ O(h²)
+
+heatmap(sol.x, sol.y, sol.u, c=:viridis, aspect_ratio=:equal,
+        xlabel="x", ylabel="y", title="Poisson solution u(x,y)")</code></pre>
+    </div>
+
+    <figure class="figure">
+      <img src="output/figures/poisson_equation.png"
+           alt="Poisson equation: source term, solution heatmap, and 3-D surface."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure 5.</strong> Poisson equation, three views.
+        <em>Left:</em> the source term $f(x,y)$. <em>Centre:</em> the
+        steady-state solution $u(x,y)$ — same shape as the source but
+        smoother and rescaled. <em>Right:</em> the same solution as a
+        3-D surface, useful for spotting peaks and saddles.
+      </figcaption>
+    </figure>
+
+    <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
+      <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
+        How this figure was generated (Julia)
+      </summary>
+      <div class="code-block" style="margin-top:10px;">
+        <div class="code-header"><span class="code-lang">julia — fig_poisson_equation()</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using Plots
+
+function fig_poisson_equation()
+    prob = PoissonEquation(
+        N_grid  = (50, 50),
+        f       = (x, y) -> 2π^2 * sin(π*x) * sin(π*y),
+        u_exact = (x, y) -> sin(π*x) * sin(π*y),
+    )
+    sol = solve(prob)
+    xs, ys, U = sol.x, sol.y, sol.u
+    F = [prob.f(x, y) for y in ys, x in xs]
+
+    p1 = heatmap(xs, ys, F, c=:coolwarm,
+                 xlabel="x", ylabel="y",
+                 title="Source term  f(x,y)", aspect_ratio=:equal)
+    p2 = heatmap(xs, ys, U, c=:viridis,
+                 xlabel="x", ylabel="y",
+                 title="Solution  u(x,y)", aspect_ratio=:equal)
+    p3 = surface(xs, ys, U, c=:viridis, camera=(40, 30),
+                 xlabel="x", ylabel="y", zlabel="u",
+                 title="3D view of u(x,y)")
+
+    plt = plot(p1, p2, p3, layout=(1, 3), size=(1300, 480), dpi=150,
+               plot_title="Poisson Equation:  −∇²u = f   (steady-state, no time)",
+               plot_titlefontsize=14)
+    savefig(plt, "poisson_equation.png")
+end
+
+fig_poisson_equation()</code></pre>
+      </div>
+    </details>
+
+    <h3>Verifying the Solver — <code>l2_error</code> &amp; <code>convergence_table</code></h3>
+    <p>
+      A Poisson solver that runs without crashing is not the same as one that
+      is correct. The 5-point stencil is provably second-order accurate, so
+      doubling the resolution should cut the $L^2$ error by a factor of 4.
+      The package ships two helpers in <code>src/poisson.jl</code> that make
+      this check a one-liner.
+    </p>
+
+    <p>
+      <strong><code>l2_error(sol)</code></strong> compares the numerical
+      solution against the exact solution stored in
+      <code>sol.problem.u_exact</code> and returns the discrete $L^2$ norm of
+      the error:
+    </p>
+    $$\|e_h\|_{L^2} \;=\; h \sqrt{\sum_{i,j} \bigl(u_{ij} - u_{\text{exact}}(x_i, y_j)\bigr)^2}$$
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (helper)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function l2_error(sol::PDESolution{T, 2}) where T
+    p = sol.problem
+    isnothing(p.u_exact) && return nothing   # nothing to compare against
+    N = size(sol, 1);  h = p.L / (N + 1)
+    err2 = 0.0
+    for j in 1:N, i in 1:N
+        e = sol[i, j] - p.u_exact(sol.x[i], sol.y[j])
+        err2 += e^2
+    end
+    return h * sqrt(err2)          # discrete L² norm ≈ ‖e‖_{L²}
+end</code></pre>
+    </div>
+
+    <p>
+      <strong><code>convergence_table(Ns)</code></strong> wraps a loop around
+      that: it solves the default test problem at each $N$ in <code>Ns</code>,
+      collects $\|e_h\|_{L^2}$, and prints the empirical convergence order
+      $\log_2\!\left(\|e_{h/2}\| / \|e_h\|\right)$ next to each row.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/poisson.jl (helper)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">function convergence_table(Ns=[10, 20, 40, 80, 160])
+    println(rpad("N", 6), rpad("h", 12), rpad("L² error", 14), "order")
+    println("-"^40)
+    prev_err = NaN
+    for N in Ns
+        sol = solve(PoissonEquation(N=N))
+        h   = sol.problem.L / (N + 1)
+        err = l2_error(sol)
+        ord = isnan(prev_err) ? "—" : string(round(log2(prev_err / err), digits=2))
+        println(rpad(N, 6),
+                rpad(round(h,   digits=6),   12),
+                rpad(round(err, sigdigits=4), 14),
+                ord)
+        prev_err = err
+    end
+end</code></pre>
+    </div>
+
+    <p>Run it from the REPL — no arguments needed for the default sweep:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — usage</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs
+
+# Single-grid error:
+sol = solve(PoissonEquation(N=40))
+@show l2_error(sol)        # ≈ 5.17e-04
+
+# Full sweep — runs N = 10, 20, 40, 80, 160 by default
+convergence_table()
+
+# Or pick your own sequence (doubling each time gives the cleanest table):
+convergence_table([16, 32, 64, 128, 256])</code></pre>
+    </div>
+
+    <p>Expected output:</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">REPL output</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-text">N     h           L² error      order
+----------------------------------------
+10    0.090909    0.00825       —
+20    0.047619    0.00207       2.0
+40    0.02439     0.000517      2.0
+80    0.012346    0.000129      2.0
+160   0.006211    3.23e-5       2.0</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>How to read the table</strong><br>
+      Halving $h$ (i.e. doubling $N$) divides the error by $\approx 4$, and the
+      <em>order</em> column lands close to <strong>2.00</strong> — exactly the
+      $O(h^2)$ rate predicted by the truncation error of the 5-point Laplacian.
+      If your order column drifts away from 2 (or worse, stalls at 1.0), the
+      most likely culprits are wrong boundary handling, an off-by-one in the
+      grid indexing, or a mismatched right-hand side.
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE C-2: 3D POISSON EQUATION
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-poisson-3d">
+    <h3>Poisson Equation — 3D</h3>
+    <p>
+      The system matrix is the Kronecker sum of three 1D Laplacians — the same
+      construction as 2D extended by one level. Keep <code>N ≤ 25</code>;
+      the matrix is $N^3\times N^3$ and sparse direct solvers become expensive above that.
+    </p>
+
+    <p>
+      Like Heat and Wave, Poisson uses a single parametric struct
+      <code>PoissonEquation{N, F, EF}</code> for every dimension. For 3D you
+      pass a 3-tuple <code>N_grid</code>, a 3-arg <code>f</code>, and (optionally)
+      a 3-arg <code>u_exact</code>. The N-D Kronecker assembly inside
+      <code>solve</code> walks every axis at compile time.
+    </p>
+
+    <p>The 7-point stencil and Kronecker-sum matrix:</p>
+    $$-\nabla^2 u = f(x,y,z), \quad (x,y,z)\in\prod_{i=1}^{3}[a_i,b_i], \quad u=0 \text{ on } \partial\Omega$$
+    $$A = I\otimes I\otimes T_1 \;+\; I\otimes T_1\otimes I \;+\; T_1\otimes I\otimes I, \qquad A\,\mathbf{u} = \mathbf{f}$$
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — usage (3D, same PoissonEquation struct)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+# 3D test case: −∇²u = 3π²·sin(πx)sin(πy)sin(πz), exact u = sin(πx)sin(πy)sin(πz)
+prob = PoissonEquation(
+    N_grid  = (20, 20, 20),                                            # ⇒ N = 3
+    f       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z),
+    u_exact = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z),
+)
+sol = solve(prob)                                                       # PDESolution — 20×20×20
+
+println("L2 error = ", l2_error(sol))   # should be ≈ O(h²)
+
+# Mid-plane z-slice:
+mid = div(prob.N_grid[3], 2)
+heatmap(sol.x, sol.y, sol.u[:, :, mid]',
+        title="3D Poisson — z=$(round(sol.z[mid], digits=2))",
+        xlabel="x", ylabel="y", color=:viridis, aspect_ratio=1)</code></pre>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       EXAMPLE D: NAVIER-STOKES
+       ════════════════════════════════════════════════════════ -->
+  <nav class="page-nav">
+    <a class="prev" href="pde-wave.html">
+      <span class="label">&larr; Previous</span>
+      <span class="title">7 &middot; Wave equation</span>
+    </a>
+    <a class="next" href="pde-ns.html">
+      <span class="label">Next &rarr;</span>
+      <span class="title">9 &middot; Navier&ndash;Stokes</span>
+    </a>
+  </nav>
+  <footer>
+    Julia for HPC &middot; Chapter 08 &middot; Poisson equation
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
