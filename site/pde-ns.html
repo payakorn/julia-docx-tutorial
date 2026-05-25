@@ -617,136 +617,21 @@ rhs[:, end] .+= r .* ω[2:N-1, N]                       # top lid (moving)
 
     <details style="margin-top:1em; border:1px solid #d9d9d9; border-radius:6px; padding:8px 14px; background:#fafbfc;">
       <summary style="cursor:pointer; font-weight:600; color:#1F4E79;">
-        How this figure was generated (Julia) — full ψ-ω solver
+        How this figure was generated (Julia)
       </summary>
       <p style="margin:6px 0 0 0; font-size:0.88rem; color:#4a6a8a;">
-        The right panel is the output of a real solver: streamfunction–
-        vorticity formulation, semi-implicit time stepping (implicit
-        diffusion + explicit convection). The implicit diffusion lifts
-        the stability constraint to the convective CFL only, so we can
-        take far larger time steps than a fully explicit scheme. The
-        package's <code>solve(::NavierStokes)</code> in Step 6.6 uses
-        Oceananigans for the same problem; this version is included
-        here so the figure script is self-contained.
+        The right panel is the output of a real solver: streamfunction–vorticity
+        formulation, semi-implicit time stepping (implicit diffusion + explicit
+        convection). The ψ-ω solver lives in <code>src/Navier_Stokes.jl</code>
+        as <code>LidCavityFlow</code> — call <code>plot(prob)</code> and the
+        package handles everything.
       </p>
       <div class="code-block" style="margin-top:10px;">
-        <div class="code-header"><span class="code-lang">julia — solver + figure</span><button class="copy-btn">Copy</button></div>
-        <pre><code class="language-julia">using Plots, LinearAlgebra, SparseArrays, Printf, Colors
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using juliaPDEs, Plots
 
-# ---------------------------------------------------------------
-# ψ-ω lid-driven cavity solver (semi-implicit)
-# ---------------------------------------------------------------
-# arr[i, j] is the value at grid point (x_i, y_j). Walls are at i=1,
-# i=N (left/right) and j=1, j=N (bottom/top). The top wall moves with
-# speed U_lid; all other walls are no-slip.
-function solve_lid_cavity_psi_omega(; N=48, Re=100.0, T=10.0, U_lid=1.0)
-    L  = 1.0
-    h  = L / (N - 1)
-    ν  = U_lid * L / Re
-    dt = 0.30 * h / U_lid                  # convective CFL
-    nsteps = ceil(Int, T / dt)
-
-    ψ = zeros(N, N);  ω = zeros(N, N)
-
-    # 2-D Laplacian on the (N-2)x(N-2) interior, column-major flatten
-    n_int = N - 2;  nn = n_int^2
-    II = Int[];  JJ = Int[];  VV = Float64[]
-    for jj in 1:n_int, ii in 1:n_int
-        k = (jj - 1) * n_int + ii
-        push!(II, k); push!(JJ, k); push!(VV, -4.0)
-        if ii &gt; 1     ; push!(II, k); push!(JJ, k - 1);     push!(VV, 1.0); end
-        if ii &lt; n_int ; push!(II, k); push!(JJ, k + 1);     push!(VV, 1.0); end
-        if jj &gt; 1     ; push!(II, k); push!(JJ, k - n_int); push!(VV, 1.0); end
-        if jj &lt; n_int ; push!(II, k); push!(JJ, k + n_int); push!(VV, 1.0); end
-    end
-    Lap     = sparse(II, JJ, VV, nn, nn) ./ h^2
-    A_diff  = lu(sparse(I, nn, nn) - dt * ν * Lap)   # implicit diffusion
-    Lap_lu  = lu(Lap)                                # streamfunction Poisson
-    coeff   = ν * dt / h^2
-
-    for _ in 1:nsteps
-        # 1. Wall vorticity from ψ via Thom's formula
-        ω[2:N-1, N] .= -2 .* ψ[2:N-1, N-1] ./ h^2 .- 2 * U_lid / h   # top
-        ω[2:N-1, 1] .= -2 .* ψ[2:N-1, 2]   ./ h^2                     # bottom
-        ω[1, 2:N-1] .= -2 .* ψ[2,   2:N-1] ./ h^2                     # left
-        ω[N, 2:N-1] .= -2 .* ψ[N-1, 2:N-1] ./ h^2                     # right
-
-        # 2. Explicit advection at every interior node
-        ψy = (ψ[2:N-1, 3:N]   .- ψ[2:N-1, 1:N-2]) ./ (2h)
-        ψx = (ψ[3:N,   2:N-1] .- ψ[1:N-2, 2:N-1]) ./ (2h)
-        ωx = (ω[3:N,   2:N-1] .- ω[1:N-2, 2:N-1]) ./ (2h)
-        ωy = (ω[2:N-1, 3:N]   .- ω[2:N-1, 1:N-2]) ./ (2h)
-        adv = ψy .* ωx .- ψx .* ωy
-
-        # 3. RHS for the implicit diffusion solve, with wall ω contributions
-        rhs = ω[2:N-1, 2:N-1] .- dt .* adv
-        rhs[1,   :] .+= coeff .* ω[1,   2:N-1]
-        rhs[end, :] .+= coeff .* ω[N,   2:N-1]
-        rhs[:,   1] .+= coeff .* ω[2:N-1, 1]
-        rhs[:, end] .+= coeff .* ω[2:N-1, N]
-
-        # 4. (I − νΔt L) ω_int^{n+1} = rhs
-        ω[2:N-1, 2:N-1] .= reshape(A_diff \ vec(rhs), n_int, n_int)
-
-        # 5. Streamfunction Poisson: L ψ = −ω at interior, ψ = 0 on walls
-        ψ[2:N-1, 2:N-1] .= reshape(Lap_lu \ -vec(ω[2:N-1, 2:N-1]), n_int, n_int)
-    end
-
-    # Velocity field by central differences of ψ
-    u = zeros(N, N);  v = zeros(N, N)
-    u[:, 2:N-1] .=  (ψ[:, 3:N] .- ψ[:, 1:N-2]) ./ (2h)
-    v[2:N-1, :] .= -(ψ[3:N, :] .- ψ[1:N-2, :]) ./ (2h)
-    u[:, N] .= U_lid                                       # lid BC
-
-    speed = sqrt.(u.^2 .+ v.^2)
-    return ψ, ω, u, v, speed, h
-end
-
-# ---------------------------------------------------------------
-# Figure: schematic + numerical solution side-by-side
-# ---------------------------------------------------------------
-function fig_navier_stokes()
-    # Left panel: cavity schematic
-    p1 = plot(legend=false, framestyle=:none, aspect_ratio=:equal,
-              xlim=(-0.2, 1.2), ylim=(-0.2, 1.4),
-              title="Lid-Driven Cavity (NS benchmark)")
-    plot!(p1, [0,1,1,0,0], [0,0,1,1,0], color=:black, lw=2.5)
-    plot!(p1, [0.15, 0.85], [1.05, 1.05], arrow=true, color=:firebrick, lw=2.5)
-    annotate!(p1, 0.5, 1.18,
-              text("moving lid  U = 1.0", :firebrick, :center, 11, :bold))
-    annotate!(p1, -0.07, 0.5, text("u=v=0", :steelblue, :right,  10))
-    annotate!(p1,  1.07, 0.5, text("u=v=0", :steelblue, :left,   10))
-    annotate!(p1,  0.5, -0.10, text("u=v=0", :steelblue, :center, 10))
-    θ = range(0, 2π, length=100)
-    for r in (0.15, 0.25, 0.35)
-        plot!(p1, 0.5 .+ r .* cos.(θ), 0.55 .+ r .* sin.(θ),
-              color=:seagreen, lw=1, alpha=0.6)
-    end
-    annotate!(p1, 0.5, 0.55, text("vortex", :seagreen, :center, 11, :bold))
-
-    # Right panel: REAL numerical solution (ψ-ω solver above)
-    N_grid = 48
-    ψ, ω, u, v, speed, h = solve_lid_cavity_psi_omega(
-        N=N_grid, Re=100.0, T=10.0, U_lid=1.0)
-    xg = range(0, 1, length=N_grid)
-    yg = range(0, 1, length=N_grid)
-
-    # Plots' heatmap expects M[y, x] indexing → transpose our M[x, y].
-    p2 = heatmap(xg, yg, speed', c=:plasma, aspect_ratio=:equal,
-                 xlims=(0, 1), ylims=(0, 1),
-                 xlabel="x", ylabel="y",
-                 title=@sprintf("Numerical |u|  at  t=10  (Re=100, %d×%d grid)",
-                                N_grid, N_grid),
-                 colorbar_title="|u|")
-    contour!(p2, xg, yg, ψ', levels=18, color=:white, lw=0.7, alpha=0.85)
-
-    plt = plot(p1, p2, layout=(1, 2), size=(1300, 550), dpi=150,
-               plot_title="Navier-Stokes:  ∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u",
-               plot_titlefontsize=13)
-    savefig(plt, "navier_stokes.png")
-end
-
-fig_navier_stokes()</code></pre>
+prob = LidCavityFlow(N=48, Re=100.0, T=10.0, U_lid=1.0)
+plot(prob; savepath="navier_stokes.png")</code></pre>
       </div>
     </details>
   </section>

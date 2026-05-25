@@ -300,43 +300,16 @@ plot(sol.x, sol.u, xlabel="x", ylabel="u(x,T)", title="Wave equation  T=1.5", lw
         How this figure was generated (Julia)
       </summary>
       <div class="code-block" style="margin-top:10px;">
-        <div class="code-header"><span class="code-lang">julia — fig_wave_equation()</span><button class="copy-btn">Copy</button></div>
-        <pre><code class="language-julia">using Plots, Printf, Colors
+        <div class="code-header"><span class="code-lang">julia</span><button class="copy-btn">Copy</button></div>
+        <pre><code class="language-julia">using juliaPDEs, Plots
 
-function fig_wave_equation()
-    sol = solve(WaveEquation(N_grid=(300,), Nt=600, T=1.5,
-                              f_init = x -> x < 0.5 ? 2x : 2(1 - x)))
-    x, snapshots, U_hist, t_grid = sol.x, sol.snapshots, sol.U_hist, sol.t_grid
-
-    times_sorted = sort(collect(keys(snapshots)))
-    n    = length(times_sorted)
-    cmap = cgrad(:viridis, range(0.1, 0.9, length=n))
-
-    p1 = plot(xlabel="x", ylabel="u(x, t)",
-              title="Wave Equation:  ∂²u/∂t² = c² ∇²u",
-              legend=:topright, grid=true, gridalpha=0.3,
-              ylim=(-1.1, 1.1), framestyle=:box)
-    hline!(p1, [0], color=:gray, lw=0.5, label="")
-    for (i, tt) in enumerate(times_sorted)
-        plot!(p1, x, snapshots[tt], lw=2.0, color=cmap[i],
-              label=@sprintf("t = %.2f", tt))
-    end
-
-    # Run a longer simulation for the space-time plot
-    sol_long = solve(WaveEquation(N_grid=(300,), Nt=1600, T=4.0,
-                                  f_init = x -> x < 0.5 ? 2x : 2(1 - x)))
-    U_long, t_long = sol_long.U_hist, sol_long.t_grid
-
-    p2 = heatmap(t_long, x, U_long, c=:RdBu, clims=(-1, 1),
-                 xlabel="time t", ylabel="x",
-                 title="Space-time: characteristic lines",
-                 colorbar_title="u")
-
-    plt = plot(p1, p2, layout=(1, 2), size=(1300, 500), dpi=150)
-    savefig(plt, "wave_equation.png")
-end
-
-fig_wave_equation()</code></pre>
+prob = WaveEquation(
+    N_grid = (300,),
+    Nt     = 600,
+    T      = 1.5,
+    f_init = x -> x < 0.5 ? 2x : 2*(1 - x),
+)
+plot(prob; savepath="wave_equation.png")</code></pre>
       </div>
     </details>
   </section>

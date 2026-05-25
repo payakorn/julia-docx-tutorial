@@ -1,3 +1,92 @@
+# ── Lid-Driven Cavity — streamfunction-vorticity (ψ-ω) formulation ──────────
+#
+#   ∂ω/∂t + (∂ψ/∂y)(∂ω/∂x) - (∂ψ/∂x)(∂ω/∂y) = ν∇²ω   (vorticity transport)
+#   ω = −∇²ψ                                              (vorticity from ψ)
+#   u = ∂ψ/∂y,   v = −∂ψ/∂x                              (velocity from ψ)
+#
+# Eliminates pressure — only scalar solves needed. The diffusion term is
+# implicit (unconditionally stable); the only constraint is the convective
+# CFL: U·dt/h ≤ 1. Wall vorticity uses Thom's formula.
+#
+Base.@kwdef struct LidCavityFlow <: IncompressibleNSProblem
+    N::Int         = 48
+    Re::Float64    = 100.0
+    T::Float64     = 10.0
+    U_lid::Float64 = 1.0
+end
+
+# Returns (ψ, ω, u_vel, v_vel, speed, h) — all N×N arrays.
+function _solve_psi_omega(p::LidCavityFlow)
+    N  = p.N
+    L  = 1.0
+    h  = L / (N - 1)
+    ν  = p.U_lid * L / p.Re
+    dt = 0.30 * h / p.U_lid
+    nsteps = ceil(Int, p.T / dt)
+
+    ψ = zeros(N, N)
+    ω = zeros(N, N)
+
+    n_int = N - 2
+    nn    = n_int^2
+    II = Int[]; JJ = Int[]; VV = Float64[]
+    for jj in 1:n_int, ii in 1:n_int
+        k = (jj - 1) * n_int + ii
+        push!(II, k); push!(JJ, k); push!(VV, -4.0)
+        ii > 1     && (push!(II, k); push!(JJ, k - 1);     push!(VV, 1.0))
+        ii < n_int && (push!(II, k); push!(JJ, k + 1);     push!(VV, 1.0))
+        jj > 1     && (push!(II, k); push!(JJ, k - n_int); push!(VV, 1.0))
+        jj < n_int && (push!(II, k); push!(JJ, k + n_int); push!(VV, 1.0))
+    end
+    Lap    = sparse(II, JJ, VV, nn, nn) ./ h^2
+    Inn    = sparse(I, nn, nn)
+    A_diff = lu(Inn - dt * ν * Lap)
+    Lap_lu = lu(Lap)
+    coeff  = ν * dt / h^2
+
+    for _ in 1:nsteps
+        # Wall vorticity via Thom's formula
+        @views ω[2:N-1, N] .= -2 .* ψ[2:N-1, N-1] ./ h^2 .- 2 * p.U_lid / h
+        @views ω[2:N-1, 1] .= -2 .* ψ[2:N-1, 2]   ./ h^2
+        @views ω[1, 2:N-1] .= -2 .* ψ[2,   2:N-1] ./ h^2
+        @views ω[N, 2:N-1] .= -2 .* ψ[N-1, 2:N-1] ./ h^2
+
+        # Explicit convection
+        ψy  = (ψ[2:N-1, 3:N]   .- ψ[2:N-1, 1:N-2]) ./ (2h)
+        ψx  = (ψ[3:N,   2:N-1] .- ψ[1:N-2, 2:N-1]) ./ (2h)
+        ωx  = (ω[3:N,   2:N-1] .- ω[1:N-2, 2:N-1]) ./ (2h)
+        ωy  = (ω[2:N-1, 3:N]   .- ω[2:N-1, 1:N-2]) ./ (2h)
+        adv = ψy .* ωx .- ψx .* ωy
+
+        # Implicit diffusion: (I − νΔt L) ω^{n+1} = ω^n − Δt·adv
+        rhs_int = ω[2:N-1, 2:N-1] .- dt .* adv
+        rhs_int[1,   :] .+= coeff .* ω[1,   2:N-1]
+        rhs_int[end, :] .+= coeff .* ω[N,   2:N-1]
+        rhs_int[:,   1] .+= coeff .* ω[2:N-1, 1]
+        rhs_int[:, end] .+= coeff .* ω[2:N-1, N]
+        ω[2:N-1, 2:N-1] .= reshape(A_diff \ vec(rhs_int), n_int, n_int)
+
+        # Streamfunction Poisson: L ψ = −ω
+        ψ[2:N-1, 2:N-1] .= reshape(Lap_lu \ -vec(ω[2:N-1, 2:N-1]), n_int, n_int)
+    end
+
+    u_vel = zeros(N, N)
+    v_vel = zeros(N, N)
+    u_vel[:, 2:N-1] .=  (ψ[:, 3:N]   .- ψ[:, 1:N-2])   ./ (2h)
+    v_vel[2:N-1, :] .= -(ψ[3:N, :]   .- ψ[1:N-2, :])   ./ (2h)
+    u_vel[:, N] .= p.U_lid
+    return ψ, ω, u_vel, v_vel, sqrt.(u_vel.^2 .+ v_vel.^2), h
+end
+
+function solve(p::LidCavityFlow)
+    _, _, _, _, speed, _ = _solve_psi_omega(p)
+    _, x = endpoint_grid(1.0, p.N)
+    _, y = endpoint_grid(1.0, p.N)
+    return PDESolution((x, y), speed, p.T, p)
+end
+
+# ── Oceananigans-backed Navier-Stokes ────────────────────────────────────────
+
 Base.@kwdef struct NavierStokes <: IncompressibleNSProblem
     nx::Int            = 64
     ny::Int            = 64
