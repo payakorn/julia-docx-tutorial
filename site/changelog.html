@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Changelog &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+
+    <div class="section-label">About</div>
+    <a href="changelog.html" class="active"><span class="ch-num">▸</span>Changelog</a>
+  </nav>
+</aside>
+
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Changelog</div>
+    <h1>Changelog</h1>
+    <p>Release history for the <code>juliaPDEs</code> package and the companion tutorial site.</p>
+  </header>
+
+  <!-- ── v0.3.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-3-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.3.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-05-25</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>
+        <strong><code>src/plots.jl</code></strong> — figure functions for every PDE type,
+        dispatched via <code>Plots.plot</code>:
+        <ul>
+          <li><code>fig_heat_equation(p::HeatEquation{1})</code> — 2-panel: snapshots + space-time heatmap</li>
+          <li><code>fig_wave_equation(p::WaveEquation{1})</code> — 2-panel: snapshots + characteristic-line heatmap</li>
+          <li><code>fig_poisson_equation(p::PoissonEquation{2})</code> — 3-panel: f(x,y) / u(x,y) / 3-D surface</li>
+          <li><code>fig_navier_stokes(p::LidCavityFlow)</code> — 2-panel: cavity schematic + speed heatmap with ψ-streamlines</li>
+          <li><code>plot_solution(sol::PDESolution)</code> — generic dispatch on <code>sol.problem</code> type</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>LidCavityFlow</code></strong> struct in <code>src/Navier_Stokes.jl</code> —
+        lightweight streamfunction-vorticity (ψ-ω) lid-driven cavity solver; no Oceananigans
+        dependency required for figures.
+      </li>
+      <li>
+        <strong><code>Plots.plot</code> extensions</strong> — <code>plot(prob)</code> and
+        <code>plot(sol)</code> now dispatch to the correct multi-panel figure automatically:
+        <div class="code-block" style="margin-top:0.6em;">
+          <div class="code-header"><span class="code-lang">julia</span></div>
+          <pre><code class="language-julia">using juliaPDEs, Plots
+
+plot(HeatEquation(testgrid=tg, Nt=2000, T=1.0, α=0.01))    # snapshots + space-time
+plot(WaveEquation(N_grid=(300,), Nt=600, T=1.5, f_init=…))  # snapshots + space-time
+plot(PoissonEquation())                                       # f / u / 3-D surface
+plot(LidCavityFlow(Re=100.0))                                # schematic + speed heatmap
+plot(solve(prob))                                             # same, via PDESolution</code></pre>
+        </div>
+      </li>
+    </ul>
+
+    <h3>Changed</h3>
+    <ul>
+      <li>
+        Web tutorial pages updated to use the new one-liner API — verbose inline
+        <code>fig_*()</code> function definitions replaced in
+        <code>pde-wave.html</code>, <code>pde-poisson.html</code>, and <code>pde-ns.html</code>.
+      </li>
+      <li>Site footer now shows the package version alongside the commit hash.</li>
+    </ul>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── v0.2.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-2-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.2.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-05-19</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>
+        <strong>TestGrid-driven <code>HeatEquation</code></strong> — dimension-free (1D/2D/3D),
+        supports time-dependent Dirichlet BCs via <code>bc1</code>/<code>bc2</code> tuples.
+      </li>
+      <li>
+        <strong><code>solve_implicit(p::HeatEquation; θ)</code></strong> — Crank–Nicolson
+        (θ=0.5) and backward-Euler (θ=1.0) implicit time stepping; unconditionally stable.
+      </li>
+      <li>
+        <strong>Multi-page docs site</strong> — single <code>index.html</code> split into
+        per-topic pages: <code>pde-heat.html</code>, <code>pde-wave.html</code>,
+        <code>pde-poisson.html</code>, <code>pde-ns.html</code>,
+        <code>pde-bc-verify.html</code>, <code>pde-workflow.html</code>, and supporting pages.
+      </li>
+      <li>Gmsh chapter as a standalone page (<code>gmsh.html</code>) with mesh-to-matrix figure.</li>
+      <li><code>convergence_table</code> helper in <code>src/poisson.jl</code> for empirical order-of-accuracy studies.</li>
+      <li><strong><code>Grid</code> and <code>TestGrid</code></strong> structs in <code>src/types.jl</code> for declarative problem setup.</li>
+    </ul>
+
+    <h3>Changed</h3>
+    <ul>
+      <li><code>HeatEquation</code> refactored from ad-hoc parameters to <code>TestGrid</code>-based construction.</li>
+      <li><code>PoissonEquation</code> and <code>WaveEquation</code> unified under the same <code>{N, F}</code> parametric pattern.</li>
+    </ul>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── v0.1.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-1-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.1.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-05 (initial)</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>Core <code>juliaPDEs</code> package with four PDE solvers:
+        <ul>
+          <li><code>HeatEquation</code> / <code>WaveEquation</code> — forward-Euler and leap-frog</li>
+          <li><code>PoissonEquation</code> — N-D sparse direct solve via Kronecker-sum Laplacian</li>
+          <li><code>NavierStokes</code> — Oceananigans-backed lid-driven cavity</li>
+        </ul>
+      </li>
+      <li><code>PDESolution &lt;: AbstractArray</code> — unified solution wrapper with <code>sol.x</code>, <code>sol.y</code>, <code>sol.u</code>.</li>
+      <li>Abstract type hierarchy: <code>PDEProblem → ParabolicProblem / HyperbolicProblem / EllipticProblem / IncompressibleNSProblem</code>.</li>
+      <li><code>generate_lecture_doc.jl</code> — generates all PDE figures and assembles <code>.docx</code> via <code>python-docx</code>.</li>
+      <li><code>serv.jl</code> — LiveServer-based static file server on port 9000.</li>
+      <li><code>pde_explorer.jl</code> — Pluto.jl interactive notebook with live sliders.</li>
+      <li>Docker support with optional Cloudflare tunnel sidecar.</li>
+      <li>Single-page web tutorial (<code>site/index.html</code>) with KaTeX and Prism.js.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Julia for HPC &mdash; Student Setup Guide
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
