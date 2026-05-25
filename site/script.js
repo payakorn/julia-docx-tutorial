@@ -14,7 +14,8 @@
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(v => {
       const started = new Date(v.started_at).toLocaleString();
-      el.textContent = `commit ${v.commit_short} · last updated ${started}`;
+      const ver = v.version ? `v${v.version} · ` : '';
+      el.textContent = `${ver}commit ${v.commit_short} · last updated ${started}`;
     })
     .catch(() => { el.textContent = 'build info unavailable'; });
 })();
