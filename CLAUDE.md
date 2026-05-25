@@ -42,10 +42,10 @@ TUNNEL_TOKEN=<token> docker-compose up --build
 
 | File | Role |
 |------|------|
-| `generate_lecture_doc.jl` | Main generator (~1655 lines) — solves PDEs, renders figures, builds `.docx` |
+| `generate_lecture_doc.jl` | Main generator (~2073 lines) — solves PDEs, renders figures, builds `.docx` |
 | `serv.jl` | `LiveServer.jl` web server serving `site/` on port 9000 |
 | `pde_explorer.jl` | Pluto.jl interactive notebook with live sliders for all PDEs |
-| `juliaPDEs/src/` | Reusable PDE solver package (heat, wave, Navier-Stokes) |
+| `juliaPDEs/src/` | Reusable PDE solver package (heat, wave, Poisson, Navier-Stokes) |
 | `site/index.html` | Static web interface with embedded KaTeX and Prism.js |
 | `CondaPkg.toml` | Declares `python-docx` (auto-installed via pip by `PythonCall.jl`) |
 
@@ -59,11 +59,42 @@ TUNNEL_TOKEN=<token> docker-compose up --build
 
 All tunable parameters live in the `Config` struct near the top of `generate_lecture_doc.jl` (lines 44–92): grid sizes, time steps, CFL numbers, PDE coefficients (α, c, Re), document metadata, and figure styling. Edit there to change solver behavior or document appearance.
 
-### `juliaPDEs` Package
+### `juliaPDEs` Package (v0.3.0)
 
-A companion package inside `juliaPDEs/`. Exports:
-- `solve_heat_1d`, `solve_wave_1d`, `solve_navier_stokes`
-- `animate_wave_1d`, `animate_navier_stokes`
+A companion package inside `juliaPDEs/`. Source files:
+
+| File | Role |
+|------|------|
+| `src/types.jl` | Abstract type hierarchy, `PDESolution`, `Grid`, `TestGrid`, grid helpers |
+| `src/heat.jl` | `HeatEquation` — forward Euler + Crank–Nicolson (`solve`, `solve_implicit`) |
+| `src/wave.jl` | `WaveEquation` — leap-frog, dimension-free (1D/2D/3D) |
+| `src/poisson.jl` | `PoissonEquation` — sparse direct solve, `l2_error`, `convergence_table` |
+| `src/Navier_Stokes.jl` | `LidCavityFlow` (ψ-ω solver) + `NavierStokes` (Oceananigans-backed) |
+| `src/plots.jl` | `plot()` dispatch for all Problem/Solution types; `fig_*` figure functions |
+
+Key exports:
+- **Structs**: `HeatEquation`, `WaveEquation`, `PoissonEquation`, `LidCavityFlow`, `NavierStokes`
+- **Solvers**: `solve`, `solve_implicit`, `animate_navier_stokes`
+- **Figures**: `plot(prob)` / `plot(sol)` — dispatches to the correct multi-panel figure automatically
+- **Errors**: `l2_error`, `convergence_table`
+- **Helpers**: `interior_grid`, `endpoint_grid`
+
+#### `plot()` dispatch
+
+Extending `Plots.plot` means users just call `plot(prob)` or `plot(sol)`:
+
+```julia
+using juliaPDEs, Plots
+
+plot(HeatEquation(testgrid=tg, Nt=2000, T=1.0, α=0.01))   # 2-panel: snapshots + space-time
+plot(WaveEquation(N_grid=(300,), Nt=600, T=1.5, f_init=…)) # 2-panel: snapshots + space-time
+plot(PoissonEquation())                                      # 3-panel: f / u / 3D surface
+plot(LidCavityFlow(Re=100.0))                               # 2-panel: schematic + speed heatmap
+plot(solve(prob))                                            # same dispatch via PDESolution
+```
+
+Pass `savepath="file.png"` to save to disk. The explicit `fig_*` functions are also exported for
+direct use (`fig_heat_equation`, `fig_wave_equation`, `fig_poisson_equation`, `fig_navier_stokes`).
 
 Has its own `Project.toml` with heavier deps (CUDA, Makie, Oceananigans) not needed by the main project.
 
