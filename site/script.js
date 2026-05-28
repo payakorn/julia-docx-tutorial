@@ -20,6 +20,40 @@
     .catch(() => { el.textContent = 'build info unavailable'; });
 })();
 
+// ── Instant navigation (prerender sidebar links) ────────────────────
+// Chrome/Edge: Speculation Rules prerender same-origin .html links on
+// hover, so the next chapter is fully built (HTML + KaTeX + Prism) before
+// the click lands. Other browsers fall back to hover-prefetch, which at
+// least caches the HTML.
+(function () {
+  if (HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules')) {
+    const rules = document.createElement('script');
+    rules.type = 'speculationrules';
+    rules.textContent = JSON.stringify({
+      prerender: [{
+        where: { href_matches: '/*.html' },
+        eagerness: 'moderate'
+      }]
+    });
+    document.body.append(rules);
+    return;
+  }
+
+  // Fallback: prefetch on first hover, once per URL.
+  const seen = new Set();
+  document.addEventListener('pointerenter', e => {
+    const a = e.target.closest && e.target.closest('a[href$=".html"]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || seen.has(href)) return;
+    seen.add(href);
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = href;
+    document.head.append(link);
+  }, { capture: true, passive: true });
+})();
+
 // ── Theme toggle ────────────────────────────────────────────────────
 // The no-flash initial application lives in an inline <script> in each
 // page's <head> (it must run before first paint). This handler just
