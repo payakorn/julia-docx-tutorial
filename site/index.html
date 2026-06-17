@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Julia for HPC — Getting Started Guide</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
@@ -63,6 +64,11 @@
     <a href="#step5-verify"  class="sub">7.3 Verify &amp; converge</a>
     <a href="#step5-bc"      class="sub">7.4 Boundary conditions (N-D)</a>
     <a href="gmsh.html"      class="sub">7.5 Mesh → matrix (Gmsh)</a>
+    <a href="#pde-plot-makie" class="sub">7.6 Plotting with Makie</a>
+    <a href="#makie-2d"          class="sub2">↳ 2D heatmap</a>
+    <a href="#makie-3d-surface"  class="sub2">↳ 3D surface</a>
+    <a href="#makie-contour"     class="sub2">↳ Contours</a>
+    <a href="#makie-3d-volume"   class="sub2">↳ 3D slices</a>
     <div class="section-label">Polish your code</div>
     <a href="#step6">Step 8 — Package design patterns</a>
     <a href="#step6-arch"      class="sub">8.1 Struct design patterns</a>
@@ -5967,6 +5973,189 @@ end</code></pre>
       job of the meshing layer covered next in
       <a href="gmsh.html">7.5 — Mesh → matrix with Gmsh</a>.
     </p>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       PLOTTING PDEs WITH MAKIE
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-plot-makie">
+    <h2>Plotting PDEs with Makie</h2>
+    <p>
+      So far every figure has used <code>Plots.jl</code>, which is perfect for
+      quick 1-D line plots. Once your solutions live in two or three dimensions,
+      <a href="https://docs.makie.org" target="_blank" rel="noopener"><strong>Makie.jl</strong></a>
+      becomes the better tool: one unified API for 2-D heatmaps, filled
+      contours and fully 3-D surfaces and iso-surfaces, all publication-quality.
+    </p>
+    <p>
+      Makie ships several <em>backends</em>. Pick by what you need:
+    </p>
+    <ul>
+      <li><code>CairoMakie</code> — vector/raster output (PNG, SVG, PDF), runs
+        headless on a cluster with no GPU. Used for every figure below.</li>
+      <li><code>GLMakie</code> — interactive windows you can rotate and zoom;
+        needs OpenGL / a display.</li>
+      <li><code>WGLMakie</code> — the same, rendered in a browser.</li>
+    </ul>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — setup: solve once, plot many ways</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, CairoMakie     # CairoMakie ⇒ static PNG/SVG, no GPU needed
+
+# Solve the canonical 2-D Poisson problem  −Δu = 2π²·sin(πx)·sin(πy)
+prob = PoissonEquation(
+    N_grid  = (60, 60),
+    f       = (x, y) -> 2π^2 * sin(π*x) * sin(π*y),
+    u_exact = (x, y) -> sin(π*x) * sin(π*y),
+)
+sol = solve(prob)                # PDESolution — sol.x, sol.y, sol.u all ready</code></pre>
+    </div>
+
+    <!-- ── 2-D heatmap ──────────────────────────────────────── -->
+    <h3 id="makie-2d">2-D — <code>heatmap</code></h3>
+    <p>
+      The fastest read on a 2-D scalar field is a heatmap. Build a
+      <code>Figure</code>, add an <code>Axis</code>, draw with
+      <code>heatmap!</code>, and attach a <code>Colorbar</code> that reads the
+      returned plot object for its scale.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — 2-D heatmap</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">fig = Figure(size = (760, 620))
+ax  = Axis(fig[1, 1]; title = "Poisson solution u(x,y)",
+           xlabel = "x", ylabel = "y", aspect = DataAspect())
+hm  = heatmap!(ax, sol.x, sol.y, sol.u; colormap = :viridis)
+Colorbar(fig[1, 2], hm; label = "u(x,y)")
+save("heatmap.png", fig; px_per_unit = 2)   # px_per_unit ⇒ hi-DPI export</code></pre>
+    </div>
+    <figure class="figure">
+      <img src="output/figures/makie_heatmap_2d.png"
+           alt="Makie 2-D heatmap of the Poisson solution u(x,y) with a colorbar."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure M-1.</strong> A Makie <code>heatmap</code> of the 2-D
+        Poisson solution, with an attached colorbar.
+      </figcaption>
+    </figure>
+
+    <!-- ── 3-D surface ──────────────────────────────────────── -->
+    <h3 id="makie-3d-surface">3-D — <code>surface</code> on an <code>Axis3</code></h3>
+    <p>
+      To see the same 2-D field as a height map, swap <code>Axis</code> for
+      <code>Axis3</code> and draw with <code>surface!</code>. The
+      <code>azimuth</code> and <code>elevation</code> keywords set the camera;
+      peaks, valleys and saddles jump out immediately.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — 3-D surface of a 2-D field</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">fig = Figure(size = (820, 640))
+ax  = Axis3(fig[1, 1]; title = "u(x,y) over the unit square",
+            xlabel = "x", ylabel = "y", zlabel = "u",
+            azimuth = 0.6π, elevation = 0.18π)
+sp  = surface!(ax, sol.x, sol.y, sol.u; colormap = :viridis)
+Colorbar(fig[1, 2], sp; label = "u(x,y)")
+save("surface.png", fig; px_per_unit = 2)</code></pre>
+    </div>
+    <figure class="figure">
+      <img src="output/figures/makie_surface_3d.png"
+           alt="Makie 3-D surface plot of the Poisson solution rendered on an Axis3."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure M-2.</strong> The same solution as a 3-D
+        <code>surface</code> on an <code>Axis3</code>.
+      </figcaption>
+    </figure>
+
+    <!-- ── Contours ─────────────────────────────────────────── -->
+    <h3 id="makie-contour">Contour plots — filled and iso-lines</h3>
+    <p>
+      Contours show <em>level sets</em>. Use <code>contourf!</code> for filled
+      bands; overlay <code>contour!</code> for crisp black iso-lines on top.
+      Pass an explicit <code>levels</code> range so both share the same breaks.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — filled contour + iso-lines</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">levels = range(0, maximum(sol.u); length = 12)
+
+fig = Figure(size = (1180, 560))
+
+ax1 = Axis(fig[1, 1]; title = "Filled (contourf)",
+           xlabel = "x", ylabel = "y", aspect = DataAspect())
+cf  = contourf!(ax1, sol.x, sol.y, sol.u; levels, colormap = :viridis)
+Colorbar(fig[1, 2], cf; label = "u(x,y)")
+
+ax2 = Axis(fig[1, 3]; title = "Filled + iso-lines",
+           xlabel = "x", ylabel = "y", aspect = DataAspect())
+contourf!(ax2, sol.x, sol.y, sol.u; levels, colormap = :viridis)
+contour!(ax2,  sol.x, sol.y, sol.u; levels, color = :black, linewidth = 0.9)
+
+save("contour.png", fig; px_per_unit = 2)</code></pre>
+    </div>
+    <figure class="figure">
+      <img src="output/figures/makie_contour.png"
+           alt="Makie filled contour and filled-plus-iso-line contour of the Poisson solution."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure M-3.</strong> <em>Left:</em> a filled
+        <code>contourf</code>. <em>Right:</em> the same field with black
+        <code>contour</code> iso-lines overlaid.
+      </figcaption>
+    </figure>
+
+    <!-- ── 3-D fields — z-slices ────────────────────────────── -->
+    <h3 id="makie-3d-volume">3-D fields — stacked slices</h3>
+    <p>
+      When the solution itself is 3-D — <code>HeatEquation(N_grid=(n,n,n))</code>
+      or a 3-D Poisson problem — a single flat heatmap is no longer enough. A
+      backend-agnostic way to look inside the volume is to draw a few horizontal
+      <em>z-slices</em> as colored <code>surface</code> planes stacked in an
+      <code>Axis3</code>: each plane sits at its own height and is tinted by the
+      field on that slice. Share one <code>colorrange</code> so the planes are
+      directly comparable.
+    </p>
+    <div class="callout info">
+      <strong>Iso-surfaces need GLMakie</strong>
+      For true iso-surfaces or ray-traced volume rendering
+      (<code>contour(x, y, z, u)</code> on a 3-D array, or <code>volume</code>),
+      switch the backend to <code>GLMakie</code> — those primitives are not
+      supported by CairoMakie's 2-D rasteriser.
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — 3-D field as stacked z-slices</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># A genuinely 3-D field — e.g. the exact 3-D Poisson solution
+prob3 = PoissonEquation(
+    N_grid  = (40, 40, 40),
+    f       = (x, y, z) -> 3π^2 * sin(π*x) * sin(π*y) * sin(π*z),
+    u_exact = (x, y, z) -> sin(π*x) * sin(π*y) * sin(π*z),
+)
+sol3 = solve(prob3)                       # PDESolution — 40×40×40
+N    = length(sol3.z)
+
+fig = Figure(size = (820, 660))
+ax  = Axis3(fig[1, 1]; title = "z-slices of u(x,y,z)",
+            xlabel = "x", ylabel = "y", zlabel = "z",
+            azimuth = 0.55π, elevation = 0.16π)
+for frac in (0.25, 0.5, 0.75)             # three horizontal cut planes
+    k      = round(Int, frac * N)
+    zplane = fill(sol3.z[k], length(sol3.x), length(sol3.y))   # flat plane at z
+    sp     = surface!(ax, sol3.x, sol3.y, zplane;
+                      color = sol3.u[:, :, k], colormap = :viridis,
+                      colorrange = (0, 1), transparency = true)
+    frac == 0.75 &amp;&amp; Colorbar(fig[1, 2], sp; label = "u(x,y,z)")
+end
+save("slices.png", fig; px_per_unit = 2)</code></pre>
+    </div>
+    <figure class="figure">
+      <img src="output/figures/makie_volume_3d.png"
+           alt="Makie 3-D plot: three colored z-slice planes of a sin-product field stacked on an Axis3."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure M-4.</strong> Three z-slices of the 3-D field
+        $u(x,y,z)=\sin\pi x\,\sin\pi y\,\sin\pi z$, drawn as stacked colored
+        <code>surface</code> planes — brightest at the mid-plane $z=0.5$.
+      </figcaption>
+    </figure>
   </section>
 
 

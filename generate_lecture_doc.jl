@@ -17,7 +17,7 @@
 
 using Pkg
 # ---------------- Auto-install missing packages on first run ------------------
-const REQUIRED_PKGS = ["Plots", "PythonCall", "Gmsh"]
+const REQUIRED_PKGS = ["Plots", "PythonCall", "Gmsh", "CairoMakie"]
 
 function ensure_packages()
     installed = Set(keys(Pkg.project().dependencies))
@@ -33,6 +33,10 @@ ensure_packages()
 using Plots, LinearAlgebra, SparseArrays, Printf, Dates
 using PythonCall
 using Gmsh: gmsh
+# Makie is imported under an alias so its exports (heatmap, surface, contour,
+# contourf, plot, …) never collide with the identically-named Plots functions
+# used elsewhere in this file. Every Makie call below is qualified with `CM.`.
+import CairoMakie as CM
 
 # Set headless backend for HPC / CI
 ENV["GKSwstype"] = "100"
@@ -831,6 +835,126 @@ function fig_gmsh_gallery()
     savefig(plt, joinpath(CFG.figures_dir, "gmsh_gallery.png"))
 end
 
+# =============================================================================
+# MAKIE FIGURES  — publication-quality PDE plots rendered headless via CairoMakie
+#
+# These power the "Plotting PDEs with Makie" section of the website. Every Makie
+# call is qualified with `CM.` (see the `import CairoMakie as CM` at the top) so
+# the names never clash with the identically-named Plots functions above.
+# =============================================================================
+
+# Analytic 3-D scalar field u(x,y,z) = sin(πx) sin(πy) sin(πz) — the exact
+# solution of the 3-D Poisson test problem. Returned as (xs, ys, zs, V).
+function poisson_field_3d(; N=40, L=CFG.poisson_L)
+    h  = L / (N + 1)
+    # Keep these as ranges (not collected): Makie's volume/iso-surface path reads
+    # the x/y/z arguments as interval endpoints and rejects arbitrary Vectors.
+    xs = range(h, L - h, length=N)
+    ys = range(h, L - h, length=N)
+    zs = range(h, L - h, length=N)
+    V  = [sin(π*x) * sin(π*y) * sin(π*z) for x in xs, y in ys, z in zs]
+    return xs, ys, zs, V
+end
+
+"""
+    fig_makie_heatmap_2d()
+
+2-D view of a PDE field: a Makie `heatmap` of the Poisson solution u(x,y) with
+an attached colorbar. The clearest first look at any 2-D scalar field.
+"""
+function fig_makie_heatmap_2d()
+    @info "Generating Makie figure: 2-D heatmap"
+    xs, ys, U, _ = solve_poisson_2d()
+
+    fig = CM.Figure(size=(760, 620), fontsize=16)
+    ax  = CM.Axis(fig[1, 1];
+                  title="2-D heatmap — Poisson solution u(x,y)",
+                  titlecolor=BLUE, xlabel="x", ylabel="y",
+                  aspect=CM.DataAspect())
+    hm  = CM.heatmap!(ax, xs, ys, U; colormap=:viridis)
+    CM.Colorbar(fig[1, 2], hm; label="u(x,y)")
+    CM.save(joinpath(CFG.figures_dir, "makie_heatmap_2d.png"), fig; px_per_unit=2)
+end
+
+"""
+    fig_makie_surface_3d()
+
+3-D surface of a 2-D PDE field: the same Poisson solution lifted to a Makie
+`Axis3` surface, ideal for reading off peaks, valleys and saddles.
+"""
+function fig_makie_surface_3d()
+    @info "Generating Makie figure: 3-D surface"
+    xs, ys, U, _ = solve_poisson_2d()
+
+    fig = CM.Figure(size=(820, 640), fontsize=16)
+    ax  = CM.Axis3(fig[1, 1];
+                   title="3-D surface — u(x,y) over the unit square",
+                   titlecolor=BLUE, xlabel="x", ylabel="y", zlabel="u",
+                   azimuth=0.6π, elevation=0.18π)
+    sp  = CM.surface!(ax, xs, ys, U; colormap=:viridis)
+    CM.Colorbar(fig[1, 2], sp; label="u(x,y)")
+    CM.save(joinpath(CFG.figures_dir, "makie_surface_3d.png"), fig; px_per_unit=2)
+end
+
+"""
+    fig_makie_contour()
+
+Contour views side by side: a filled `contourf` (left) and a filled map with
+black `contour` iso-lines overlaid (right) — the standard way to show level
+sets of a 2-D solution.
+"""
+function fig_makie_contour()
+    @info "Generating Makie figure: filled + line contours"
+    xs, ys, U, _ = solve_poisson_2d()
+    levels = range(0, maximum(U); length=12)
+
+    fig = CM.Figure(size=(1180, 560), fontsize=16)
+
+    ax1 = CM.Axis(fig[1, 1]; title="Filled contour (contourf)", titlecolor=BLUE,
+                  xlabel="x", ylabel="y", aspect=CM.DataAspect())
+    cf  = CM.contourf!(ax1, xs, ys, U; levels=levels, colormap=:viridis)
+    CM.Colorbar(fig[1, 2], cf; label="u(x,y)")
+
+    ax2 = CM.Axis(fig[1, 3]; title="Filled + iso-lines (contour)", titlecolor=BLUE,
+                  xlabel="x", ylabel="y", aspect=CM.DataAspect())
+    cf2 = CM.contourf!(ax2, xs, ys, U; levels=levels, colormap=:viridis)
+    CM.contour!(ax2, xs, ys, U; levels=levels, color=:black, linewidth=0.9)
+    CM.Colorbar(fig[1, 4], cf2; label="u(x,y)")
+
+    CM.save(joinpath(CFG.figures_dir, "makie_contour.png"), fig; px_per_unit=2)
+end
+
+"""
+    fig_makie_volume_3d()
+
+Visualising a genuinely 3-D field: several z-slices of
+u(x,y,z)=sin(πx)sin(πy)sin(πz) drawn as colored `surface` planes stacked inside
+an `Axis3`. This is the CairoMakie-friendly way to look into a volume — true
+iso-surface/volume rendering needs GLMakie.
+"""
+function fig_makie_volume_3d()
+    @info "Generating Makie figure: 3-D stacked slices"
+    xs, ys, zs, V = poisson_field_3d()
+    N = length(zs)
+
+    fig = CM.Figure(size=(820, 660), fontsize=16)
+    ax  = CM.Axis3(fig[1, 1];
+                   title="3-D field — z-slices of u(x,y,z)",
+                   titlecolor=BLUE, xlabel="x", ylabel="y", zlabel="z",
+                   azimuth=0.55π, elevation=0.16π)
+
+    local sp
+    for frac in (0.25, 0.5, 0.75)               # three horizontal cut planes
+        k      = round(Int, frac * N)
+        zplane = fill(zs[k], length(xs), length(ys))   # flat plane at height z
+        sp = CM.surface!(ax, xs, ys, zplane;
+                         color=V[:, :, k], colormap=:viridis,
+                         colorrange=(0.0, 1.0), transparency=true)
+    end
+    CM.Colorbar(fig[1, 2], sp; label="u(x,y,z)")
+    CM.save(joinpath(CFG.figures_dir, "makie_volume_3d.png"), fig; px_per_unit=2)
+end
+
 function generate_all_figures()
     @info "=== Generating all figures ==="
     fig_pde_pipeline()
@@ -842,6 +966,11 @@ function generate_all_figures()
     fig_convergence_study()
     fig_mesh_to_matrix()
     fig_gmsh_gallery()
+    # Makie-rendered figures for the "Plotting PDEs with Makie" section
+    fig_makie_heatmap_2d()
+    fig_makie_surface_3d()
+    fig_makie_contour()
+    fig_makie_volume_3d()
     @info "All figures saved to $(CFG.figures_dir)"
 end
 
@@ -2070,4 +2199,8 @@ function main()
     @info "✓ All done. Open: $out"
 end
 
-main()
+# Only run the full pipeline when invoked as a script (`julia generate_lecture_doc.jl`);
+# `include`-ing this file (e.g. to reuse a single fig_* function) won't trigger it.
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end
