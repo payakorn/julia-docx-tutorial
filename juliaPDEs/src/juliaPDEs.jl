@@ -4,6 +4,7 @@ using Plots, Revise, Oceananigans
 using SparseArrays, LinearAlgebra
 
 include("types.jl")
+include("history.jl")
 include("heat.jl")
 include("wave.jl")
 include("Navier_Stokes.jl")
@@ -19,6 +20,7 @@ export l2_error, convergence_table
 export interior_grid, endpoint_grid
 export fig_heat_equation, fig_wave_equation, fig_poisson_equation, fig_navier_stokes
 export plot_solution
+export save_solution, load_history, SolutionWriter, save_step!, write_meta!, default_run_name
 
 
 end # module juliaPDEs

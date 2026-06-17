@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "ceda936213ffecb3de52e8af48d394bdd80d3fb0"
+project_hash = "490de48f0f1179c70332d3147b9338355d450564"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -988,9 +988,9 @@ version = "1.8.0"
 
 [[deps.JSON]]
 deps = ["Dates", "Logging", "Parsers", "PrecompileTools", "StructUtils", "UUIDs", "Unicode"]
-git-tree-sha1 = "f76f7560267b840e492180f9899b472f30b88450"
+git-tree-sha1 = "c89d196f5ffb64bfbf80985b699ea913b0d2c211"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "1.6.0"
+version = "1.6.1"
 
     [deps.JSON.extensions]
     JSONArrowExt = ["ArrowTypes"]
@@ -2546,10 +2546,10 @@ uuid = "9a68df92-36a6-505f-a73e-abb412b6bfb4"
 version = "0.2.3+0"
 
 [[deps.juliaPDEs]]
-deps = ["BenchmarkTools", "CUDA", "CairoMakie", "Gmsh", "LinearAlgebra", "Makie", "Oceananigans", "Plots", "Printf", "Revise", "SparseArrays"]
+deps = ["BenchmarkTools", "CUDA", "CairoMakie", "GLMakie", "Gmsh", "JSON", "LinearAlgebra", "Makie", "Oceananigans", "Plots", "Printf", "Revise", "SparseArrays"]
 path = "."
 uuid = "27a59582-a819-4a6e-ae33-0a6f2b5f1538"
-version = "0.2.0"
+version = "0.3.0"
 
 [[deps.libaec_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]

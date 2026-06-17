@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plotting &amp; saving solutions &mdash; Julia for HPC</title>
+  <script>
+    try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-julia.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div id="sidebar-overlay"></div>
+<aside id="sidebar">
+  <div class="brand">
+    <a href="index.html">
+      <h1>Julia for HPC</h1>
+      <p>Getting Started Guide</p>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+  <nav>
+    <a href="index.html"><span class="ch-num">★</span>Home</a>
+
+    <div class="section-label">Set up</div>
+    <a href="setup.html"><span class="ch-num">01</span>Install &amp; configure</a>
+
+    <div class="section-label">Learn Julia</div>
+    <a href="basics.html"><span class="ch-num">02</span>Language basics</a>
+    <a href="packages.html"><span class="ch-num">03</span>Use existing packages</a>
+    <a href="build-package.html"><span class="ch-num">04</span>Build your own package</a>
+
+    <div class="section-label">Solve PDEs</div>
+    <a href="pde-workflow.html"><span class="ch-num">05</span>Workflow overview</a>
+    <a href="pde-heat.html"><span class="ch-num">06</span>Heat equation</a>
+    <a href="pde-wave.html"><span class="ch-num">07</span>Wave equation</a>
+    <a href="pde-poisson.html"><span class="ch-num">08</span>Poisson equation</a>
+    <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
+    <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
+    <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+    <a href="solutions-io.html" class="active"><span class="ch-num">12</span>Plotting &amp; saving</a>
+
+    <div class="section-label">Polish &amp; ship</div>
+    <a href="polish.html"><span class="ch-num">13</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">14</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">15</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">16</span>Git &amp; GitHub</a>
+
+    <div class="section-label">About</div>
+    <a href="changelog.html"><span class="ch-num">▸</span>Changelog</a>
+  </nav>
+</aside>
+
+<div id="content">
+
+  <header class="chapter-hero">
+    <div class="crumb"><a href="index.html">Home</a> &nbsp;/&nbsp; Plotting &amp; saving solutions</div>
+    <h1>Plotting &amp; saving solutions</h1>
+    <p>Once <code>solve</code> hands you a <code>PDESolution</code>, two things you
+       almost always want next: <strong>see it</strong> and <strong>keep it</strong>.
+       This chapter covers <code>plot_solution</code>, Makie for 2-D/3-D views, and
+       an opt-in run-history recorder that streams every snapshot to disk in a
+       plain, language-agnostic format.</p>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       1 — PLOTTING
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="plotting">
+    <h2>1 &middot; Plotting a solution</h2>
+    <p>
+      The package ships <code>plot_solution(sol)</code>, which dispatches on the
+      problem type stored in <code>sol.problem</code> and returns the standard
+      <code>Plots.jl</code> figure for it. You can also just call
+      <code>plot(sol)</code> — the package extends <code>Plots.plot</code> for
+      both problem structs and solutions.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — one call per problem type</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, Plots
+
+# 1-D heat → snapshots + space-time heatmap
+grid = Grid(a = (0.0,), b = (1.0,), stepsize = (1/200,))
+tg   = TestGrid(grid, (t -> 0.0,), (t -> 0.0,), x -> exp(-100 * (x - 0.5)^2))
+sol  = solve(HeatEquation(testgrid = tg, Nt = 2000, T = 1.0, α = 0.01))
+
+plot_solution(sol)                 # or simply: plot(sol)
+plot_solution(sol; savepath = "heat.png")   # also write a PNG
+
+# 2-D Poisson → f(x,y) / u(x,y) / 3-D surface
+plot(solve(PoissonEquation()))</code></pre>
+    </div>
+
+    <h3 id="plotting-makie">2-D &amp; 3-D views with Makie</h3>
+    <p>
+      For surfaces, filled contours and genuinely 3-D fields, Makie is the
+      sharper tool. The package depends on <code>CairoMakie</code> (static PNG/SVG,
+      headless) and <code>GLMakie</code> (interactive). Because a
+      <code>PDESolution</code> exposes <code>sol.x</code>, <code>sol.y</code>,
+      <code>sol.z</code> and <code>sol.u</code>, you feed it straight to Makie:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — Makie 2-D heatmap, contour &amp; 3-D surface</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, CairoMakie     # CairoMakie ⇒ static, no GPU needed
+
+sol = solve(PoissonEquation())  # 2-D, sol.u is a matrix
+
+# Heatmap
+fig = Figure(); ax = Axis(fig[1,1]; xlabel="x", ylabel="y", aspect=DataAspect())
+hm  = heatmap!(ax, sol.x, sol.y, sol.u; colormap=:viridis)
+Colorbar(fig[1,2], hm); save("heatmap.png", fig)
+
+# Filled contour + iso-lines
+levels = range(minimum(sol.u), maximum(sol.u); length=12)
+fig = Figure(); ax = Axis(fig[1,1]; aspect=DataAspect())
+contourf!(ax, sol.x, sol.y, sol.u; levels, colormap=:viridis)
+contour!( ax, sol.x, sol.y, sol.u; levels, color=:black, linewidth=0.9)
+save("contour.png", fig)
+
+# 3-D surface
+fig = Figure(); ax = Axis3(fig[1,1]; xlabel="x", ylabel="y", zlabel="u")
+surface!(ax, sol.x, sol.y, sol.u; colormap=:viridis)
+save("surface.png", fig)</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — a 3-D field as stacked z-slices</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># For a 3-D solution (sol.u is a 3-D array), draw a few z-slices as colored
+# surface planes — CairoMakie renders this without a GPU. (True iso-surfaces /
+# volume rendering need GLMakie.)
+fig = Figure(); ax = Axis3(fig[1,1]; xlabel="x", ylabel="y", zlabel="z")
+lo, hi = extrema(sol.u)
+for frac in (0.25, 0.5, 0.75)
+    k      = round(Int, frac * length(sol.z))
+    zplane = fill(sol.z[k], length(sol.x), length(sol.y))
+    surface!(ax, sol.x, sol.y, zplane;
+             color = sol.u[:, :, k], colormap = :viridis,
+             colorrange = (lo, hi), transparency = true)
+end
+save("slices.png", fig)</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Backends</strong>
+      <code>CairoMakie</code> writes PNG/SVG/PDF and runs headless on a cluster;
+      <code>GLMakie</code> opens an interactive window (needs OpenGL / a display)
+      and is the one to load for rotatable iso-surfaces and volume rendering.
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       2 — SAVING
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="saving">
+    <h2>2 &middot; Saving a run's history</h2>
+    <p>
+      For time-dependent problems you often want the whole evolution, not just
+      the final frame. Pass <code>save_every</code> (and optionally
+      <code>save_dir</code>) to <code>solve</code> — supported by
+      <code>HeatEquation</code> and <code>WaveEquation</code> — and each snapshot
+      is written as it is computed. Omit <code>save_every</code> and the solver
+      takes its original fast path: nothing is saved.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — record while solving</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">grid = Grid(a = (0.0,), b = (1.0,), stepsize = (1/50,))
+tg   = TestGrid(grid, (t -> 0.0,), (t -> 0.0,), x -> exp(-100 * (x - 0.5)^2))
+prob = HeatEquation(testgrid = tg, Nt = 100, T = 0.2, α = 0.01)
+
+# Save the field every 10 iterations (plus the initial and final states)
+sol = solve(prob; save_every = 10)
+#   ⇒ runs/heatequation_1d_N50_2026-06-17T08-28-53/
+
+# Choose the folder yourself:
+sol = solve(prob; save_every = 10, save_dir = "runs/my_experiment")
+
+# Just the final solution? One frame:
+save_solution(sol, "runs/final_only")</code></pre>
+    </div>
+    <p>
+      Each run lands in its own descriptive, timestamped folder. <em>All</em>
+      metadata lives once in <code>meta.json</code>; the per-iteration files hold
+      nothing but the field values, so they stay tiny:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">run folder layout</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-none">runs/heatequation_1d_N50_2026-06-17T08-28-53/
+├── meta.json          # problem, params, grid, dt, shape + index of every frame
+├── step_00000.json    # field values ONLY — flat, column-major, no metadata
+├── step_00001.json
+├── step_00002.json
+└── ...</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">json — meta.json (abridged)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-json">{
+  "problem": "HeatEquation",
+  "dimension": 1,
+  "dt": 0.002,
+  "shape": [50],
+  "order": "column-major",
+  "grid": { "x": [0.0196, 0.0392, "..."] },
+  "params": { "Nt": 100, "T": 0.2, "α": 0.01 },
+  "snapshots": [
+    { "step": 0, "iteration": 0,  "t": 0.0,  "file": "step_00000.json" },
+    { "step": 1, "iteration": 10, "t": 0.02, "file": "step_00001.json" }
+  ]
+}</code></pre>
+    </div>
+    <div class="callout info">
+      <strong>Why metadata in one place?</strong>
+      Repeating the grid and parameters in every frame would multiply the disk
+      cost of a long run for no benefit. Keeping them once in
+      <code>meta.json</code> — and storing each frame as a bare JSON number
+      array — keeps the run small <em>and</em> readable by any language.
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       3 — RELOADING
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="reloading">
+    <h2>3 &middot; Reloading — in Julia or anywhere else</h2>
+    <p>
+      Because the format is plain JSON, you can replay a run in Julia or pull it
+      into Python/MATLAB for post-processing. The flat frames reshape back with
+      <code>meta["shape"]</code> in column-major (Fortran) order.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — load_history</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">meta, times, frames = load_history("runs/my_experiment")
+
+length(frames)        # number of saved snapshots
+times                 # Vector of simulation times, one per frame
+frames[end]           # final field, reshaped to meta["shape"]</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">python — same run, no Julia needed</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-python">import json, numpy as np, os
+
+run   = "runs/my_experiment"
+meta  = json.load(open(os.path.join(run, "meta.json")))
+shape = meta["shape"]
+
+frames = []
+for snap in meta["snapshots"]:
+    flat = json.load(open(os.path.join(run, snap["file"])))
+    frames.append(np.array(flat).reshape(shape, order="F"))  # column-major
+
+times = [s["t"] for s in meta["snapshots"]]</code></pre>
+    </div>
+  </section>
+
+  <footer>
+    Julia for HPC &mdash; Student Setup Guide
+    <div id="build-info" style="margin-top:6px;font-size:0.82em;opacity:0.7;">loading build info&hellip;</div>
+  </footer>
+
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

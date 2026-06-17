@@ -50,12 +50,13 @@
     <a href="pde-ns.html"><span class="ch-num">09</span>Navier&ndash;Stokes</a>
     <a href="pde-bc-verify.html"><span class="ch-num">10</span>BCs &amp; verification</a>
     <a href="gmsh.html"><span class="ch-num">11</span>Meshes with Gmsh</a>
+    <a href="solutions-io.html"><span class="ch-num">12</span>Plotting &amp; saving</a>
 
     <div class="section-label">Polish &amp; ship</div>
-    <a href="polish.html"><span class="ch-num">12</span>Package design</a>
-    <a href="homework.html"><span class="ch-num">13</span>Homework</a>
-    <a href="hpc.html"><span class="ch-num">14</span>Run on the cluster</a>
-    <a href="git.html"><span class="ch-num">15</span>Git &amp; GitHub</a>
+    <a href="polish.html"><span class="ch-num">13</span>Package design</a>
+    <a href="homework.html"><span class="ch-num">14</span>Homework</a>
+    <a href="hpc.html"><span class="ch-num">15</span>Run on the cluster</a>
+    <a href="git.html"><span class="ch-num">16</span>Git &amp; GitHub</a>
 
     <div class="section-label">About</div>
     <a href="changelog.html" class="active"><span class="ch-num">▸</span>Changelog</a>
@@ -69,6 +70,53 @@
     <h1>Changelog</h1>
     <p>Release history for the <code>juliaPDEs</code> package and the companion tutorial site.</p>
   </header>
+
+  <!-- ── v0.4.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-4-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.4.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-06-17</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>
+        <strong>Solution run history</strong> — opt-in snapshot saving wired into
+        <code>solve</code> for <code>HeatEquation</code> and <code>WaveEquation</code>
+        via <code>save_every</code> / <code>save_dir</code> (the fast path is unchanged
+        when they are omitted):
+        <div class="code-block" style="margin-top:0.6em;">
+          <div class="code-header"><span class="code-lang">julia</span></div>
+          <pre><code class="language-julia">sol = solve(prob; save_every = 10)        # ⇒ runs/heatequation_1d_N50_2026-06-17T.../
+sol = solve(prob; save_every = 10, save_dir = "runs/experiment")</code></pre>
+        </div>
+      </li>
+      <li>
+        <strong>Language-agnostic JSON format</strong> — each run lands in its own
+        descriptive, timestamped folder. <em>All</em> metadata (problem, params, grid,
+        dt, shape, frame index) lives once in <code>meta.json</code>; the per-iteration
+        files hold only the flat, column-major field array, so they stay tiny and load
+        anywhere (e.g. <code>np.array(json.load(f)).reshape(shape, order="F")</code>).
+      </li>
+      <li>
+        <strong><code>src/history.jl</code></strong> helpers —
+        <code>save_solution</code>, <code>load_history</code>, and the lower-level
+        <code>SolutionWriter</code> / <code>save_step!</code> / <code>write_meta!</code>
+        / <code>default_run_name</code>.
+      </li>
+      <li>
+        New docs page <a href="solutions-io.html"><code>solutions-io.html</code></a> —
+        plotting a <code>PDESolution</code> and saving / reloading run history.
+      </li>
+    </ul>
+
+    <h3>Changed</h3>
+    <ul>
+      <li>Added <code>JSON</code> and <code>Dates</code> dependencies to the package.</li>
+    </ul>
+  </section>
+
+  <hr class="divider" />
 
   <!-- ── v0.3.0 ─────────────────────────────────────────────────────── -->
   <section class="section" id="v0-3-0">

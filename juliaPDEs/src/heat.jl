@@ -43,7 +43,8 @@ end
   return u
 end
 
-function solve(p::HeatEquation{N,F}) where {N,F}
+function solve(p::HeatEquation{N,F}; save_every::Integer=0,
+               save_dir::Union{Nothing,AbstractString}=nothing) where {N,F}
   tg = p.testgrid
   space = tg.grid.space
   npts = tg.grid.numgrid
@@ -74,8 +75,17 @@ function solve(p::HeatEquation{N,F}) where {N,F}
   inner_range = CartesianIndices(ntuple(i -> 2:(npts[i]-1), N))
   e_off = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
 
+  # Optional history writer — created only when save_every > 0 (fast path otherwise).
+  writer = nothing
+  if save_every > 0
+    dir    = something(save_dir, joinpath("runs", default_run_name(p, npts)))
+    writer = SolutionWriter(dir; problem=p, grid=space, dt=dt, shape=npts)
+    save_step!(writer, u, 0, 0, 0.0)          # initial condition = frame 0
+  end
+
   # 5. Time-stepping loop — forward-Euler + (2N+1)-point Laplacian. Boundary
   #    values are refreshed at the new time level after each interior sweep.
+  frame = 0
   for n in 1:p.Nt
     for I in inner_range
       laplacian = 0.0
@@ -88,6 +98,20 @@ function solve(p::HeatEquation{N,F}) where {N,F}
     _apply_dirichlet_bcs!(u_new, tg.bc1, tg.bc2, space, n * dt)
 
     u, u_new = u_new, u
+
+    if writer !== nothing && n % save_every == 0
+      frame += 1
+      save_step!(writer, u, frame, n, n * dt)
+    end
+  end
+
+  # Capture the final state (if not already on a save boundary), then write meta once.
+  if writer !== nothing
+    if p.Nt % save_every != 0
+      frame += 1
+      save_step!(writer, u, frame, p.Nt, p.Nt * dt)
+    end
+    write_meta!(writer; params = _problem_params(p))
   end
 
   return PDESolution(space, u, p.T, p)
