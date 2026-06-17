@@ -69,6 +69,10 @@
     <a href="#makie-3d-surface"  class="sub2">↳ 3D surface</a>
     <a href="#makie-contour"     class="sub2">↳ Contours</a>
     <a href="#makie-3d-volume"   class="sub2">↳ 3D slices</a>
+    <a href="#pde-solution-io"   class="sub">7.7 Plotting &amp; saving solutions</a>
+    <a href="#sol-plot"          class="sub2">↳ plot_solution</a>
+    <a href="#sol-save"          class="sub2">↳ Saving a run</a>
+    <a href="#sol-load"          class="sub2">↳ Reloading runs</a>
     <div class="section-label">Polish your code</div>
     <a href="#step6">Step 8 — Package design patterns</a>
     <a href="#step6-arch"      class="sub">8.1 Struct design patterns</a>
@@ -6156,6 +6160,156 @@ save("slices.png", fig; px_per_unit = 2)</code></pre>
         <code>surface</code> planes — brightest at the mid-plane $z=0.5$.
       </figcaption>
     </figure>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       PLOTTING & SAVING SOLUTIONS (package conveniences)
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="pde-solution-io">
+    <h2>Plotting &amp; Saving Solutions</h2>
+    <p>
+      The Makie snippets above are worth wrapping once so you never repeat
+      them. The <code>juliaPDEs</code> package ships two conveniences built
+      directly on the <code>PDESolution</code> type: <code>plot_solution</code>,
+      which picks the right plot for any dimension, and an opt-in
+      <strong>run-history</strong> recorder that streams each snapshot to disk
+      in a plain, language-agnostic format.
+    </p>
+
+    <!-- ── plot_solution ────────────────────────────────────── -->
+    <h3 id="sol-plot">One call, any dimension — <code>plot_solution</code></h3>
+    <p>
+      <code>plot_solution(sol)</code> dispatches on the solution's dimension
+      <code>N</code> and returns a Makie <code>Figure</code> you can then
+      <code>save</code> (with <code>CairoMakie</code>) or display
+      (<code>GLMakie</code>):
+    </p>
+    <ul>
+      <li><strong>1-D</strong> → a line plot $u(x)$;</li>
+      <li><strong>2-D</strong> → a heatmap by default, or
+        <code>kind = :surface | :contour | :contourf</code>;</li>
+      <li><strong>3-D</strong> → stacked colored z-slices in an
+        <code>Axis3</code>.</li>
+    </ul>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — plot any solution the same way</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">using juliaPDEs, CairoMakie       # CairoMakie provides the rendering backend
+
+# 2-D heat problem
+prob = HeatEquation(N_grid = (60, 60), Nt = 200, T = 0.3, α = 0.01,
+                    f_init = (x, y) -> exp(-50 * ((x-0.5)^2 + (y-0.5)^2)))
+sol  = solve(prob)
+
+fig = plot_solution(sol)                       # ⇒ heatmap (N = 2 auto-detected)
+save("heat2d.png", fig)
+
+plot_solution(sol; kind = :surface)            # same data, 3-D surface
+plot_solution(sol; kind = :contour)            # filled + iso-lines
+plot_solution(sol; colormap = :magma)          # restyle any plot</code></pre>
+    </div>
+    <div class="callout tip">
+      <strong>Implementation note</strong>
+      Inside the package Makie is loaded <em>qualified</em>
+      (<code>import Makie</code>) so its <code>heatmap</code>/<code>surface</code>/
+      <code>contour</code> names never collide with the <code>Plots</code>
+      functions used elsewhere. The figure is built without a backend; loading
+      <code>CairoMakie</code> or <code>GLMakie</code> is what renders it.
+    </div>
+
+    <!-- ── saving history ───────────────────────────────────── -->
+    <h3 id="sol-save">Saving a run — every iteration if you want</h3>
+    <p>
+      For time-dependent problems you often want the whole evolution, not just
+      the final frame. Pass <code>save_every</code> (and optionally
+      <code>save_dir</code>) to <code>solve</code> and each snapshot is written
+      as it is computed. When <code>save_every</code> is omitted the solver
+      takes its original fast path — nothing is saved.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — record the history while solving</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">prob = HeatEquation(N_grid = (50,), Nt = 100, T = 0.2, α = 0.01,
+                    f_init = x -> exp(-100 * (x - 0.5)^2))
+
+# Save the field every 10 iterations (the initial and final states too)
+sol = solve(prob; save_every = 10)
+#   ⇒ runs/heatequation_1d_N50_2026-06-17T08-28-53/
+
+# Or choose the folder yourself:
+sol = solve(prob; save_every = 10, save_dir = "runs/my_experiment")
+
+# Just the final solution? One frame:
+save_solution(sol, "runs/final_only")</code></pre>
+    </div>
+    <p>
+      Each run lands in its own descriptive, timestamped folder. <em>All</em>
+      metadata lives once in <code>meta.json</code>; the per-iteration files
+      hold nothing but the field values, so they stay tiny:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">run folder layout</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-text">runs/heatequation_1d_N50_2026-06-17T08-28-53/
+├── meta.json          # problem, params, grid, dt, shape + index of every frame
+├── step_00000.json    # field values ONLY — flat, column-major, no metadata
+├── step_00001.json
+├── step_00002.json
+└── ...</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">json — meta.json (abridged)</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-json">{
+  "problem": "HeatEquation",
+  "dimension": 1,
+  "dt": 0.002,
+  "shape": [50],
+  "order": "column-major",
+  "grid": { "x": [0.0196, 0.0392, ...] },
+  "params": { "Nt": 100, "T": 0.2, "α": 0.01, "N_grid": [50] },
+  "snapshots": [
+    { "step": 0, "iteration": 0,   "t": 0.0,  "file": "step_00000.json" },
+    { "step": 1, "iteration": 10,  "t": 0.02, "file": "step_00001.json" },
+    ...
+  ]
+}</code></pre>
+    </div>
+    <div class="callout info">
+      <strong>Why metadata in one place?</strong>
+      Repeating the grid and parameters in every frame would multiply the disk
+      cost of a long run for no benefit. Keeping them once in
+      <code>meta.json</code> — and storing each frame as a bare JSON number
+      array — keeps the run small <em>and</em> readable by any language.
+    </div>
+
+    <!-- ── reloading ────────────────────────────────────────── -->
+    <h3 id="sol-load">Reloading — in Julia or anywhere else</h3>
+    <p>
+      Because the format is plain JSON, you can replay a run in Julia or pull it
+      into Python/MATLAB for post-processing. The flat frames reshape back with
+      <code>meta["shape"]</code> in column-major (Fortran) order.
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — load_history</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">meta, times, frames = load_history("runs/my_experiment")
+
+length(frames)        # number of saved snapshots
+times                 # Vector of simulation times, one per frame
+frames[end]           # final field, reshaped to meta["shape"]</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">python — same run, no Julia needed</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-python">import json, numpy as np, os
+
+run = "runs/my_experiment"
+meta = json.load(open(os.path.join(run, "meta.json")))
+shape = meta["shape"]
+
+frames = []
+for snap in meta["snapshots"]:
+    flat = json.load(open(os.path.join(run, snap["file"])))
+    frames.append(np.array(flat).reshape(shape, order="F"))  # column-major
+
+times = [s["t"] for s in meta["snapshots"]]</code></pre>
+    </div>
   </section>
 
 
