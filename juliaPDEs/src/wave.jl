@@ -17,7 +17,8 @@ Base.@kwdef struct WaveEquation{N, F} <: HyperbolicProblem
     f_init::F    = x -> sin(π * x)                               # default is 1D — override for higher N
 end
 
-function solve(p::WaveEquation{N, F}) where {N, F}
+function solve(p::WaveEquation{N, F}; save_every::Integer=0,
+               save_dir::Union{Nothing,AbstractString}=nothing) where {N, F}
     # 1. Build the per-axis endpoint grids via the shared helper.
     grids = ntuple(i -> endpoint_grid(p.a[i], p.b[i], p.N_grid[i]), N)
     d           = ntuple(i -> grids[i][1], N)
@@ -48,8 +49,17 @@ function solve(p::WaveEquation{N, F}) where {N, F}
     inner_range = CartesianIndices(ntuple(i -> 2:(p.N_grid[i]-1), N))
     e = ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, N)), N)
 
+    # Optional history writer — created only when save_every > 0 (fast path otherwise).
+    writer = nothing
+    if save_every > 0
+        dir    = something(save_dir, joinpath("runs", default_run_name(p)))
+        writer = SolutionWriter(dir; problem=p, grid=axes_coords, dt=dt, shape=p.N_grid)
+        save_step!(writer, u_curr, 0, 0, 0.0)     # initial condition = frame 0
+    end
+
     # 5. Main time-stepping loop — leap-frog (2nd-order in time) + (2N+1)-point Laplacian.
-    for _ in 1:nsteps
+    frame = 0
+    for step in 1:nsteps
         for I in inner_range
             laplacian = 0.0
             for i in 1:N
@@ -63,6 +73,20 @@ function solve(p::WaveEquation{N, F}) where {N, F}
         end
         # O(1) three-way pointer rotation — the old u_prev buffer is reused as the next u_next.
         u_prev, u_curr, u_next = u_curr, u_next, u_prev
+
+        if writer !== nothing && step % save_every == 0
+            frame += 1
+            save_step!(writer, u_curr, frame, step, step * dt)
+        end
+    end
+
+    # Capture the final state (if not already on a save boundary), then write meta once.
+    if writer !== nothing
+        if nsteps % save_every != 0
+            frame += 1
+            save_step!(writer, u_curr, frame, nsteps, nsteps * dt)
+        end
+        write_meta!(writer; params = _problem_params(p))
     end
 
     return PDESolution(axes_coords, u_curr, p.T, p)
