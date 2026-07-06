@@ -5,6 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.0] — 2026-07-06
+
+### Added
+- **`CoupledHeatEquation`** (`src/coupled.jl`) — the first multi-field problem type: two
+  linearly-coupled diffusing fields, `∂u/∂t = α₁∇²u − κ(u−v)` and `∂v/∂t = α₂∇²v − κ(v−u)`,
+  solved as *one* sparse block linear system per time step (backward Euler, reusing the
+  same `nd_laplacian` + `lu` machinery as `PoissonEquation` / `HeatEquation.solve_implicit`)
+  instead of two independent per-field solves. Verified against
+  `HeatEquation.solve_implicit` at κ=0 with a matching θ (exact match).
+- **`CoupledPDESolution`** (`src/types.jl`) — lightweight two-field solution type returned
+  by `solve(::CoupledHeatEquation)`.
+- **`fig_coupled_heat(p::CoupledHeatEquation{1})`** (`src/plots.jl`) — 2-panel figure: both
+  fields' final profiles overlaid, and their pointwise coupling residual `|u−v|`. Wired
+  into the `Plots.plot` dispatch.
+- New section **8.9 Generalizing to Coupled Systems** (`site/polish.html`, mirrored in the
+  `.docx` guide as Step 8, §6.8) — why independent per-field time-stepping can't correctly
+  capture a coupling term shared by both equations, and how the same one-block-solve
+  technique connects to `LidCavityFlow`'s ψ/ω splitting.
+
+### Changed
+- Bumped package version to `0.5.0` in `Project.toml`.
+
+---
+
+## [0.4.0] — 2026-06-17
+
+### Added
+- **Solution run history** — opt-in snapshot saving wired into `solve` for `HeatEquation`
+  and `WaveEquation` via `save_every` / `save_dir` (the fast path is unchanged when they
+  are omitted).
+- **Language-agnostic JSON format** — each run lands in its own descriptive, timestamped
+  folder. *All* metadata (problem, params, grid, dt, shape, frame index) lives once in
+  `meta.json`; the per-iteration files hold only the flat, column-major field array, so
+  they stay tiny and load anywhere (e.g. `np.array(json.load(f)).reshape(shape, order="F")`).
+- **`src/history.jl`** helpers — `save_solution`, `load_history`, and the lower-level
+  `SolutionWriter` / `save_step!` / `write_meta!` / `default_run_name`.
+- New docs page `solutions-io.html` — plotting a `PDESolution` and saving / reloading run
+  history.
+
+### Changed
+- Added `JSON` and `Dates` dependencies to the package.
+
+---
+
 ## [0.3.0] — 2026-05-25
 
 ### Added
