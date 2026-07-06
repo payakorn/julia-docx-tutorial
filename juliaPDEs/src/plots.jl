@@ -271,36 +271,70 @@ function fig_navier_stokes(p::LidCavityFlow;
     return plt
 end
 
+const _COUPLED_FIELD_COLORS = [:firebrick, :steelblue, :seagreen, :goldenrod, :purple, :darkorange]
+
+"""
+    fig_coupled_system(prob::CoupledPDESystem{M,1}; savepath, size, dpi) -> Plot
+
+2-panel figure generalising `fig_coupled_heat` to any number `M` of named
+fields: all fields' final profiles overlaid (left) and the pointwise
+difference `|uᵢ − uⱼ|` for every coupled pair — `K[i][j] ≠ 0` — (right).
+"""
+function fig_coupled_system(p::CoupledPDESystem{M,1};
+        savepath::String = "",
+        size::Tuple{Int,Int} = (1100, 450),
+        dpi::Int = 150) where M
+
+  sol = solve(p)
+  x   = sol.x
+  color(k) = _COUPLED_FIELD_COLORS[mod1(k, length(_COUPLED_FIELD_COLORS))]
+
+  # Qualified as Plots.plot/Plots.plot! — juliaPDEs also `using CairoMakie`,
+  # whose re-exported `plot`/`plot!` (from Makie) otherwise collide with
+  # Plots' inside this module's namespace (a pre-existing ambiguity that
+  # affects every fig_* function in this file, not just this one).
+  p1 = Plots.plot(xlabel="x", ylabel="value",
+            title="Coupled fields at t = $(p.T)",
+            legend=:topright, grid=true, gridalpha=0.3, framestyle=:box)
+  for k in 1:M
+    Plots.plot!(p1, x, sol.fields[k], lw=2.2, color=color(k),
+          label="$(p.vars[k])  (α=$(p.α[k]))")
+  end
+
+  p2 = Plots.plot(xlabel="x", ylabel="|uᵢ - uⱼ|", legend=:topright,
+            title="Coupling residuals", grid=true, gridalpha=0.3, framestyle=:box)
+  pair = 0
+  for i in 1:M, j in (i+1):M
+    (p.K[i][j] == 0.0 && p.K[j][i] == 0.0) && continue
+    pair += 1
+    Plots.plot!(p2, x, abs.(sol.fields[i] .- sol.fields[j]), lw=2.0, color=color(pair),
+          label="|$(p.vars[i]) - $(p.vars[j])|")
+  end
+
+  plt = Plots.plot(p1, p2, layout=(1,2), size=size, dpi=dpi,
+             plot_title="Coupled PDE System — one sparse system, $(M) fields",
+             plot_titlefontsize=13)
+  isempty(savepath) || Plots.savefig(plt, savepath)
+  return plt
+end
+
 """
     fig_coupled_heat(prob::CoupledHeatEquation{1}; savepath, size, dpi) -> Plot
 
 2-panel figure: the two coupled fields' final profiles overlaid (left) and
 their pointwise difference `|u − v|` (right) — the residual κ keeps pulling
-toward zero.
+toward zero. Delegates to `fig_coupled_system` — `CoupledHeatEquation` is the
+`M = 2` special case of `CoupledPDESystem`.
 """
 function fig_coupled_heat(p::CoupledHeatEquation{1,F1,F2};
         savepath::String = "",
         size::Tuple{Int,Int} = (1100, 450),
         dpi::Int = 150) where {F1,F2}
 
-  sol = solve(p)
-  x   = sol.x
-
-  p1 = plot(x, sol.u, xlabel="x", ylabel="value", lw=2.2, color=:firebrick,
-            label="u  (α₁=$(p.α[1]))",
-            title="Coupled fields at t = $(p.T)   (κ = $(p.κ))",
-            legend=:topright, grid=true, gridalpha=0.3, framestyle=:box)
-  plot!(p1, x, sol.v, lw=2.2, color=:steelblue, label="v  (α₂=$(p.α[2]))")
-
-  p2 = plot(x, abs.(sol.u .- sol.v), xlabel="x", ylabel="|u - v|",
-            lw=2.0, color=:seagreen, legend=false, grid=true, gridalpha=0.3,
-            title="Coupling residual", framestyle=:box)
-
-  plt = plot(p1, p2, layout=(1,2), size=size, dpi=dpi,
-             plot_title="Coupled Heat Equations — one sparse system, two fields",
-             plot_titlefontsize=13)
-  isempty(savepath) || savefig(plt, savepath)
-  return plt
+  sys = CoupledPDESystem(grid=p.grid, vars=(:u, :v), α=p.α,
+                          K=((0.0, p.κ), (p.κ, 0.0)), f_init=p.f_init,
+                          Nt=p.Nt, T=p.T)
+  return fig_coupled_system(sys; savepath, size, dpi)
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -349,6 +383,7 @@ Plots.plot(p::WaveEquation{1,F};             kwargs...) where F         = fig_wa
 Plots.plot(p::PoissonEquation{2,F,EF};       kwargs...) where {F,EF}    = fig_poisson_equation(p; kwargs...)
 Plots.plot(p::LidCavityFlow;                 kwargs...)                  = fig_navier_stokes(p; kwargs...)
 Plots.plot(p::CoupledHeatEquation{1,F1,F2};  kwargs...) where {F1,F2}    = fig_coupled_heat(p; kwargs...)
+Plots.plot(p::CoupledPDESystem{M,1};         kwargs...) where M          = fig_coupled_system(p; kwargs...)
 Plots.plot(sol::PDESolution{T,1};            kwargs...) where T          = plot_solution(sol; kwargs...)
 Plots.plot(sol::PDESolution{T,2};            kwargs...) where T          = plot_solution(sol; kwargs...)
-Plots.plot(sol::CoupledPDESolution{1};       kwargs...)                  = fig_coupled_heat(sol.problem; kwargs...)
+Plots.plot(sol::CoupledPDESolution{M,1};     kwargs...) where M          = plot(sol.problem; kwargs...)

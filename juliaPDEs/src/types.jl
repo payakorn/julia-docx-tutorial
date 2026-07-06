@@ -50,24 +50,72 @@ struct TestGrid{N,F}
   f_init::F
 end
 
-# ── CoupledPDESolution — two fields sharing one grid ──────────────────────────
+# ── Ind — flat linear indexing across M named fields sharing one grid ────────
+#
+#   Mirrors the indexing scheme from the exploratory generic-PDE project this
+#   package's multi-field support is modelled on: rather than hardcoding
+#   separate `u`, `v`, … fields on a solution/problem struct, stack the M
+#   interior fields into ONE vector (as `CoupledPDESystem.solve` does for its
+#   block linear system) and use `vars::NTuple{M,Symbol}` to look positions
+#   up by name.
+#
+#   `Ind(I::Int)`        → (which variable, CartesianIndex within that field)
+#   `Ind(var, I...)`     → flat linear index of `var[I...]` in the stacked vector
+#
+#   Unlike the exploratory version this package draws on — which stored one
+#   `Grid` per field — every field here shares the single `Grid{N}` of the
+#   `CoupledPDESystem` it belongs to, since a coupled system lives on one
+#   common domain. `NumGrid` still carries one shape per field (all equal)
+#   so the indexing arithmetic reads the same as the source it mirrors.
+#
+struct Ind{M,N}
+  vars::NTuple{M,Symbol}
+  NumGrid::NTuple{M,NTuple{N,Int}}
+end
+
+Ind(vars::NTuple{M,Symbol}, numgrid::NTuple{N,Int}) where {M,N} =
+  Ind(vars, ntuple(_ -> numgrid, M))
+
+function Base.getindex(d::Ind{M,N}, I::Int) where {M,N}
+  n = prod(d.NumGrid[1])
+  nvar = I % n == 0 ? I ÷ n : I ÷ n + 1
+  ngrid = I - (nvar - 1) * n
+  return d.vars[nvar], CartesianIndices(d.NumGrid[1])[ngrid]
+end
+
+function Base.getindex(d::Ind{M,N}, var::Symbol, I...) where {M,N}
+  length(I) == N || error("Ind: dimension mismatch (expected $N indices, got $(length(I)))")
+  nvar = findfirst(==(var), d.vars)
+  nvar === nothing && error("Ind: unknown variable $var (known: $(d.vars))")
+  return prod(d.NumGrid[1]) * (nvar - 1) + LinearIndices(d.NumGrid[1])[I...]
+end
+
+# ── CoupledPDESolution — M fields sharing one grid ────────────────────────────
 #
 #   A second, minimal solution type rather than reusing `PDESolution{T,N}`:
 #   that type subtypes `AbstractArray{T,N}` around a single homogeneous array,
-#   so bolting a second field onto it would change what indexing/iterating a
-#   `PDESolution` means for every existing solver. Coupled problems (two
-#   fields solved together as one linear system, e.g. `CoupledHeatEquation`)
-#   get their own lightweight struct instead.
+#   so bolting extra fields onto it would change what indexing/iterating a
+#   `PDESolution` means for every existing solver. Coupled problems (M fields
+#   solved together as one linear system, e.g. `CoupledPDESystem`) get their
+#   own lightweight struct instead.
 #
-struct CoupledPDESolution{N}
+#   `vars`/`fields` generalise the earlier fixed `u`/`v` design to any number
+#   of named fields; `sol.u`, `sol.v`, … keep working via `getproperty` for
+#   any name present in `vars` (the `CoupledHeatEquation` 2-field case looks
+#   identical to before — it now just happens to be `M == 2`).
+#
+struct CoupledPDESolution{M,N}
   grid::NTuple{N,Vector{Float64}}
-  u::Array{Float64,N}
-  v::Array{Float64,N}
+  vars::NTuple{M,Symbol}
+  fields::NTuple{M,Array{Float64,N}}
   t::Float64
   problem::PDEProblem
 end
 
 function Base.getproperty(s::CoupledPDESolution, sym::Symbol)
+  vars = getfield(s, :vars)
+  i = findfirst(==(sym), vars)
+  i !== nothing && return getfield(s, :fields)[i]
   g = getfield(s, :grid)
   sym === :x && return g[1]
   if sym === :y
@@ -81,11 +129,11 @@ function Base.getproperty(s::CoupledPDESolution, sym::Symbol)
   return getfield(s, sym)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", s::CoupledPDESolution{N}) where {N}
+function Base.show(io::IO, ::MIME"text/plain", s::CoupledPDESolution{M,N}) where {M,N}
   dims = join(["$(length(g)) pts" for g in s.grid], " × ")
-  println(io, "CoupledPDESolution{$(N)D}")
+  println(io, "CoupledPDESolution{$(M) fields, $(N)D}")
   println(io, "  problem : $(typeof(s.problem))")
-  println(io, "  size    : $(size(s.u)) (× 2 fields: u, v)")
+  println(io, "  size    : $(size(s.fields[1])) (× $(M) fields: $(join(s.vars, ", ")))")
   println(io, "  t       : $(s.t)")
   print(io, "  grid    : $(dims)")
 end

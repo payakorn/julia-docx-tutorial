@@ -18,13 +18,15 @@ include("plots.jl")
 include("makie.jl")
 
 export PDEProblem, ParabolicProblem, HyperbolicProblem, EllipticProblem, IncompressibleNSProblem
-export PDESolution, CoupledPDESolution, Grid, TestGrid
-export HeatEquation, WaveEquation, PoissonEquation, NavierStokes, LidCavityFlow, CoupledHeatEquation
+export PDESolution, CoupledPDESolution, Grid, TestGrid, Ind
+export HeatEquation, WaveEquation, PoissonEquation, NavierStokes, LidCavityFlow
+export CoupledHeatEquation, CoupledPDESystem
 export solve, solve_implicit
 export animate_navier_stokes
 export l2_error, convergence_table
 export interior_grid, endpoint_grid
-export fig_heat_equation, fig_wave_equation, fig_poisson_equation, fig_navier_stokes, fig_coupled_heat
+export fig_heat_equation, fig_wave_equation, fig_poisson_equation, fig_navier_stokes
+export fig_coupled_heat, fig_coupled_system
 export plot_solution
 export testmakie, makie_simple_line, makie_sin_cos_tan, makie_scatter_line
 export makie_subplots, makie_contour, makie_contourf, makie_advanced
