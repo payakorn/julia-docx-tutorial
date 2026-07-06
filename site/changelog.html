@@ -71,6 +71,58 @@
     <p>Release history for the <code>juliaPDEs</code> package and the companion tutorial site.</p>
   </header>
 
+  <!-- ── v0.5.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-5-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.5.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-07-06</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>
+        <strong><code>CoupledHeatEquation</code></strong> (<code>src/coupled.jl</code>) —
+        the first multi-field problem type: two linearly-coupled diffusing fields,
+        <code>∂u/∂t = α₁∇²u − κ(u−v)</code> and <code>∂v/∂t = α₂∇²v − κ(v−u)</code>,
+        solved as <em>one</em> sparse block linear system per time step (backward
+        Euler, reusing the same <code>nd_laplacian</code> + <code>lu</code> machinery
+        as <code>PoissonEquation</code> / <code>HeatEquation.solve_implicit</code>)
+        instead of two independent per-field solves:
+        <div class="code-block" style="margin-top:0.6em;">
+          <div class="code-header"><span class="code-lang">julia</span></div>
+          <pre><code class="language-julia">using juliaPDEs
+
+g   = Grid(a=(0.0,), b=(1.0,), stepsize=(0.02,))
+sol = solve(CoupledHeatEquation(grid=g, α=(0.01,0.02), κ=0.5,
+                                 f_init=(x -> sin(π*x), x -> 0.0)))
+plot(sol)   # fig_coupled_heat — both fields + coupling residual</code></pre>
+        </div>
+        Verified against <code>HeatEquation.solve_implicit</code> at κ=0 with a
+        matching θ (exact match, confirming the block assembly).
+      </li>
+      <li>
+        <strong><code>CoupledPDESolution</code></strong> (<code>src/types.jl</code>) —
+        lightweight two-field solution type returned by
+        <code>solve(::CoupledHeatEquation)</code>.
+      </li>
+      <li>
+        <strong><code>fig_coupled_heat(p::CoupledHeatEquation{1})</code></strong>
+        (<code>src/plots.jl</code>) — 2-panel figure: both fields' final profiles
+        overlaid, and their pointwise coupling residual <code>|u−v|</code>. Wired
+        into the <code>Plots.plot</code> dispatch.
+      </li>
+      <li>
+        New section <a href="polish.html#step6-coupled">8.9 Generalizing to Coupled
+        Systems</a> — why independent per-field time-stepping can't correctly
+        capture a coupling term shared by both equations, and how the same
+        one-block-solve technique connects to <code>LidCavityFlow</code>'s ψ/ω
+        splitting. Mirrored in the <code>.docx</code> guide as Step 8, §6.8.
+      </li>
+    </ul>
+  </section>
+
+  <hr class="divider" />
+
   <!-- ── v0.4.0 ─────────────────────────────────────────────────────── -->
   <section class="section" id="v0-4-0">
     <h2>
