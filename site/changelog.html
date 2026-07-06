@@ -71,6 +71,95 @@
     <p>Release history for the <code>juliaPDEs</code> package and the companion tutorial site.</p>
   </header>
 
+  <!-- ── v0.6.0 ─────────────────────────────────────────────────────── -->
+  <section class="section" id="v0-6-0">
+    <h2>
+      <span style="font-family:monospace;font-weight:700;">v0.6.0</span>
+      <span style="font-weight:400;color:var(--c-text-dim);margin-left:0.6em;font-size:0.85em;">2026-07-06</span>
+    </h2>
+
+    <h3>Added</h3>
+    <ul>
+      <li>
+        <strong><code>CoupledPDESystem{M,N}</code></strong> (<code>src/coupled.jl</code>) —
+        generalizes <code>CoupledHeatEquation</code> from a fixed 2-field system to any
+        number <code>M</code> of named fields, each diffusing at its own rate and linearly
+        exchanging with any other field via an <code>M×M</code> coupling matrix
+        <code>K</code> (zero by default, reproducing <code>M</code> independent fields
+        solved together purely for indexing convenience; nonzero entries reproduce and
+        extend the original 2-field κ exchange). Still one <code>(M·n)×(M·n)</code> sparse
+        block system, reusing <code>nd_laplacian</code> and factorised once via
+        <code>lu</code>:
+        <div class="code-block" style="margin-top:0.6em;">
+          <div class="code-header"><span class="code-lang">julia</span></div>
+          <pre><code class="language-julia">using juliaPDEs
+
+g   = Grid(a=(0.0,), b=(1.0,), stepsize=(0.02,))
+sys = CoupledPDESystem(grid=g, vars=(:u, :v, :w), α=(0.01, 0.01, 0.01),
+                        K=((0,8,0),(8,0,8),(0,8,0)),   # chain: u↔v, v↔w — u,w uncoupled
+                        f_init=(x -> exp(-100(x-0.2)^2), x -> exp(-100(x-0.5)^2),
+                                x -> exp(-100(x-0.8)^2)))
+sol = solve(sys)
+plot(sol)   # fig_coupled_system — every field + residuals for the coupled pairs</code></pre>
+        </div>
+      </li>
+      <li>
+        <strong><code>Ind{M,N}</code></strong> (<code>src/types.jl</code>) — flat linear
+        indexing across <code>M</code> named fields sharing one grid:
+        <code>Ind(vars, numgrid)[var, I...]</code> gives the position of field
+        <code>var</code> at grid point <code>I</code> in the stacked solve vector;
+        <code>Ind(...)[flat]</code> is the inverse. Naming
+        (<code>vars::NTuple{M,Symbol}</code>, the two <code>getindex</code> overloads)
+        mirrors the indexing scheme from the exploratory generic-PDE project this
+        multi-field support is modelled on.
+      </li>
+      <li>
+        <strong><code>CoupledPDESolution{M,N}</code></strong> (<code>src/types.jl</code>) —
+        generalizes the old fixed <code>u</code>/<code>v</code>
+        <code>CoupledPDESolution{N}</code> to any number of named fields;
+        <code>sol.u</code>/<code>sol.v</code> keep working unchanged for the 2-field case.
+      </li>
+      <li>
+        <strong><code>fig_coupled_system(p::CoupledPDESystem{M,1})</code></strong>
+        (<code>src/plots.jl</code>) — generalizes <code>fig_coupled_heat</code> to any
+        <code>M</code>: all fields overlaid (left), pointwise residual
+        <code>|uᵢ−uⱼ|</code> for every coupled pair (right).
+      </li>
+      <li>
+        <strong><code>juliaPDEs/test/runtests.jl</code></strong> — the package's first
+        real test suite (previously only described — §4.5.8 of the teaching doc taught a
+        <code>test/runtests.jl</code> convention that didn't exist in the repo yet).
+        Includes an <code>Ind</code> round-trip check, a cross-check that
+        <code>CoupledPDESystem</code> at <code>K=0</code> reproduces
+        <code>HeatEquation.solve_implicit</code> exactly (the verification method v0.5.0
+        claimed but never encoded as a real test), and smoke tests for
+        <code>HeatEquation</code>/<code>WaveEquation</code>/<code>PoissonEquation</code>.
+      </li>
+      <li>
+        <a href="polish.html#step6-coupled">§8.9 Generalizing to Coupled Systems</a>
+        rewritten from a forward-looking exercise into a walkthrough of the now-implemented
+        <code>CoupledPDESystem</code>/<code>Ind</code>, with a new 3-field figure (three
+        plates in a thermal exchange chain). <a href="build-package.html">Step H</a>
+        rewritten to walk through the real test suite. Mirrored in the <code>.docx</code>
+        guide as §6.8 and §4.5.8.
+      </li>
+    </ul>
+
+    <h3>Changed</h3>
+    <ul>
+      <li>
+        <strong><code>CoupledHeatEquation</code></strong> — <code>solve</code> now
+        delegates to <code>CoupledPDESystem(vars=(:u,:v), K=[[0,κ],[κ,0]], ...)</code>
+        instead of its own parallel block-matrix assembly. The 2-field case is now a
+        literal instance of the general system rather than a hand-maintained
+        implementation that could drift from it.
+      </li>
+      <li>Bumped package version to <code>0.6.0</code> in <code>Project.toml</code>; added <code>Test</code> as a dependency.</li>
+    </ul>
+  </section>
+
+  <hr class="divider" />
+
   <!-- ── v0.5.0 ─────────────────────────────────────────────────────── -->
   <section class="section" id="v0-5-0">
     <h2>

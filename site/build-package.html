@@ -923,22 +923,49 @@ animate_navier_stokes(NavierStokes())                  # → navier_stokes_anima
     </div>
 
     <h4>Step H — Write and run tests</h4>
+    <p>
+      Beyond a smoke test per solver, the real payoff is a cross-check: the
+      generalized <code>CoupledPDESystem</code> (§8.9), run with zero
+      coupling, must reproduce <code>HeatEquation.solve_implicit</code>
+      exactly — if it doesn't, the block-system assembly in
+      <code>coupled.jl</code> has a bug.
+    </p>
 
     <div class="code-block">
       <div class="code-header"><span class="code-lang">julia — test/runtests.jl</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">using juliaPDEs, Test
+      <pre><code class="language-julia">using Test, juliaPDEs
 
-@testset "Heat equation" begin
-    sol = solve(HeatEquation(N_grid=(50,), T=0.1))
-    @test size(sol.u) == (50,)               # correct grid size
-    @test maximum(sol.u) &lt; 1.0               # diffusion shrinks the peak
-    @test sol.u[1]   ≈ 0.0 atol=1e-10        # Dirichlet BC at left
-    @test sol.u[end] ≈ 0.0 atol=1e-10        # Dirichlet BC at right
+@testset "Ind indexing" begin
+    d = Ind((:u, :v, :w), (4, 5))
+    for var in (:u, :v, :w), I in CartesianIndices((4, 5))
+        flat = d[var, I.I...]
+        (var2, I2) = d[flat]
+        @test var2 == var
+        @test I2 == I
+    end
 end
 
-@testset "Wave equation" begin
-    sol = solve(WaveEquation(N_grid=(100,), Nt=200, T=0.5))
-    @test size(sol.u) == (100,)
+@testset "CoupledPDESystem at K=0 ≡ HeatEquation.solve_implicit (θ=1)" begin
+    grid = Grid(a=(0.0,), b=(1.0,), stepsize=(0.02,))
+    f_init(x) = sin(pi * x)
+    tg = TestGrid(grid, (t -> 0.0,), (t -> 0.0,), f_init)
+
+    heat     = HeatEquation(testgrid=tg, Nt=200, T=0.1, α=0.01)
+    sol_heat = solve_implicit(heat; θ=1.0)
+
+    sys = CoupledPDESystem(grid=grid, vars=(:u, :v), α=(0.01, 0.01),
+                           f_init=(f_init, f_init), Nt=200, T=0.1)
+    sol_sys = solve(sys)
+
+    @test sol_sys.u ≈ sol_heat.u
+    @test sol_sys.v ≈ sol_heat.u
+end
+
+@testset "WaveEquation smoke test" begin
+    p = WaveEquation(N_grid=(80,), a=(0.0,), b=(1.0,), Nt=200,
+                     T=0.2, c=1.0, f_init=x -> sin(pi * x))
+    sol = solve(p)
+    @test length(sol.u) == 80
     @test all(isfinite, sol.u)               # no NaNs from CFL violation
 end</code></pre>
     </div>

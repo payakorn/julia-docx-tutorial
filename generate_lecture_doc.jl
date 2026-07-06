@@ -70,6 +70,17 @@ Base.@kwdef mutable struct Config
     coupled_inits    :: NTuple{2,Function} = (x -> exp(-100*(x-0.3)^2),
                                                x -> exp(-100*(x-0.7)^2))
 
+    # ---- COUPLED PDE SYSTEM (M named fields, generalizes the pair above) ----
+    coupled_system_N        :: Int              = 200
+    coupled_system_alphas   :: NTuple{3,Float64} = (0.01, 0.01, 0.01)
+    coupled_system_K        :: NTuple{3,NTuple{3,Float64}} =
+        ((0.0, 8.0, 0.0), (8.0, 0.0, 8.0), (0.0, 8.0, 0.0))   # chain: 1↔2, 2↔3 — 1 and 3 not coupled
+    coupled_system_L        :: Float64          = 1.0
+    coupled_system_T_final  :: Float64          = 0.3
+    coupled_system_inits    :: NTuple{3,Function} = (x -> exp(-100*(x-0.2)^2),
+                                                      x -> exp(-100*(x-0.5)^2),
+                                                      x -> exp(-100*(x-0.8)^2))
+
     # ---- WAVE EQUATION ----
     wave_N         :: Int     = 300
     wave_c         :: Float64 = 1.0
@@ -197,6 +208,49 @@ function solve_coupled_heat_1d(; N=CFG.coupled_N, αs=CFG.coupled_alphas,
         v = w[N+1:end]
     end
     return x, u, v
+end
+
+"""
+    solve_coupled_system_1d(; N, αs, K, L, T_final, init_funcs)
+
+Generalizes `solve_coupled_heat_1d` from 2 fields to M = length(αs) named
+fields, each diffusing at its own rate αₖ and linearly exchanging heat with
+any other field j for which K[k][j] ≠ 0 (an M×M coupling matrix rather than
+a single scalar κ). Still ONE (M·N)×(M·N) block system, factorised once via
+`lu` and reused every step — same backward-Euler stacking idea as
+`solve_coupled_heat_1d`, just with M interior fields concatenated instead of
+2. Returns (x, fields) where `fields` is a Vector of M solution vectors.
+"""
+function solve_coupled_system_1d(; N=CFG.coupled_system_N, αs=CFG.coupled_system_alphas,
+                                 K=CFG.coupled_system_K, L=CFG.coupled_system_L,
+                                 T_final=CFG.coupled_system_T_final,
+                                 init_funcs=CFG.coupled_system_inits)
+    M  = length(αs)
+    dx = L / (N+1)
+    x  = collect(range(dx, L-dx, length=N))
+    dt = 0.4 * dx^2 / maximum(αs)
+    nsteps = Int(ceil(T_final / dt))
+
+    e   = ones(N)
+    Lap = spdiagm(0 => 2 .* e, 1 => -e[1:end-1], -1 => -e[1:end-1]) ./ dx^2
+    Iden = sparse(I, N, N)
+
+    # Assemble the M×M block system: diagonal block k gets its own diffusivity
+    # plus the sum of its outgoing coupling rates; off-diagonal block (k,j)
+    # is the (negative) exchange rate between fields k and j.
+    koff = [sum(K[k][j] for j in 1:M if j != k) for k in 1:M]
+    A = vcat([hcat([k == j ? Iden + dt .* (αs[k] .* Lap + koff[k] .* Iden) : -dt .* K[k][j] .* Iden
+                     for j in 1:M]...) for k in 1:M]...)
+    Afact = lu(A)
+
+    fields = [init_funcs[k].(x) for k in 1:M]
+    for step in 1:nsteps
+        w = Afact \ vcat(fields...)
+        for k in 1:M
+            fields[k] = w[(k-1)*N+1:k*N]
+        end
+    end
+    return x, fields
 end
 
 """
@@ -392,6 +446,39 @@ function fig_coupled_heat()
     plt = plot(p1, p2, layout=(1,2), size=(CFG.fig_width, CFG.fig_height),
                dpi=CFG.fig_dpi)
     savefig(plt, joinpath(CFG.figures_dir, "coupled_heat.png"))
+end
+
+function fig_coupled_system()
+    @info "Generating Figure: Coupled PDE system (M > 2 fields)"
+    x, fields = solve_coupled_system_1d()
+    M = length(fields)
+    names = ["u₁", "u₂", "u₃"][1:M]
+    colors = [:firebrick, :steelblue, :seagreen][1:M]
+
+    p1 = plot(xlabel="x", ylabel="value",
+              title=@sprintf("Coupled fields at t = %.2g", CFG.coupled_system_T_final),
+              titlefontcolor=parse(Colorant, BLUE), legend=:topright,
+              grid=true, gridalpha=0.3, framestyle=:box)
+    for k in 1:M
+        plot!(p1, x, fields[k], lw=2.2, color=colors[k],
+              label=@sprintf("%s  (α=%.3g)", names[k], CFG.coupled_system_alphas[k]))
+    end
+
+    p2 = plot(xlabel="x", ylabel="|uᵢ - uⱼ|", legend=:topright,
+              title="Coupling residuals", titlefontcolor=parse(Colorant, BLUE),
+              grid=true, gridalpha=0.3, framestyle=:box)
+    pair = 0
+    for i in 1:M, j in (i+1):M
+        K = CFG.coupled_system_K
+        (K[i][j] == 0.0 && K[j][i] == 0.0) && continue
+        pair += 1
+        plot!(p2, x, abs.(fields[i] .- fields[j]), lw=2.0, color=colors[pair],
+              label="|$(names[i]) - $(names[j])|")
+    end
+
+    plt = plot(p1, p2, layout=(1,2), size=(CFG.fig_width, CFG.fig_height),
+               dpi=CFG.fig_dpi)
+    savefig(plt, joinpath(CFG.figures_dir, "coupled_system.png"))
 end
 
 function fig_wave_equation()
@@ -910,6 +997,7 @@ function generate_all_figures()
     fig_pde_types()
     fig_heat_equation()
     fig_coupled_heat()
+    fig_coupled_system()
     fig_wave_equation()
     fig_poisson_equation()
     fig_navier_stokes()
@@ -1465,23 +1553,51 @@ function build_docx()
 
     add_heading("4.5.8  Step H — Write tests", 2)
     add_para("Tests live in test/runtests.jl. Run them with `(@juliaPDEs) " *
-             "pkg> test`:")
-    add_code(["using juliaPDEs, Test",
+             "pkg> test`, or `julia --project=juliaPDEs -e 'using Pkg; " *
+             "Pkg.test()'` from the command line. Beyond basic smoke tests " *
+             "per solver, the suite includes a real cross-check: the " *
+             "generalized CoupledPDESystem, run with zero coupling, must " *
+             "reproduce HeatEquation.solve_implicit exactly — if it doesn't, " *
+             "the block-system assembly in coupled.jl has a bug:")
+    add_code(["using Test, juliaPDEs",
               "",
-              "@testset \"Heat equation\" begin",
-              "    x, u = solve_heat_1d(N=50, T=0.1)",
-              "    @test length(x) == 50",
-              "    @test maximum(u) < 1.0",
-              "    @test u[1]   ≈ 0.0 atol=1e-10",
-              "    @test u[end] ≈ 0.0 atol=1e-10",
+              "@testset \"Ind indexing\" begin",
+              "    d = Ind((:u, :v, :w), (4, 5))",
+              "    for var in (:u, :v, :w), I in CartesianIndices((4, 5))",
+              "        flat = d[var, I.I...]",
+              "        (var2, I2) = d[flat]",
+              "        @test var2 == var",
+              "        @test I2 == I",
+              "    end",
               "end",
               "",
-              "@testset \"Wave equation\" begin",
-              "    prob = juliaPDEs.WaveEquation(nx=100, nt=200, T=0.5)",
-              "    x, u = solve_wave_1d(prob)",
-              "    @test length(x) == 100",
-              "    @test all(isfinite, u)",
+              "@testset \"CoupledPDESystem at K=0 ≡ HeatEquation.solve_implicit (θ=1)\" begin",
+              "    grid = Grid(a=(0.0,), b=(1.0,), stepsize=(0.02,))",
+              "    f_init(x) = sin(pi * x)",
+              "    tg = TestGrid(grid, (t -> 0.0,), (t -> 0.0,), f_init)",
+              "",
+              "    heat     = HeatEquation(testgrid=tg, Nt=200, T=0.1, α=0.01)",
+              "    sol_heat = solve_implicit(heat; θ=1.0)",
+              "",
+              "    sys = CoupledPDESystem(grid=grid, vars=(:u, :v), α=(0.01, 0.01),",
+              "                           f_init=(f_init, f_init), Nt=200, T=0.1)",
+              "    sol_sys = solve(sys)",
+              "",
+              "    @test sol_sys.u ≈ sol_heat.u",
+              "    @test sol_sys.v ≈ sol_heat.u",
+              "end",
+              "",
+              "@testset \"WaveEquation smoke test\" begin",
+              "    p = WaveEquation(N_grid=(80,), a=(0.0,), b=(1.0,), Nt=200,",
+              "                     T=0.2, c=1.0, f_init=x -> sin(pi * x))",
+              "    sol = solve(p)",
+              "    @test length(sol.u) == 80",
+              "    @test all(isfinite, sol.u)",
               "end"])
+    add_para("This turns the earlier promise — that CoupledHeatEquation is " *
+             "'verified against HeatEquation.solve_implicit at κ=0' — into " *
+             "something Pkg.test() actually checks on every run, rather than " *
+             "a claim that only lived in a changelog entry.")
 
     add_heading("4.5.9  Revise — live reload during development", 2)
     add_para("Add Revise to your global environment so changes to src/ files " *
@@ -1976,76 +2092,107 @@ function build_docx()
               "savefig(\"wave_solution.png\")"])
 
     add_heading("6.8  Generalizing to Coupled Multi-Field Systems", 2)
-    add_para("Every problem so far — HeatProblem, WaveProblem — advances ONE " *
-             "scalar field. Many real models need two (or more) fields that " *
-             "feed into each other every time step: two temperatures " *
-             "exchanging heat, predator/prey populations diffusing and " *
-             "interacting, or the ψ (streamfunction) / ω (vorticity) pair in " *
-             "the Navier-Stokes solver you already saw in Step 7. What " *
-             "changes when a problem has more than one field?")
-    add_para("What changes: stack both fields into ONE vector and solve ONE " *
-             "sparse linear system per time step, instead of looping two " *
-             "independent solves. For two coupled heat fields " *
-             "∂u/∂t = α₁∇²u − κ(u−v) and ∂v/∂t = α₂∇²v − κ(v−u), the unknown " *
-             "becomes w = [u; v] and backward Euler gives a single block " *
-             "matrix:")
-    add_code(["#   [ I + dt(α₁·Lap + κI)      −dt·κ·I          ] [uⁿ⁺¹]   [uⁿ]",
-              "#   [      −dt·κ·I          I + dt(α₂·Lap + κI) ] [vⁿ⁺¹] = [vⁿ]",
-              "#",
-              "# src/coupled.jl (juliaPDEs package)",
-              "Base.@kwdef struct CoupledHeatEquation{N,F1,F2} <: ParabolicProblem",
-              "    grid::Grid{N}",
-              "    α::NTuple{2,Float64} = (0.01, 0.02)   # diffusivity per field",
-              "    κ::Float64           = 0.5            # exchange rate",
-              "    f_init::Tuple{F1,F2}",
-              "    Nt::Int              = 1000",
-              "    T::Float64           = 1.0",
+    add_para("Every problem in Step 7 — HeatEquation, WaveEquation, " *
+             "PoissonEquation — advances ONE scalar field. Many real models " *
+             "need two or more fields that feed into each other every time " *
+             "step: two temperatures exchanging heat, predator/prey " *
+             "populations diffusing and interacting, or the ψ (streamfunction) " *
+             "/ ω (vorticity) pair in the Navier-Stokes solver from Step 7. " *
+             "What changes when a problem has more than one field?")
+    add_para("What changes: stack every field into ONE vector and solve ONE " *
+             "sparse linear system per time step, instead of looping " *
+             "independent solves. The package's CoupledPDESystem{M,N} type " *
+             "does exactly this for any number M of named fields — it is the " *
+             "actual generalization of the two-field CoupledHeatEquation you " *
+             "may already have used, not just a sketch of one:")
+    add_code(["# src/types.jl — flat indexing across M named fields sharing one grid",
+              "struct Ind{M,N}",
+              "    vars::NTuple{M,Symbol}",
+              "    NumGrid::NTuple{M,NTuple{N,Int}}",
               "end",
               "",
-              "function solve(p::CoupledHeatEquation{N,F1,F2}) where {N,F1,F2}",
-              "    Lap  = nd_laplacian(d, inner_n)      # same operator PoissonEquation uses",
+              "# Ind(:v, i, j) → flat position of field :v at grid point (i,j)",
+              "# Ind(42)       → (which field, CartesianIndex within that field)",
+              "",
+              "# src/coupled.jl",
+              "Base.@kwdef struct CoupledPDESystem{M,N} <: ParabolicProblem",
+              "    grid::Grid{N}",
+              "    vars::NTuple{M,Symbol}                 # e.g. (:u, :v, :w)",
+              "    α::NTuple{M,Float64}                   # diffusivity per field",
+              "    K::NTuple{M,NTuple{M,Float64}} = ntuple(_->ntuple(_->0.0,length(vars)),length(vars)) # M×M coupling matrix",
+              "    f_init::NTuple{M,Function}",
+              "    Nt::Int    = 1000",
+              "    T::Float64 = 1.0",
+              "end",
+              "",
+              "function solve(p::CoupledPDESystem{M,N}) where {M,N}",
+              "    Lap  = nd_laplacian(d, inner_n)     # same operator PoissonEquation uses",
               "    Iden = sparse(I, n, n)",
-              "    A11  = Iden + dt * (p.α[1] * Lap + p.κ * Iden)",
-              "    A22  = Iden + dt * (p.α[2] * Lap + p.κ * Iden)",
-              "    Aoff = -dt * p.κ * Iden",
-              "    Afact = lu([A11 Aoff; Aoff A22])      # ONE factorisation, reused every step",
-              "    # … time-step both fields together via Afact \\\\ [u; v] …",
+              "    koff = [sum(p.K[i][j] for j in 1:M if j != i) for i in 1:M]",
+              "    # Aᵢᵢ = I + dt(αᵢ·Lap + koffᵢ·I),  Aᵢⱼ = −dt·Kᵢⱼ·I   (i ≠ j)",
+              "    Afact = lu(A)                       # ONE factorisation, reused every step",
+              "    # … time-step all M fields together via Afact \\\\ [u₁; u₂; …; u_M] …",
               "end"])
-    add_para("Why this is necessary: if you instead time-step u and v with " *
-             "two separate independent solves, the coupling term κ(u−v) has " *
-             "to be evaluated using the OLD value of the other field, which " *
-             "is only first-order accurate in the coupling and can become " *
-             "unstable for large κ (stiff exchange). Solving both fields at " *
-             "the same implicit time level, in one system, keeps the scheme " *
-             "unconditionally stable no matter how strong the coupling is — " *
-             "exactly the same reason Step 7's implicit heat solver beats " *
-             "forward Euler.")
+    add_para("The key idea is `vars::NTuple{M,Symbol}` plus `Ind`: instead of " *
+             "hardcoding fields named `u` and `v` on the struct, each field " *
+             "gets a symbolic name, and Ind's two getindex methods translate " *
+             "between a name-and-grid-point (\"where is :w at grid point 7?\") " *
+             "and a flat position in the stacked (M·n)-length vector the " *
+             "sparse solve actually works with. `K` generalizes the single " *
+             "exchange rate κ to an M×M matrix: K[i][j] = 0 for every pair " *
+             "means M independent fields solved together purely for " *
+             "convenience, and nonzero entries reproduce (and extend) the " *
+             "two-field exchange behaviour. Note the default for K reads " *
+             "length(vars), not the type parameter M directly — @kwdef " *
+             "default expressions are evaluated in the outer constructor " *
+             "before M is resolved, so only previously-listed field names " *
+             "like vars are in scope yet.")
+    add_para("Why coupling at the same implicit time level is necessary: if " *
+             "you instead time-step two fields with separate independent " *
+             "solves, an exchange term like κ(u−v) has to be evaluated using " *
+             "the OLD value of the other field, which is only first-order " *
+             "accurate in the coupling and can become unstable for large κ " *
+             "(stiff exchange). Solving every field at the same implicit " *
+             "time level, in one system, keeps the scheme unconditionally " *
+             "stable no matter how strong the coupling is — exactly the same " *
+             "reason Step 7's implicit heat solver beats forward Euler.")
     add_para("Benefit: the block-system technique reuses every piece of " *
              "linear-algebra machinery already in the package — the same " *
              "nd_laplacian sparse assembly and the same lu / \\\\ solve used " *
              "by PoissonEquation and HeatEquation.solve_implicit — it just " *
              "gets called on a bigger, block-structured matrix. And because " *
-             "CoupledHeatEquation still subtypes ParabolicProblem, it slots " *
-             "into the exact same solve()/plot() dispatch as every other " *
-             "problem type; nothing else in the package needs to know or " *
-             "care that a solution came from two coupled fields instead of " *
-             "one.")
+             "CoupledPDESystem subtypes ParabolicProblem, it slots into the " *
+             "exact same solve()/plot() dispatch as every other problem " *
+             "type. CoupledHeatEquation, the original two-field type, is now " *
+             "a one-line convenience constructor that builds and delegates " *
+             "to a CoupledPDESystem with vars=(:u,:v) — the special case is " *
+             "a literal instance of the general one, rather than a separate " *
+             "implementation that has to be kept in sync by hand.")
     add_para("Connection to Navier-Stokes: the LidCavityFlow solver from " *
              "Step 7 already advances two coupled fields, ψ and ω, every " *
              "time step — but via splitting (an explicit vorticity update, " *
              "then two separate sparse solves: one lu factorisation for " *
              "diffusion, another for the streamfunction Poisson equation). " *
-             "That is a perfectly standard and efficient scheme. As an " *
-             "exercise, ask what would change if ψ and ω were instead " *
-             "stacked into one block system like u and v above — you would " *
-             "trade two smaller factorisations for one larger one, gaining " *
-             "the same 'exact at the same time level' coupling this section " *
-             "demonstrates.")
+             "That is a perfectly standard and efficient scheme, and — " *
+             "unlike CoupledHeatEquation — it stays outside CoupledPDESystem " *
+             "for now: it's 2-D-only and hand-rolled rather than built on " *
+             "nd_laplacian. As an exercise, ask what would change if ψ and ω " *
+             "were instead stacked into one CoupledPDESystem-style block " *
+             "system — you would trade two smaller factorisations for one " *
+             "larger one, gaining the same 'exact at the same time level' " *
+             "coupling this section demonstrates.")
     add_image(joinpath(CFG.figures_dir, "coupled_heat.png"); width_in=6.5,
-              caption="Figure. Two coupled heat fields (left) starting from " *
-                      "separate Gaussian pulses, pulled toward each other by " *
-                      "κ while each also diffuses; the coupling residual " *
-                      "|u−v| (right) shrinks toward zero.")
+              caption="Figure. The M = 2 case: two coupled heat fields (left) " *
+                      "starting from separate Gaussian pulses, pulled toward " *
+                      "each other by κ while each also diffuses; the coupling " *
+                      "residual |u−v| (right) shrinks toward zero.")
+    add_image(joinpath(CFG.figures_dir, "coupled_system.png"); width_in=6.5,
+              caption="Figure. CoupledPDESystem with M = 3 named fields in a " *
+                      "chain: field 2 exchanges heat with both 1 and 3, but 1 " *
+                      "and 3 are not directly coupled (K[1][3] = K[3][1] = 0). " *
+                      "The residual panel (right) shows only the two coupled " *
+                      "pairs — the same Ind-indexed block system handles any " *
+                      "coupling topology, not just all-to-all.")
 
     add_page_break()
 

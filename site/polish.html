@@ -1404,54 +1404,81 @@ wsol.problem isa HyperbolicProblem # true</code></pre>
 
     <h3 id="step6-coupled">8.9 Generalizing to Coupled Systems</h3>
     <p>
-      Every problem so far — <code>HeatEquation</code>,
-      <code>WaveEquation</code> — advances <strong>one</strong> scalar field.
-      Many real models need two (or more) fields that feed into each other
-      every time step: two temperatures exchanging heat, predator/prey
-      populations diffusing and interacting, or the ψ (streamfunction) / ω
-      (vorticity) pair in the Navier&ndash;Stokes solver from Chapter 9.
-      What changes when a problem has more than one field?
+      Every problem in Chapter 7 — <code>HeatEquation</code>,
+      <code>WaveEquation</code>, <code>PoissonEquation</code> — advances
+      <strong>one</strong> scalar field. Many real models need two or more
+      fields that feed into each other every time step: two temperatures
+      exchanging heat, predator/prey populations diffusing and interacting,
+      or the ψ (streamfunction) / ω (vorticity) pair in the
+      Navier&ndash;Stokes solver from Chapter 9. What changes when a
+      problem has more than one field?
     </p>
     <p>
-      <strong>What changes.</strong> Stack both fields into <em>one</em>
+      <strong>What changes.</strong> Stack every field into <em>one</em>
       vector and solve <em>one</em> sparse linear system per time step,
-      instead of looping two independent solves. For two coupled heat
-      fields <code>∂u/∂t = α₁∇²u − κ(u−v)</code> and
-      <code>∂v/∂t = α₂∇²v − κ(v−u)</code>, the unknown becomes
-      <code>w = [u; v]</code> and backward Euler gives a single block
-      matrix:
+      instead of looping independent solves. The package's
+      <code>CoupledPDESystem{M,N}</code> type does exactly this for any
+      number <code>M</code> of named fields — it is the actual
+      generalization of the two-field <code>CoupledHeatEquation</code> you
+      may already have used, not just a sketch of one:
     </p>
     <div class="code-block">
-      <div class="code-header"><span class="code-lang">julia — src/coupled.jl</span><button class="copy-btn">Copy</button></div>
-      <pre><code class="language-julia">#   [ I + dt(α₁·Lap + κI)      −dt·κ·I          ] [uⁿ⁺¹]   [uⁿ]
-#   [      −dt·κ·I          I + dt(α₂·Lap + κI) ] [vⁿ⁺¹] = [vⁿ]
-
-Base.@kwdef struct CoupledHeatEquation{N,F1,F2} &lt;: ParabolicProblem
-    grid::Grid{N}
-    α::NTuple{2,Float64} = (0.01, 0.02)   # diffusivity per field
-    κ::Float64           = 0.5            # exchange rate
-    f_init::Tuple{F1,F2}
-    Nt::Int              = 1000
-    T::Float64           = 1.0
+      <div class="code-header"><span class="code-lang">julia — src/types.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># flat indexing across M named fields sharing one grid
+struct Ind{M,N}
+    vars::NTuple{M,Symbol}
+    NumGrid::NTuple{M,NTuple{N,Int}}
 end
 
-function solve(p::CoupledHeatEquation{N,F1,F2}) where {N,F1,F2}
-    Lap  = nd_laplacian(d, inner_n)      # same operator PoissonEquation uses
+# Ind(:v, i, j) → flat position of field :v at grid point (i,j)
+# Ind(42)       → (which field, CartesianIndex within that field)</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/coupled.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">Base.@kwdef struct CoupledPDESystem{M,N} &lt;: ParabolicProblem
+    grid::Grid{N}
+    vars::NTuple{M,Symbol}                 # e.g. (:u, :v, :w)
+    α::NTuple{M,Float64}                   # diffusivity per field
+    K::NTuple{M,NTuple{M,Float64}} = ntuple(_->ntuple(_->0.0,length(vars)),length(vars)) # M×M coupling matrix
+    f_init::NTuple{M,Function}
+    Nt::Int    = 1000
+    T::Float64 = 1.0
+end
+
+function solve(p::CoupledPDESystem{M,N}) where {M,N}
+    Lap  = nd_laplacian(d, inner_n)     # same operator PoissonEquation uses
     Iden = sparse(I, n, n)
-    A11  = Iden + dt * (p.α[1] * Lap + p.κ * Iden)
-    A22  = Iden + dt * (p.α[2] * Lap + p.κ * Iden)
-    Aoff = -dt * p.κ * Iden
-    Afact = lu([A11 Aoff; Aoff A22])     # ONE factorisation, reused every step
-    # … time-step both fields together via Afact \ [u; v] …
+    koff = [sum(p.K[i][j] for j in 1:M if j != i) for i in 1:M]
+    # Aᵢᵢ = I + dt(αᵢ·Lap + koffᵢ·I),  Aᵢⱼ = −dt·Kᵢⱼ·I   (i ≠ j)
+    Afact = lu(A)                       # ONE factorisation, reused every step
+    # … time-step all M fields together via Afact \ [u₁; u₂; …; u_M] …
 end</code></pre>
     </div>
     <p>
-      <strong>Why this is necessary.</strong> If you instead time-step
-      <code>u</code> and <code>v</code> with two separate independent
-      solves, the coupling term <code>κ(u−v)</code> has to be evaluated
+      The key idea is <code>vars::NTuple{M,Symbol}</code> plus
+      <code>Ind</code>: instead of hardcoding fields named <code>u</code>
+      and <code>v</code> on the struct, each field gets a symbolic name,
+      and <code>Ind</code>'s two <code>getindex</code> methods translate
+      between a name-and-grid-point ("where is <code>:w</code> at grid
+      point 7?") and a flat position in the stacked <code>(M·n)</code>-length
+      vector the sparse solve actually works with. <code>K</code>
+      generalizes the single exchange rate κ to an M×M matrix:
+      <code>K[i][j] = 0</code> for every pair means M independent fields
+      solved together purely for convenience, and nonzero entries reproduce
+      (and extend) the two-field exchange behaviour. Note the default for
+      <code>K</code> reads <code>length(vars)</code>, not the type
+      parameter <code>M</code> directly — <code>@kwdef</code> default
+      expressions are evaluated in the outer constructor before
+      <code>M</code> is resolved, so only previously-listed field names
+      like <code>vars</code> are in scope yet.
+    </p>
+    <p>
+      <strong>Why coupling at the same implicit time level is necessary.</strong>
+      If you instead time-step two fields with separate independent
+      solves, an exchange term like <code>κ(u−v)</code> has to be evaluated
       using the <em>old</em> value of the other field — only first-order
       accurate in the coupling, and it can go unstable for large κ (stiff
-      exchange). Solving both fields at the same implicit time level, in
+      exchange). Solving every field at the same implicit time level, in
       one system, keeps the scheme unconditionally stable no matter how
       strong the coupling is — the same reason the implicit heat solver in
       Chapter 6 beats forward Euler.
@@ -1464,11 +1491,14 @@ end</code></pre>
       <code>PoissonEquation</code> and
       <code>HeatEquation.solve_implicit</code> — it just gets called on a
       bigger, block-structured matrix. And because
-      <code>CoupledHeatEquation</code> still subtypes
-      <code>ParabolicProblem</code>, it slots into the exact same
-      <code>solve()</code>/<code>plot()</code> dispatch as every other
-      problem type; nothing else in the package needs to know or care that
-      a solution came from two coupled fields instead of one.
+      <code>CoupledPDESystem</code> subtypes <code>ParabolicProblem</code>,
+      it slots into the exact same <code>solve()</code>/<code>plot()</code>
+      dispatch as every other problem type. <code>CoupledHeatEquation</code>,
+      the original two-field type, is now a one-line convenience
+      constructor that builds and delegates to a <code>CoupledPDESystem</code>
+      with <code>vars=(:u,:v)</code> — the special case is a literal
+      instance of the general one, rather than a separate implementation
+      that has to be kept in sync by hand.
     </p>
     <p>
       <strong>Connection to Navier&ndash;Stokes.</strong> <code>LidCavityFlow</code>
@@ -1476,8 +1506,11 @@ end</code></pre>
       via <em>splitting</em> (an explicit vorticity update, then two
       separate sparse solves: one factorisation for diffusion, another for
       the streamfunction Poisson equation). That's a perfectly standard and
-      efficient scheme. As an exercise, consider what would change if ψ and
-      ω were instead stacked into one block system like u and v above — you
+      efficient scheme, and — unlike <code>CoupledHeatEquation</code> — it
+      stays outside <code>CoupledPDESystem</code> for now: it's 2-D-only
+      and hand-rolled rather than built on <code>nd_laplacian</code>. As an
+      exercise, consider what would change if ψ and ω were instead stacked
+      into one <code>CoupledPDESystem</code>-style block system — you
       would trade two smaller factorisations for one larger one, gaining
       the same "exact at the same time level" coupling this section
       demonstrates.
@@ -1487,10 +1520,23 @@ end</code></pre>
            alt="Two coupled heat fields starting from separate Gaussian pulses, and their coupling residual."
            style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
       <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
-        <strong>Figure.</strong> Two coupled heat fields (left) starting
-        from separate Gaussian pulses, pulled toward each other by κ while
-        each also diffuses; the coupling residual |u&minus;v| (right)
-        shrinks toward zero.
+        <strong>Figure.</strong> The M = 2 case: two coupled heat fields
+        (left) starting from separate Gaussian pulses, pulled toward each
+        other by κ while each also diffuses; the coupling residual
+        |u&minus;v| (right) shrinks toward zero.
+      </figcaption>
+    </figure>
+    <figure class="figure">
+      <img src="output/figures/coupled_system.png"
+           alt="Three coupled heat fields in a chain, u1-u2-u3, with u1 and u3 not directly coupled."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure.</strong> <code>CoupledPDESystem</code> with M = 3
+        named fields in a chain: field 2 exchanges heat with both 1 and 3,
+        but 1 and 3 are not directly coupled
+        (<code>K[1][3] = K[3][1] = 0</code>). The residual panel (right)
+        shows only the two coupled pairs — the same <code>Ind</code>-indexed
+        block system handles any coupling topology, not just all-to-all.
       </figcaption>
     </figure>
   </section>
