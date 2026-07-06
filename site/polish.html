@@ -1401,6 +1401,98 @@ hsol.problem isa PDEProblem       # true
 hsol.problem isa ParabolicProblem # true
 wsol.problem isa HyperbolicProblem # true</code></pre>
     </div>
+
+    <h3 id="step6-coupled">8.9 Generalizing to Coupled Systems</h3>
+    <p>
+      Every problem so far — <code>HeatEquation</code>,
+      <code>WaveEquation</code> — advances <strong>one</strong> scalar field.
+      Many real models need two (or more) fields that feed into each other
+      every time step: two temperatures exchanging heat, predator/prey
+      populations diffusing and interacting, or the ψ (streamfunction) / ω
+      (vorticity) pair in the Navier&ndash;Stokes solver from Chapter 9.
+      What changes when a problem has more than one field?
+    </p>
+    <p>
+      <strong>What changes.</strong> Stack both fields into <em>one</em>
+      vector and solve <em>one</em> sparse linear system per time step,
+      instead of looping two independent solves. For two coupled heat
+      fields <code>∂u/∂t = α₁∇²u − κ(u−v)</code> and
+      <code>∂v/∂t = α₂∇²v − κ(v−u)</code>, the unknown becomes
+      <code>w = [u; v]</code> and backward Euler gives a single block
+      matrix:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — src/coupled.jl</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">#   [ I + dt(α₁·Lap + κI)      −dt·κ·I          ] [uⁿ⁺¹]   [uⁿ]
+#   [      −dt·κ·I          I + dt(α₂·Lap + κI) ] [vⁿ⁺¹] = [vⁿ]
+
+Base.@kwdef struct CoupledHeatEquation{N,F1,F2} &lt;: ParabolicProblem
+    grid::Grid{N}
+    α::NTuple{2,Float64} = (0.01, 0.02)   # diffusivity per field
+    κ::Float64           = 0.5            # exchange rate
+    f_init::Tuple{F1,F2}
+    Nt::Int              = 1000
+    T::Float64           = 1.0
+end
+
+function solve(p::CoupledHeatEquation{N,F1,F2}) where {N,F1,F2}
+    Lap  = nd_laplacian(d, inner_n)      # same operator PoissonEquation uses
+    Iden = sparse(I, n, n)
+    A11  = Iden + dt * (p.α[1] * Lap + p.κ * Iden)
+    A22  = Iden + dt * (p.α[2] * Lap + p.κ * Iden)
+    Aoff = -dt * p.κ * Iden
+    Afact = lu([A11 Aoff; Aoff A22])     # ONE factorisation, reused every step
+    # … time-step both fields together via Afact \ [u; v] …
+end</code></pre>
+    </div>
+    <p>
+      <strong>Why this is necessary.</strong> If you instead time-step
+      <code>u</code> and <code>v</code> with two separate independent
+      solves, the coupling term <code>κ(u−v)</code> has to be evaluated
+      using the <em>old</em> value of the other field — only first-order
+      accurate in the coupling, and it can go unstable for large κ (stiff
+      exchange). Solving both fields at the same implicit time level, in
+      one system, keeps the scheme unconditionally stable no matter how
+      strong the coupling is — the same reason the implicit heat solver in
+      Chapter 6 beats forward Euler.
+    </p>
+    <p>
+      <strong>Benefit.</strong> The block-system technique reuses every
+      piece of linear-algebra machinery already in the package — the same
+      <code>nd_laplacian</code> sparse assembly and the same
+      <code>lu</code> / <code>\</code> solve used by
+      <code>PoissonEquation</code> and
+      <code>HeatEquation.solve_implicit</code> — it just gets called on a
+      bigger, block-structured matrix. And because
+      <code>CoupledHeatEquation</code> still subtypes
+      <code>ParabolicProblem</code>, it slots into the exact same
+      <code>solve()</code>/<code>plot()</code> dispatch as every other
+      problem type; nothing else in the package needs to know or care that
+      a solution came from two coupled fields instead of one.
+    </p>
+    <p>
+      <strong>Connection to Navier&ndash;Stokes.</strong> <code>LidCavityFlow</code>
+      already advances two coupled fields, ψ and ω, every time step — but
+      via <em>splitting</em> (an explicit vorticity update, then two
+      separate sparse solves: one factorisation for diffusion, another for
+      the streamfunction Poisson equation). That's a perfectly standard and
+      efficient scheme. As an exercise, consider what would change if ψ and
+      ω were instead stacked into one block system like u and v above — you
+      would trade two smaller factorisations for one larger one, gaining
+      the same "exact at the same time level" coupling this section
+      demonstrates.
+    </p>
+    <figure class="figure">
+      <img src="output/figures/coupled_heat.png"
+           alt="Two coupled heat fields starting from separate Gaussian pulses, and their coupling residual."
+           style="max-width:100%; height:auto; border:1px solid #d9d9d9; border-radius:6px; padding:6px; background:#fff;" />
+      <figcaption style="font-size:0.9em; color:#555; text-align:center; margin-top:8px;">
+        <strong>Figure.</strong> Two coupled heat fields (left) starting
+        from separate Gaussian pulses, pulled toward each other by κ while
+        each also diffuses; the coupling residual |u&minus;v| (right)
+        shrinks toward zero.
+      </figcaption>
+    </figure>
   </section>
 
   <!-- ══ HOMEWORK ══════════════════════════════════════════════ -->

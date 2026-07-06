@@ -61,6 +61,15 @@ Base.@kwdef mutable struct Config
     heat_snapshots :: Vector{Float64} = [0.0, 0.05, 0.2, 0.5, 1.0]
     heat_init      :: Function = x -> exp(-100*(x-0.5)^2)   # Gaussian pulse
 
+    # ---- COUPLED HEAT EQUATIONS (two fields, one sparse system) ----
+    coupled_N        :: Int              = 200
+    coupled_alphas   :: NTuple{2,Float64} = (0.01, 0.01)
+    coupled_kappa    :: Float64          = 8.0
+    coupled_L        :: Float64          = 1.0
+    coupled_T_final  :: Float64          = 0.3
+    coupled_inits    :: NTuple{2,Function} = (x -> exp(-100*(x-0.3)^2),
+                                               x -> exp(-100*(x-0.7)^2))
+
     # ---- WAVE EQUATION ----
     wave_N         :: Int     = 300
     wave_c         :: Float64 = 1.0
@@ -147,6 +156,47 @@ function solve_heat_1d(; N=CFG.heat_N, α=CFG.heat_alpha, L=CFG.heat_L,
         end
     end
     return x, snapshots, hcat(full_hist...), t_grid
+end
+
+"""
+    solve_coupled_heat_1d(; N, αs, κ, L, T_final, init_funcs)
+
+Solves the coupled system  ∂u/∂t = α₁u'' − κ(u−v),  ∂v/∂t = α₂v'' − κ(v−u)
+on [0, L] with u=v=0 (Dirichlet), by stacking both interior fields into one
+vector and factorising a single sparse block system once (backward Euler —
+unconditionally stable regardless of κ). This is the coupled-system
+counterpart of `solve_heat_1d`: instead of two independent time-stepping
+loops, ONE `lu` factorisation advances both fields together every step.
+Returns (x, u_final, v_final).
+"""
+function solve_coupled_heat_1d(; N=CFG.coupled_N, αs=CFG.coupled_alphas,
+                               κ=CFG.coupled_kappa, L=CFG.coupled_L,
+                               T_final=CFG.coupled_T_final,
+                               init_funcs=CFG.coupled_inits)
+    dx = L / (N+1)
+    x  = collect(range(dx, L-dx, length=N))
+    dt = 0.4 * dx^2 / maximum(αs)          # same CFL-style step as solve_heat_1d
+    nsteps = Int(ceil(T_final / dt))
+
+    # 1-D interior Laplacian (matches the −∇² sign convention used throughout
+    # this file, e.g. solve_poisson_2d): Lap ≈ −u''.
+    e   = ones(N)
+    Lap = spdiagm(0 => 2 .* e, 1 => -e[1:end-1], -1 => -e[1:end-1]) ./ dx^2
+    Iden = sparse(I, N, N)
+
+    A11 = Iden + dt .* (αs[1] .* Lap + κ .* Iden)
+    A22 = Iden + dt .* (αs[2] .* Lap + κ .* Iden)
+    Aoff = -dt * κ .* Iden
+    Afact = lu([A11 Aoff; Aoff A22])
+
+    u = init_funcs[1].(x)
+    v = init_funcs[2].(x)
+    for step in 1:nsteps
+        w = Afact \ vcat(u, v)
+        u = w[1:N]
+        v = w[N+1:end]
+    end
+    return x, u, v
 end
 
 """
@@ -319,6 +369,29 @@ function fig_heat_equation()
     plt = plot(p1, p2, layout=(1,2), size=(CFG.fig_width, CFG.fig_height),
                dpi=CFG.fig_dpi, plot_titlefontsize=13)
     savefig(plt, joinpath(CFG.figures_dir, "heat_equation.png"))
+end
+
+function fig_coupled_heat()
+    @info "Generating Figure: Coupled heat equations"
+    x, u, v = solve_coupled_heat_1d()
+
+    p1 = plot(x, u, xlabel="x", ylabel="value", lw=2.2, color=:firebrick,
+              label=@sprintf("u  (α₁=%.3g)", CFG.coupled_alphas[1]),
+              title=@sprintf("Coupled fields at t = %.2g   (κ = %.2g)",
+                             CFG.coupled_T_final, CFG.coupled_kappa),
+              titlefontcolor=parse(Colorant, BLUE), legend=:topright,
+              grid=true, gridalpha=0.3, framestyle=:box)
+    plot!(p1, x, v, lw=2.2, color=:steelblue,
+          label=@sprintf("v  (α₂=%.3g)", CFG.coupled_alphas[2]))
+
+    p2 = plot(x, abs.(u .- v), xlabel="x", ylabel="|u - v|",
+              lw=2.0, color=:seagreen, legend=false,
+              title="Coupling residual", titlefontcolor=parse(Colorant, BLUE),
+              grid=true, gridalpha=0.3, framestyle=:box)
+
+    plt = plot(p1, p2, layout=(1,2), size=(CFG.fig_width, CFG.fig_height),
+               dpi=CFG.fig_dpi)
+    savefig(plt, joinpath(CFG.figures_dir, "coupled_heat.png"))
 end
 
 function fig_wave_equation()
@@ -836,6 +909,7 @@ function generate_all_figures()
     fig_pde_pipeline()
     fig_pde_types()
     fig_heat_equation()
+    fig_coupled_heat()
     fig_wave_equation()
     fig_poisson_equation()
     fig_navier_stokes()
@@ -1837,7 +1911,7 @@ function build_docx()
               "    plot(sol.x, sol.u;",
               "        xlabel = \"x\",",
               "        ylabel = \"u(x,t)\",",
-              "        title  = \"Heat equation  α=$(sol.prob.α)  t=$(sol.t)\",",
+              "        title  = \"Heat equation  α=\$(sol.prob.α)  t=\$(sol.t)\",",
               "        lw     = 2,",
               "        label  = \"Numerical\",",
               "        kwargs...)",
@@ -1847,7 +1921,7 @@ function build_docx()
               "    plot(sol.x, sol.u;",
               "        xlabel = \"x\",",
               "        ylabel = \"u(x,t)\",",
-              "        title  = \"Wave equation  c=$(sol.prob.c)  t=$(sol.t)\",",
+              "        title  = \"Wave equation  c=\$(sol.prob.c)  t=\$(sol.t)\",",
               "        lw     = 2,",
               "        label  = \"Numerical\",",
               "        kwargs...)",
@@ -1900,6 +1974,78 @@ function build_docx()
               "wsol  = solve(wprob)          # dispatches to WaveProblem method",
               "plot(wsol)                    # dispatches to Solution1D{WaveProblem}",
               "savefig(\"wave_solution.png\")"])
+
+    add_heading("6.8  Generalizing to Coupled Multi-Field Systems", 2)
+    add_para("Every problem so far — HeatProblem, WaveProblem — advances ONE " *
+             "scalar field. Many real models need two (or more) fields that " *
+             "feed into each other every time step: two temperatures " *
+             "exchanging heat, predator/prey populations diffusing and " *
+             "interacting, or the ψ (streamfunction) / ω (vorticity) pair in " *
+             "the Navier-Stokes solver you already saw in Step 7. What " *
+             "changes when a problem has more than one field?")
+    add_para("What changes: stack both fields into ONE vector and solve ONE " *
+             "sparse linear system per time step, instead of looping two " *
+             "independent solves. For two coupled heat fields " *
+             "∂u/∂t = α₁∇²u − κ(u−v) and ∂v/∂t = α₂∇²v − κ(v−u), the unknown " *
+             "becomes w = [u; v] and backward Euler gives a single block " *
+             "matrix:")
+    add_code(["#   [ I + dt(α₁·Lap + κI)      −dt·κ·I          ] [uⁿ⁺¹]   [uⁿ]",
+              "#   [      −dt·κ·I          I + dt(α₂·Lap + κI) ] [vⁿ⁺¹] = [vⁿ]",
+              "#",
+              "# src/coupled.jl (juliaPDEs package)",
+              "Base.@kwdef struct CoupledHeatEquation{N,F1,F2} <: ParabolicProblem",
+              "    grid::Grid{N}",
+              "    α::NTuple{2,Float64} = (0.01, 0.02)   # diffusivity per field",
+              "    κ::Float64           = 0.5            # exchange rate",
+              "    f_init::Tuple{F1,F2}",
+              "    Nt::Int              = 1000",
+              "    T::Float64           = 1.0",
+              "end",
+              "",
+              "function solve(p::CoupledHeatEquation{N,F1,F2}) where {N,F1,F2}",
+              "    Lap  = nd_laplacian(d, inner_n)      # same operator PoissonEquation uses",
+              "    Iden = sparse(I, n, n)",
+              "    A11  = Iden + dt * (p.α[1] * Lap + p.κ * Iden)",
+              "    A22  = Iden + dt * (p.α[2] * Lap + p.κ * Iden)",
+              "    Aoff = -dt * p.κ * Iden",
+              "    Afact = lu([A11 Aoff; Aoff A22])      # ONE factorisation, reused every step",
+              "    # … time-step both fields together via Afact \\\\ [u; v] …",
+              "end"])
+    add_para("Why this is necessary: if you instead time-step u and v with " *
+             "two separate independent solves, the coupling term κ(u−v) has " *
+             "to be evaluated using the OLD value of the other field, which " *
+             "is only first-order accurate in the coupling and can become " *
+             "unstable for large κ (stiff exchange). Solving both fields at " *
+             "the same implicit time level, in one system, keeps the scheme " *
+             "unconditionally stable no matter how strong the coupling is — " *
+             "exactly the same reason Step 7's implicit heat solver beats " *
+             "forward Euler.")
+    add_para("Benefit: the block-system technique reuses every piece of " *
+             "linear-algebra machinery already in the package — the same " *
+             "nd_laplacian sparse assembly and the same lu / \\\\ solve used " *
+             "by PoissonEquation and HeatEquation.solve_implicit — it just " *
+             "gets called on a bigger, block-structured matrix. And because " *
+             "CoupledHeatEquation still subtypes ParabolicProblem, it slots " *
+             "into the exact same solve()/plot() dispatch as every other " *
+             "problem type; nothing else in the package needs to know or " *
+             "care that a solution came from two coupled fields instead of " *
+             "one.")
+    add_para("Connection to Navier-Stokes: the LidCavityFlow solver from " *
+             "Step 7 already advances two coupled fields, ψ and ω, every " *
+             "time step — but via splitting (an explicit vorticity update, " *
+             "then two separate sparse solves: one lu factorisation for " *
+             "diffusion, another for the streamfunction Poisson equation). " *
+             "That is a perfectly standard and efficient scheme. As an " *
+             "exercise, ask what would change if ψ and ω were instead " *
+             "stacked into one block system like u and v above — you would " *
+             "trade two smaller factorisations for one larger one, gaining " *
+             "the same 'exact at the same time level' coupling this section " *
+             "demonstrates.")
+    add_image(joinpath(CFG.figures_dir, "coupled_heat.png"); width_in=6.5,
+              caption="Figure. Two coupled heat fields (left) starting from " *
+                      "separate Gaussian pulses, pulled toward each other by " *
+                      "κ while each also diffuses; the coupling residual " *
+                      "|u−v| (right) shrinks toward zero.")
 
     add_page_break()
 

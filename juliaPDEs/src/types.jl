@@ -50,6 +50,46 @@ struct TestGrid{N,F}
   f_init::F
 end
 
+# ── CoupledPDESolution — two fields sharing one grid ──────────────────────────
+#
+#   A second, minimal solution type rather than reusing `PDESolution{T,N}`:
+#   that type subtypes `AbstractArray{T,N}` around a single homogeneous array,
+#   so bolting a second field onto it would change what indexing/iterating a
+#   `PDESolution` means for every existing solver. Coupled problems (two
+#   fields solved together as one linear system, e.g. `CoupledHeatEquation`)
+#   get their own lightweight struct instead.
+#
+struct CoupledPDESolution{N}
+  grid::NTuple{N,Vector{Float64}}
+  u::Array{Float64,N}
+  v::Array{Float64,N}
+  t::Float64
+  problem::PDEProblem
+end
+
+function Base.getproperty(s::CoupledPDESolution, sym::Symbol)
+  g = getfield(s, :grid)
+  sym === :x && return g[1]
+  if sym === :y
+    length(g) >= 2 || error("$(typeof(s)) has no y dimension")
+    return g[2]
+  end
+  if sym === :z
+    length(g) >= 3 || error("$(typeof(s)) has no z dimension")
+    return g[3]
+  end
+  return getfield(s, sym)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", s::CoupledPDESolution{N}) where {N}
+  dims = join(["$(length(g)) pts" for g in s.grid], " × ")
+  println(io, "CoupledPDESolution{$(N)D}")
+  println(io, "  problem : $(typeof(s.problem))")
+  println(io, "  size    : $(size(s.u)) (× 2 fields: u, v)")
+  println(io, "  t       : $(s.t)")
+  print(io, "  grid    : $(dims)")
+end
+
 # ── AbstractArray interface ───────────────────────────────────────────────────
 Base.size(s::PDESolution) = size(s.u)
 Base.getindex(s::PDESolution, I...) = s.u[I...]

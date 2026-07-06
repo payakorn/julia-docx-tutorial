@@ -271,6 +271,38 @@ function fig_navier_stokes(p::LidCavityFlow;
     return plt
 end
 
+"""
+    fig_coupled_heat(prob::CoupledHeatEquation{1}; savepath, size, dpi) -> Plot
+
+2-panel figure: the two coupled fields' final profiles overlaid (left) and
+their pointwise difference `|u − v|` (right) — the residual κ keeps pulling
+toward zero.
+"""
+function fig_coupled_heat(p::CoupledHeatEquation{1,F1,F2};
+        savepath::String = "",
+        size::Tuple{Int,Int} = (1100, 450),
+        dpi::Int = 150) where {F1,F2}
+
+  sol = solve(p)
+  x   = sol.x
+
+  p1 = plot(x, sol.u, xlabel="x", ylabel="value", lw=2.2, color=:firebrick,
+            label="u  (α₁=$(p.α[1]))",
+            title="Coupled fields at t = $(p.T)   (κ = $(p.κ))",
+            legend=:topright, grid=true, gridalpha=0.3, framestyle=:box)
+  plot!(p1, x, sol.v, lw=2.2, color=:steelblue, label="v  (α₂=$(p.α[2]))")
+
+  p2 = plot(x, abs.(sol.u .- sol.v), xlabel="x", ylabel="|u - v|",
+            lw=2.0, color=:seagreen, legend=false, grid=true, gridalpha=0.3,
+            title="Coupling residual", framestyle=:box)
+
+  plt = plot(p1, p2, layout=(1,2), size=size, dpi=dpi,
+             plot_title="Coupled Heat Equations — one sparse system, two fields",
+             plot_titlefontsize=13)
+  isempty(savepath) || savefig(plt, savepath)
+  return plt
+end
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Generic dispatch on PDESolution
 # ══════════════════════════════════════════════════════════════════════════════
@@ -316,5 +348,7 @@ Plots.plot(p::HeatEquation{1,F};             kwargs...) where F         = fig_he
 Plots.plot(p::WaveEquation{1,F};             kwargs...) where F         = fig_wave_equation(p; kwargs...)
 Plots.plot(p::PoissonEquation{2,F,EF};       kwargs...) where {F,EF}    = fig_poisson_equation(p; kwargs...)
 Plots.plot(p::LidCavityFlow;                 kwargs...)                  = fig_navier_stokes(p; kwargs...)
+Plots.plot(p::CoupledHeatEquation{1,F1,F2};  kwargs...) where {F1,F2}    = fig_coupled_heat(p; kwargs...)
 Plots.plot(sol::PDESolution{T,1};            kwargs...) where T          = plot_solution(sol; kwargs...)
 Plots.plot(sol::PDESolution{T,2};            kwargs...) where T          = plot_solution(sol; kwargs...)
+Plots.plot(sol::CoupledPDESolution{1};       kwargs...)                  = fig_coupled_heat(sol.problem; kwargs...)
