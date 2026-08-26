@@ -1,0 +1,38 @@
+name: Docker build check
+
+# The Pi runs this repo through the deploy-tunnel pattern: an updater sidecar
+# git-pulls main on a schedule and restarts the container, whatever the
+# state of the code. So a broken image only shows up as a dead site that needs
+# an SSH session to diagnose. This builds the image on every push to main
+# and every PR so the break surfaces here instead.
+#
+# Build only -- nothing is pushed to a registry. The image is discarded; the
+# point is that `docker build` still succeeds.
+#
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Superseded builds have no value; cancel them.
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # GitHub Actions cache keeps repeat builds to the layers that changed;
+      # without it every run re-downloads and re-installs every dependency.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
