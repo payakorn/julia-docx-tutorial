@@ -359,6 +359,152 @@ println("u after one step: ", u)
 
 
   <!-- ════════════════════════════════════════════════════════
+       7.3  FROM GRID TO SCHEME — WHO OWNS THE MATRIX LAYOUT?
+       ════════════════════════════════════════════════════════ -->
+  <section class="section" id="step5-scheme">
+    <h3>7.3 From grid to scheme: who owns the matrix layout?</h3>
+    <p>
+      Rules 1 and 2 turn a PDE into operations on an <em>array</em>. But the
+      moment you go <em>implicit</em> — Crank&ndash;Nicolson for heat, the direct
+      Poisson solve, the diffusion step in Navier&ndash;Stokes — you stop
+      updating an array in place and instead solve a linear system
+      $A\mathbf{u} = \mathbf{b}$. That raises a question the explicit code never
+      had to answer:
+    </p>
+    <div class="callout info">
+      <strong>The missing link.</strong>
+      A grid node lives at a 2-D position like $(i, j)$. A matrix row is a single
+      integer $k$. <em>Something</em> has to map one to the other. In this
+      package that something is the line
+      <code>k = (jj-1)*n_int + ii</code> in <code>Navier_Stokes.jl</code> —
+      written by hand, and easy to miss. That mapping is the real subject of
+      this section.
+    </div>
+
+    <h4>Why the easy case hides the problem</h4>
+    <p>
+      For Poisson the mapping is invisible because Julia's column-major
+      <code>vec</code> / <code>reshape</code> <em>is</em> the numbering, and
+      <code>nd_laplacian</code> builds a clean Kronecker-sum matrix:
+    </p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the simple path</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia">u_vec = A \ vec(F_arr)          # node (i,j) → row k is just column-major order
+u_arr = reshape(u_vec, p.N_grid) # …and back again</code></pre>
+    </div>
+    <p>This works only because Poisson is the <em>friendly</em> case:</p>
+    <ul>
+      <li><strong>one field</strong> ($u$ alone),</li>
+      <li><strong>collocated</strong> — every unknown lives on the same node,</li>
+      <li><strong>Dirichlet nodes eliminated</strong>, so unknowns are a tidy box,</li>
+      <li><strong>one matrix</strong>, with a beautiful banded pattern.</li>
+    </ul>
+
+    <h4>Why Navier&ndash;Stokes breaks all four</h4>
+    <p>
+      The lid-driven cavity (<code>_solve_psi_omega</code>) is the counter-example
+      you already spotted:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Friendly assumption</th><th>What Navier&ndash;Stokes actually does</th></tr></thead>
+        <tbody>
+          <tr><td>One field</td><td>Carries $\psi$ <em>and</em> $\omega$ (and $u,v$ derived) at once.</td></tr>
+          <tr><td>One matrix</td><td>Two operators: $(I-\nu\Delta t\,L)$ for diffusion <em>and</em> $L$ for the streamfunction Poisson solve.</td></tr>
+          <tr><td>Tidy unknown box</td><td>Solves on interior nodes only ($n_{\text{int}}=N-2$); wall vorticity is set <em>outside</em> the system by Thom's formula.</td></tr>
+          <tr><td>Collocated, beautiful pattern</td><td>A staggered (MAC) primitive-variable form would put $u$, $v$, $p$ on <strong>three different node sets</strong> — no single clean matrix exists.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      So there is no one &ldquo;beautiful&rdquo; matrix to hang off the grid.
+      There is a <em>workflow</em> of operators plus explicit boundary handling.
+      That is the heart of your question.
+    </p>
+
+    <h4>Two tempting designs — and why one wins</h4>
+    <p>You are choosing between:</p>
+    <ol>
+      <li>
+        <strong>Option A — make <code>Grid</code> carry the matrix.</strong>
+        Add the DOF numbering and the assembled operator straight into the
+        <code>Grid</code> struct.
+      </li>
+      <li>
+        <strong>Option B — one mega-struct</strong> that bundles grid, fields,
+        boundary conditions, numbering and matrices together &ldquo;to handle
+        everything.&rdquo;
+      </li>
+    </ol>
+    <div class="callout warn">
+      <strong>Both couple things that should stay apart.</strong>
+      Option A welds <em>geometry</em> to <em>one</em> discretization choice — but
+      the same grid must back a 5-point <em>and</em> a 9-point stencil, a ψ-ω
+      <em>and</em> a primitive-variable scheme. Option B becomes a god-object: the
+      part that knows coordinates ends up entangled with the part that knows
+      Reynolds numbers, and nothing is reusable or testable on its own.
+    </div>
+
+    <h4>Recommended: three thin layers, not one fat struct</h4>
+    <p>
+      Keep <code>Grid</code> purely geometric. Give the <em>numbering</em> its own
+      small type — that is the abstraction you actually discovered. Let the
+      <em>scheme</em> be the code that assembles operators on top.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Answers the question…</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>Grid</code></td><td>&ldquo;Where is node $(i,j)$ in space?&rdquo;</td><td>keep as-is</td></tr>
+          <tr><td><code>DofMap</code></td><td>&ldquo;Which row $k$ is field $f$ at node $(i,j)$ — and is it even an unknown?&rdquo;</td><td><strong>add (small)</strong></td></tr>
+          <tr><td><code>assemble(prob, grid, dof)</code></td><td>&ldquo;What does $A$ (and $\mathbf b$) look like?&rdquo;</td><td>a function first</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">julia — the recommended sketch</span><button class="copy-btn">Copy</button></div>
+      <pre><code class="language-julia"># Geometry stays exactly as it is — no matrices here.
+#   struct Grid{N} … end          (unchanged)
+
+# NEW: the node ↔ row numbering you found by hand, made explicit and reusable.
+struct DofMap
+    dims    :: Tuple                 # interior shape, e.g. (n_int, n_int)
+    nfields :: Int                   # 1 for Poisson, ≥2 for ψ-ω / staggered
+end
+
+# (field f, node I) → global row k.  This single function replaces every
+# scattered `k = (jj-1)*n_int + ii` and every implicit `vec`/`reshape`.
+@inline function dof(m::DofMap, f::Int, I::CartesianIndex)
+    lin = LinearIndices(m.dims)[I]           # column-major node number
+    return (lin - 1) * m.nfields + f         # interleave fields per node
+end
+
+# The "scheme" is just assembly against that map — start as a function.
+# Different formulations are different methods; no struct needed yet.
+assemble(p::PoissonEquation, grid, dof)  = nd_laplacian(...)      # one clean matrix
+assemble(p::LidCavityFlow,   grid, dof)  = (Adiff = ..., Lpois = ...)  # several operators</code></pre>
+    </div>
+    <p>
+      Now the Poisson path is unchanged, the hand-written
+      <code>k = (jj-1)*n_int + ii</code> becomes one tested
+      <code>dof(...)</code> call, and a future staggered scheme just sets
+      <code>nfields = 3</code> and provides its own <code>assemble</code> method —
+      <em>without touching <code>Grid</code> at all.</em>
+    </p>
+
+    <div class="callout tip">
+      <strong>Don't promote to a type until a second case forces it.</strong>
+      A <code>Scheme</code> struct earns its place the moment you need to
+      <em>store</em> assembled operators between time steps (exactly what the NS
+      diffusion <code>lu(...)</code> factorization does) or swap formulations at
+      runtime. Until then, <code>assemble</code> as a plain function is the right
+      altitude for a teaching package — reach for the abstraction when the
+      duplication appears, not before.
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
        EXAMPLE A: HEAT EQUATION
        ════════════════════════════════════════════════════════ -->
   <nav class="page-nav">
